@@ -63,6 +63,8 @@ class Camera(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     ativa: Mapped[bool] = mapped_column(default=True)
     ultima_observacao_em: Mapped[datetime | None]
+    # Calibração da visão desta câmera (giro/visao/leitura.py, classe Ajustes). Vazio = padrão.
+    ajustes_visao: Mapped[dict[str, float] | None] = mapped_column(JSON)
     criado_em: Mapped[datetime] = mapped_column(default=agora)
 
 

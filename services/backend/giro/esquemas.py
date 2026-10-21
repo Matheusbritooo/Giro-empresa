@@ -1,6 +1,7 @@
 """Formato dos dados que entram e saem da API (e das mensagens ao vivo)."""
 
 from datetime import datetime
+from typing import Annotated
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -93,12 +94,19 @@ class MesaEntrada(BaseModel):
     pos_y: int = Field(default=0, ge=0, le=30)
 
 
+# Ponto do desenho da mesa sobre a imagem da câmera: x e y de 0 a 1 (0,0 = canto superior esquerdo).
+PontoImagem = tuple[Annotated[float, Field(ge=0, le=1)], Annotated[float, Field(ge=0, le=1)]]
+
+
 class MesaAtualizacao(BaseModel):
     numero: int | None = Field(default=None, ge=1, le=999)
     lugares: int | None = Field(default=None, ge=1, le=30)
     pos_x: int | None = Field(default=None, ge=0, le=30)
     pos_y: int | None = Field(default=None, ge=0, le=30)
     ativa: bool | None = None
+    # Desenho da mesa e câmera que a vê. Mandar null apaga.
+    camera_id: int | None = None
+    poligono: list[PontoImagem] | None = Field(default=None, min_length=3, max_length=30)
 
 
 class MesaSalao(BaseModel):
@@ -112,6 +120,8 @@ class MesaSalao(BaseModel):
     ativa: bool
     estado: str
     estado_desde: datetime | None
+    camera_id: int | None = None
+    poligono: list[tuple[float, float]] | None = None
     sentou_em: datetime | None = None
     atendida_em: datetime | None = None
     saiu_em: datetime | None = None
@@ -128,11 +138,20 @@ class AlertaSaida(BaseModel):
     resolvido_em: datetime | None
 
 
+class AjustesVisao(BaseModel):
+    """Calibração da visão por câmera. Os limites evitam um valor que desligue a detecção."""
+
+    proporcao_em_pe: float | None = Field(default=None, ge=1.0, le=5.0)
+    margem_atendimento: float | None = Field(default=None, ge=0, le=0.3)
+    confianca_minima: float | None = Field(default=None, ge=0.1, le=0.95)
+
+
 class CameraSaida(Saida):
     id: int
     nome: str
     ativa: bool
     ultima_observacao_em: datetime | None
+    ajustes_visao: dict[str, float] | None = None
 
 
 class CameraCriada(CameraSaida):
@@ -141,6 +160,26 @@ class CameraCriada(CameraSaida):
 
 class CameraEntrada(BaseModel):
     nome: str = Field(min_length=2, max_length=80)
+
+
+class CameraAtualizacao(BaseModel):
+    nome: str | None = Field(default=None, min_length=2, max_length=80)
+    ativa: bool | None = None
+    ajustes_visao: AjustesVisao | None = None
+
+
+class ZonaMesaSaida(BaseModel):
+    numero: int
+    poligono: list[tuple[float, float]]
+
+
+class ConfiguracaoCamera(BaseModel):
+    """O que o serviço de visão precisa saber da câmera para ler a foto."""
+
+    camera_id: int
+    restaurante_id: int
+    mesas: list[ZonaMesaSaida]
+    ajustes: dict[str, float]
 
 
 class SalaoSaida(BaseModel):
@@ -208,3 +247,23 @@ class InscricaoPushEntrada(BaseModel):
 
 class ChavePublicaPush(BaseModel):
     chave_publica: str | None
+
+
+# Leitura da câmera (vem do serviço de visão)
+
+
+class PessoaLidaSaida(BaseModel):
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    em_pe: bool
+    mesa: int | None
+
+
+class LeituraCamera(BaseModel):
+    """Última leitura da câmera, para conferir o desenho das mesas. Sem imagem."""
+
+    em: datetime
+    pessoas: list[PessoaLidaSaida]
+    mesas: list[ObservacaoMesa]

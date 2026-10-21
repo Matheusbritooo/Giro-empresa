@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from giro.dominio.mesa import Estado, Evento, MaquinaMesa, Observacao, Regras, TipoEvento
-from giro.esquemas import AlertaSaida, MesaSalao, ObservacaoMesa
+from giro.esquemas import AlertaSaida, CameraSaida, MesaSalao, ObservacaoMesa
 from giro.modelos import (
     Alerta,
     Camera,
@@ -55,6 +55,8 @@ def mesa_salao(mesa: Mesa, ocupacao: Ocupacao | None) -> MesaSalao:
         ativa=mesa.ativa,
         estado=mesa.estado,
         estado_desde=mesa.estado_desde,
+        camera_id=mesa.camera_id,
+        poligono=[tuple(p) for p in mesa.poligono] if mesa.poligono else None,
     )
     if ocupacao is not None and mesa.estado != Estado.LIVRE:
         dados.sentou_em = ocupacao.sentou_em
@@ -122,6 +124,14 @@ class ServicoSalao:
         camera.ultima_observacao_em = em
         db.commit()
         self._avisar(db, restaurante.id, mudancas)
+        # O painel mostra "câmera sem imagem" quando esta mensagem para de chegar.
+        self.central.publicar(
+            restaurante.id,
+            {
+                "tipo": "camera",
+                "camera": CameraSaida.model_validate(camera).model_dump(mode="json"),
+            },
+        )
         return sorted(numeros - mesas.keys())
 
     def liberar_mesa(self, db: Session, mesa: Mesa, agora: datetime) -> None:

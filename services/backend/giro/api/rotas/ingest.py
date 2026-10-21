@@ -8,10 +8,12 @@ from datetime import timedelta
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from giro.api.deps import CameraAutenticada, Db, Servico
 from giro.banco import agora
-from giro.esquemas import ObservacoesEntrada
+from giro.esquemas import ConfiguracaoCamera, ObservacoesEntrada, ZonaMesaSaida
+from giro.modelos import Mesa
 
 router = APIRouter(prefix="/api/ingest", tags=["câmera"])
 
@@ -37,4 +39,25 @@ def receber_observacoes(
     desconhecidas = servico.processar_observacoes(db, camera, em, dados.mesas)
     return ResultadoIngest(
         processadas=len(dados.mesas) - len(desconhecidas), mesas_desconhecidas=desconhecidas
+    )
+
+
+@router.get("/configuracao")
+def configuracao(camera: CameraAutenticada, db: Db) -> ConfiguracaoCamera:
+    """O serviço de visão pergunta: de quem é esta câmera e onde estão as mesas na imagem."""
+    mesas = db.scalars(
+        select(Mesa)
+        .where(
+            Mesa.camera_id == camera.id,
+            Mesa.restaurante_id == camera.restaurante_id,
+            Mesa.ativa.is_(True),
+            Mesa.poligono.is_not(None),
+        )
+        .order_by(Mesa.numero)
+    ).all()
+    return ConfiguracaoCamera(
+        camera_id=camera.id,
+        restaurante_id=camera.restaurante_id,
+        mesas=[ZonaMesaSaida(numero=m.numero, poligono=m.poligono) for m in mesas],
+        ajustes=camera.ajustes_visao or {},
     )

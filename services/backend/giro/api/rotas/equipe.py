@@ -1,4 +1,4 @@
-"""Usuários do restaurante, restaurantes (admin GIRO) e câmeras."""
+"""Usuários do restaurante e restaurantes (admin GIRO)."""
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
@@ -6,9 +6,6 @@ from sqlalchemy.exc import IntegrityError
 
 from giro.api.deps import Db, RestauranteAlvo, UsuarioAtual, exigir_papel, restaurante_permitido
 from giro.esquemas import (
-    CameraCriada,
-    CameraEntrada,
-    CameraSaida,
     RestauranteAtualizacao,
     RestauranteEntrada,
     RestauranteSaida,
@@ -16,8 +13,8 @@ from giro.esquemas import (
     UsuarioEntrada,
     UsuarioSaida,
 )
-from giro.modelos import Camera, Papel, Restaurante, Usuario
-from giro.seguranca import gerar_hash_senha, gerar_token_camera, hash_token
+from giro.modelos import Papel, Restaurante, Usuario
+from giro.seguranca import gerar_hash_senha
 
 router = APIRouter(prefix="/api", tags=["equipe e cadastro"])
 
@@ -124,20 +121,3 @@ def atualizar_restaurante(
         setattr(restaurante, campo, valor)
     db.commit()
     return RestauranteSaida.model_validate(restaurante)
-
-
-@router.get("/cameras", dependencies=[DONO_OU_ADMIN])
-def listar_cameras(db: Db, restaurante_id: RestauranteAlvo) -> list[CameraSaida]:
-    cameras = db.scalars(
-        select(Camera).where(Camera.restaurante_id == restaurante_id).order_by(Camera.id)
-    ).all()
-    return [CameraSaida.model_validate(c) for c in cameras]
-
-
-@router.post("/cameras", status_code=status.HTTP_201_CREATED, dependencies=[DONO_OU_ADMIN])
-def criar_camera(dados: CameraEntrada, db: Db, restaurante_id: RestauranteAlvo) -> CameraCriada:
-    token = gerar_token_camera()
-    camera = Camera(restaurante_id=restaurante_id, nome=dados.nome, token_hash=hash_token(token))
-    db.add(camera)
-    db.commit()
-    return CameraCriada(**CameraSaida.model_validate(camera).model_dump(), token=token)

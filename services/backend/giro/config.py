@@ -23,6 +23,11 @@ class Config(BaseSettings):
     vapid_chave_publica: str | None = None
     vapid_contato: str = "mailto:contato@giro.demo"
 
+    # Serviço de visão (Fase 2), usado para mostrar a prévia da câmera ao desenhar as mesas.
+    # O segredo é o mesmo configurado no serviço de visão (GIRO_VISAO_SEGREDO).
+    visao_url: str | None = None
+    visao_segredo: str | None = None
+
     # De quanto em quanto tempo o servidor confere alertas que dependem só do relógio.
     # 0 desliga (usado nos testes).
     verificador_intervalo_seg: float = 10

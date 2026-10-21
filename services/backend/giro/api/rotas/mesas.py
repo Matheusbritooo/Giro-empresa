@@ -12,7 +12,7 @@ from giro.api.deps import (
 )
 from giro.dominio.mesa import Estado
 from giro.esquemas import MesaAtualizacao, MesaEntrada, MesaSalao
-from giro.modelos import Mesa
+from giro.modelos import Camera, Mesa
 from giro.servicos.salao import mesa_salao, ocupacoes_abertas
 
 router = APIRouter(prefix="/api/mesas", tags=["mesas"], dependencies=[exigir_papel(*GESTAO)])
@@ -45,6 +45,13 @@ def atualizar(mesa_id: int, dados: MesaAtualizacao, db: Db, usuario: UsuarioAtua
         raise HTTPException(status.HTTP_404_NOT_FOUND, "mesa não encontrada")
     restaurante_permitido(usuario, mesa.restaurante_id)
     mudancas = dados.model_dump(exclude_unset=True)
+    if mudancas.get("camera_id") is not None:
+        camera = db.get(Camera, mudancas["camera_id"])
+        # A câmera tem que ser do mesmo restaurante da mesa.
+        if camera is None or camera.restaurante_id != mesa.restaurante_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "câmera não encontrada")
+    if "poligono" in mudancas and mudancas["poligono"] is not None:
+        mudancas["poligono"] = [list(ponto) for ponto in mudancas["poligono"]]
     if mudancas.get("ativa") is False and mesa.estado != Estado.LIVRE:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "só dá para desativar a mesa quando ela estiver livre"
