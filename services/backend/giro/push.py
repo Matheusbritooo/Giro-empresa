@@ -69,7 +69,8 @@ class EnviadorPush:
                     if status in (404, 410):  # o celular cancelou a inscrição
                         vencidas.append(inscricao.id)
                     else:
-                        log.warning("falha ao enviar push: %s", erro)
+                        # Só o código: a mensagem do erro pode trazer o endereço do celular.
+                        log.warning("falha ao enviar push (status %s)", status)
             if vencidas:
                 db.execute(delete(InscricaoPush).where(InscricaoPush.id.in_(vencidas)))
                 db.commit()
