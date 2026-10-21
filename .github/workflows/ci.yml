@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (API, regras da mesa, simulador)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: services/backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: giro
+          POSTGRES_PASSWORD: giro
+          POSTGRES_DB: giro
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U giro" --health-interval 5s --health-retries 10
+    env:
+      PG: postgresql+psycopg://giro:giro@localhost:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/backend/uv.lock
+      - run: uv sync --frozen
+      - name: Lint e formatação
+        run: |
+          uv run ruff check giro tests migrations
+          uv run ruff format --check giro tests migrations
+      - name: Testes (SQLite)
+        run: uv run pytest -q
+      - name: Testes (Postgres, como em produção)
+        run: |
+          psql "postgresql://giro:giro@localhost:5432/giro" -c "create database giro_teste"
+          GIRO_TESTE_DATABASE_URL=$PG/giro_teste uv run pytest -q
+      - name: Migrações sobem, batem com os modelos e descem
+        env:
+          GIRO_DATABASE_URL: ${{ env.PG }}/giro
+        run: |
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+      - name: Cenários do salão
+        run: uv run python -m giro.simulador verificar
+
+  web:
+    name: Painel (lint, tipos, testes, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm format:check
+      - run: pnpm test
+      - run: pnpm build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  ponta-a-ponta:
+    name: Ponta a ponta (navegador)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [backend, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/backend/uv.lock
+      - run: uv sync --frozen
+        working-directory: services/backend
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: apps/web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: pnpm e2e
+        working-directory: apps/web
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: relatorio-playwright
+          path: apps/web/playwright-report
+          retention-days: 7
+
+  lgpd:
+    name: Trava de LGPD e segredos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/verificar-commit.sh --todos

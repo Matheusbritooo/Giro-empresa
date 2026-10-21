@@ -1,0 +1,38 @@
+name: Tarefa
+description: Algo novo para construir ou melhorar
+title: "[Tarefa] "
+labels: [tarefa]
+body:
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: O que precisa ser feito
+      description: Descreva o resultado esperado, do ponto de vista de quem usa (dono, gerente, garçom ou equipe GIRO).
+    validations:
+      required: true
+  - type: dropdown
+    id: fase
+    attributes:
+      label: Fase do projeto
+      options:
+        - "Fase 0: fundação"
+        - "Fase 1: salão no simulador"
+        - "Fase 2: visão computacional"
+        - "Fase 3: inteligência (painel de desempenho, previsão, relatório)"
+        - "Fase 4: gestão GIRO (clientes, cobrança, financeiro)"
+        - "Fase 5: site e calculadora de retorno"
+    validations:
+      required: true
+  - type: textarea
+    id: pronto
+    attributes:
+      label: Como saber que ficou pronto
+      description: Lista curta do que precisa funcionar.
+      placeholder: |
+        - O gerente vê ...
+        - O teste ... passa
+  - type: dropdown
+    id: responsavel
+    attributes:
+      label: Diretoria responsável
+      options: [Diretor Geral, Diretor Financeiro, Diretor Comercial, Diretor de Operações, Marketing e Análise de Mercado]

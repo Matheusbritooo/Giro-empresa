@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+.pytest_cache/
+services/backend/*.db
+
+# Node / Next.js (o resto está em apps/web/.gitignore)
+node_modules/
+
+# Ambiente: segredos nunca entram no repositório
+.env
+.env.*
+!.env.example
+!.env.development
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

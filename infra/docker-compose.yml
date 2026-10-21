@@ -1,0 +1,66 @@
+# Produção num servidor só, ou desenvolvimento com Postgres local.
+#   Só o banco (para desenvolver):  docker compose -f infra/docker-compose.yml up -d banco
+#   Tudo:                           cp infra/.env.example infra/.env  (e ajuste)
+#                                   docker compose -f infra/docker-compose.yml --env-file infra/.env --profile completo up -d --build
+
+services:
+  banco:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: giro
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-giro}
+      POSTGRES_DB: giro
+    volumes:
+      - banco:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432" # só a própria máquina acessa
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U giro"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ../services/backend
+      dockerfile: ../../infra/backend.Dockerfile
+    restart: unless-stopped
+    profiles: ["completo"]
+    environment:
+      GIRO_AMBIENTE: producao
+      GIRO_DATABASE_URL: postgresql+psycopg://giro:${POSTGRES_PASSWORD:-giro}@banco:5432/giro
+      GIRO_SEGREDO_JWT: ${GIRO_SEGREDO_JWT:?defina GIRO_SEGREDO_JWT em infra/.env}
+      GIRO_COOKIE_SEGURO: "true"
+      GIRO_ORIGENS_CORS: '["https://${DOMINIO:-localhost}"]'
+      GIRO_VAPID_CHAVE_PRIVADA: ${GIRO_VAPID_CHAVE_PRIVADA:-}
+      GIRO_VAPID_CHAVE_PUBLICA: ${GIRO_VAPID_CHAVE_PUBLICA:-}
+      GIRO_VAPID_CONTATO: ${GIRO_VAPID_CONTATO:-mailto:contato@giro.demo}
+    depends_on:
+      banco:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: ../../infra/web.Dockerfile
+    restart: unless-stopped
+    profiles: ["completo"]
+    depends_on: [api]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["completo"]
+    environment:
+      DOMINIO: ${DOMINIO:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    depends_on: [api, web]
+
+volumes:
+  banco:
+  caddy:
