@@ -1,0 +1,12 @@
+descricao: >
+  O cliente que vai embora por demora (seção 2.3 do TCM). Casal senta na mesa 5,
+  ninguém atende e eles saem aos 4 minutos, antes do alerta. O sistema registra
+  a desistência e a mesa volta a ficar livre (não foi usada, não precisa limpar).
+
+linha_do_tempo:
+  - {em: "0:00", mesa: 5, sentados: 2}
+  - {em: "4:00", mesa: 5, sentados: 0}
+
+esperado:
+  - {em: "0:00", mesa: 5, tipo: sentou}
+  - {em: "4:00", mesa: 5, tipo: saiu_sem_atendimento}

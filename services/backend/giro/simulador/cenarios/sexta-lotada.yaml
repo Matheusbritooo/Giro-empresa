@@ -1,0 +1,51 @@
+descricao: >
+  Cinco mesas ao mesmo tempo numa sexta à noite: uma atendida rápido, uma esquecida,
+  uma que desiste, uma que fica suja até a próxima turma e uma que a equipe libera.
+  Bom para demonstração: rode com --inicio-em 4:30 e o primeiro alerta aparece em 30s.
+
+linha_do_tempo:
+  # Mesa 1: tudo certo
+  - {em: "0:00", mesa: 1, sentados: 2}
+  - {em: "1:30", mesa: 1, em_pe: 1}
+  - {em: "2:00", mesa: 1, em_pe: 0}
+  - {em: "12:00", mesa: 1, sentados: 0}
+  - {em: "15:00", mesa: 1, acao: liberar}
+  # Mesa 4: esquecida
+  - {em: "0:00", mesa: 4, sentados: 3}
+  - {em: "7:00", mesa: 4, em_pe: 1}
+  - {em: "7:30", mesa: 4, em_pe: 0}
+  # Mesa 6: desiste
+  - {em: "1:00", mesa: 6, sentados: 2}
+  - {em: "4:30", mesa: 6, sentados: 0}
+  # Mesa 7: sai e fica suja até a próxima turma
+  - {em: "0:00", mesa: 7, sentados: 4}
+  - {em: "1:00", mesa: 7, em_pe: 1}
+  - {em: "1:40", mesa: 7, em_pe: 0}
+  - {em: "6:00", mesa: 7, sentados: 0}
+  - {em: "16:00", mesa: 7, sentados: 2}
+  # Mesa 10: garçom passa duas vezes, só a primeira conta
+  - {em: "2:00", mesa: 10, sentados: 2}
+  - {em: "3:00", mesa: 10, em_pe: 1}
+  - {em: "3:30", mesa: 10, em_pe: 0}
+  - {em: "8:00", mesa: 10, em_pe: 1}
+  - {em: "8:30", mesa: 10, em_pe: 0}
+
+esperado:
+  - {em: "0:00", mesa: 1, tipo: sentou}
+  - {em: "1:30", mesa: 1, tipo: atendida}
+  - {em: "12:00", mesa: 1, tipo: saiu}
+  - {em: "13:00", mesa: 1, tipo: alerta_mesa_vaga}
+  - {em: "15:00", mesa: 1, tipo: liberada}
+  - {em: "0:00", mesa: 4, tipo: sentou}
+  - {em: "5:00", mesa: 4, tipo: alerta_sem_atendimento}
+  - {em: "7:00", mesa: 4, tipo: atendida}
+  - {em: "1:00", mesa: 6, tipo: sentou}
+  - {em: "4:30", mesa: 6, tipo: saiu_sem_atendimento}
+  - {em: "0:00", mesa: 7, tipo: sentou}
+  - {em: "1:00", mesa: 7, tipo: atendida}
+  - {em: "6:00", mesa: 7, tipo: saiu}
+  - {em: "7:00", mesa: 7, tipo: alerta_mesa_vaga}
+  - {em: "16:00", mesa: 7, tipo: liberada}
+  - {em: "16:00", mesa: 7, tipo: sentou}
+  - {em: "2:00", mesa: 10, tipo: sentou}
+  - {em: "3:00", mesa: 10, tipo: atendida}

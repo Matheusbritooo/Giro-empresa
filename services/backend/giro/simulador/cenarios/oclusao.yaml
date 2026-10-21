@@ -1,0 +1,18 @@
+descricao: >
+  Alguém passa na frente da câmera e por 30 segundos a mesa 3 parece vazia.
+  O sistema não pode achar que os clientes foram embora: só conta saída depois
+  de 1 minuto vazia de verdade.
+
+linha_do_tempo:
+  - {em: "0:00", mesa: 3, sentados: 2}
+  - {em: "1:00", mesa: 3, em_pe: 1}
+  - {em: "1:30", mesa: 3, em_pe: 0}
+  - {em: "10:00", mesa: 3, sentados: 0}
+  - {em: "10:30", mesa: 3, sentados: 2}
+  - {em: "30:00", mesa: 3, sentados: 0}
+
+esperado:
+  - {em: "0:00", mesa: 3, tipo: sentou}
+  - {em: "1:00", mesa: 3, tipo: atendida}
+  - {em: "30:00", mesa: 3, tipo: saiu}
+  - {em: "31:00", mesa: 3, tipo: alerta_mesa_vaga}
