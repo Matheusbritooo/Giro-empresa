@@ -1,5 +1,5 @@
 # Painel do GIRO (Next.js, saída standalone). Contexto do build: apps/web
-FROM node:22-alpine AS base
+FROM node:25-alpine AS base
 RUN corepack enable
 
 FROM base AS deps
@@ -16,7 +16,7 @@ ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
-FROM node:22-alpine
+FROM node:25-alpine
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build --chown=node /app/.next/standalone ./
