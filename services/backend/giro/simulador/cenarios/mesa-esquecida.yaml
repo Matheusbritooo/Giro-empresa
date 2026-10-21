@@ -1,0 +1,14 @@
+descricao: >
+  O cliente esquecido da seção 1.4 do TCM. Quatro pessoas sentam na mesa 7 numa
+  sexta lotada e ninguém aparece. Aos 5 minutos o gerente recebe o alerta no celular
+  e o garçom chega aos 6:30.
+
+linha_do_tempo:
+  - {em: "0:00", mesa: 7, sentados: 4}
+  - {em: "6:30", mesa: 7, em_pe: 1}
+  - {em: "7:10", mesa: 7, em_pe: 0}
+
+esperado:
+  - {em: "0:00", mesa: 7, tipo: sentou}
+  - {em: "5:00", mesa: 7, tipo: alerta_sem_atendimento}
+  - {em: "6:30", mesa: 7, tipo: atendida}

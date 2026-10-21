@@ -1,0 +1,24 @@
+name: Problema
+description: Algo que não funciona como deveria
+title: "[Problema] "
+labels: [problema]
+body:
+  - type: textarea
+    id: aconteceu
+    attributes:
+      label: O que aconteceu
+      description: O que você fez, o que esperava e o que apareceu. Print ajuda muito (sem foto de cliente do restaurante).
+    validations:
+      required: true
+  - type: input
+    id: onde
+    attributes:
+      label: Onde
+      placeholder: "Ex.: painel do salão no celular do gerente, Chrome no Android"
+  - type: dropdown
+    id: urgencia
+    attributes:
+      label: Atrapalha o serviço do restaurante?
+      options: ["Sim, o salão está sem alerta ou sem mapa", "Atrapalha, mas dá para contornar", "Não, é detalhe"]
+    validations:
+      required: true

@@ -1,0 +1,32 @@
+# Atualiza bibliotecas toda semana e avisa de falha de segurança.
+# Correções pequenas vêm agrupadas num PR só, para não lotar a caixa do grupo.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /services/backend
+    schedule: { interval: weekly, day: monday }
+    groups:
+      backend-menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule: { interval: weekly, day: monday }
+    groups:
+      painel-menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
+
+  - package-ecosystem: docker
+    directories: [/infra]
+    schedule: { interval: monthly }
+    ignore:
+      # Node e Python ficam numa versão com suporte longo. Trocar de versão grande
+      # é decisão do grupo, testada junto com o resto (não um PR automático).
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+      - dependency-name: python
+        update-types: [version-update:semver-major, version-update:semver-minor]

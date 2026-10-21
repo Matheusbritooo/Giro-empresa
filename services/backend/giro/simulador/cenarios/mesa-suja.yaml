@@ -1,0 +1,19 @@
+descricao: >
+  A pergunta do Marcos: "por que a mesa 7 ficou vinte minutos suja numa sexta lotada?".
+  A turma sai às 70:00, a equipe recebe o alerta de mesa vaga, mas ninguém libera.
+  Só às 91:00 uma nova turma senta na mesa suja. O sistema registra 21 minutos parada.
+
+linha_do_tempo:
+  - {em: "0:00", mesa: 7, sentados: 4}
+  - {em: "1:30", mesa: 7, em_pe: 1}
+  - {em: "2:00", mesa: 7, em_pe: 0}
+  - {em: "70:00", mesa: 7, sentados: 0}
+  - {em: "91:00", mesa: 7, sentados: 2}
+
+esperado:
+  - {em: "0:00", mesa: 7, tipo: sentou}
+  - {em: "1:30", mesa: 7, tipo: atendida}
+  - {em: "70:00", mesa: 7, tipo: saiu}
+  - {em: "71:00", mesa: 7, tipo: alerta_mesa_vaga}
+  - {em: "91:00", mesa: 7, tipo: liberada}
+  - {em: "91:00", mesa: 7, tipo: sentou}

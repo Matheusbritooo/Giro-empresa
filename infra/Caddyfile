@@ -1,0 +1,13 @@
+# Um domínio só: /api vai para o backend (inclusive o WebSocket do painel ao vivo),
+# o resto vai para o painel. O Caddy emite e renova o certificado HTTPS sozinho.
+{$DOMINIO:localhost} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
