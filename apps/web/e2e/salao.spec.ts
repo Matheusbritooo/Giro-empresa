@@ -91,7 +91,13 @@ test("garçom só vê o salão; dono vê mesas, equipe e ajustes", async ({ page
 
   await entrar(page, "marcos@cantina.demo");
   await expect(page.getByTestId("mesa-1")).toBeVisible();
-  await expect(navegacao.getByRole("link")).toHaveText(["Salão", "Mesas", "Equipe", "Ajustes"]);
+  await expect(navegacao.getByRole("link")).toHaveText([
+    "Salão",
+    "Mesas",
+    "Câmeras",
+    "Equipe",
+    "Ajustes",
+  ]);
 });
 
 test("senha errada mostra o motivo", async ({ page }) => {

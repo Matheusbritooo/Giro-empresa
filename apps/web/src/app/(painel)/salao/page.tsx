@@ -12,7 +12,7 @@ import { api } from "@/lib/api";
 import { type Conexao, useRelogio, useSalaoAoVivo } from "@/lib/ao-vivo";
 import { prepararSom, tocarAlerta } from "@/lib/avisos";
 import { useRestauranteAlvo } from "@/lib/restaurante";
-import { contarPorTom, type Tom } from "@/lib/salao";
+import { camerasSemSinal, contarPorTom, minutosEntre, type Tom } from "@/lib/salao";
 import { podeGerirMesas, useSessao } from "@/lib/sessao";
 import type { Alerta, Mesa } from "@/lib/tipos";
 
@@ -99,6 +99,14 @@ export default function PaginaSalao() {
         <h1 className="font-placa text-4xl font-extrabold leading-none">Salão</h1>
         <IndicadorConexao conexao={conexao} />
       </div>
+
+      {camerasSemSinal(salao.cameras, agora).map((camera) => (
+        <Aviso key={camera.id}>
+          A câmera {camera.nome} parou de mandar imagem há{" "}
+          {minutosEntre(camera.ultima_observacao_em as string, agora)} min. Enquanto isso, as mesas
+          dela ficam sem alerta. Confira a internet do restaurante e se o gravador está ligado.
+        </Aviso>
+      ))}
 
       {recado && (
         <Aviso tipo={recado.tipo}>

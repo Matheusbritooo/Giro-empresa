@@ -36,6 +36,8 @@ export interface Mesa {
   ativa: boolean;
   estado: EstadoMesa;
   estado_desde: string | null;
+  camera_id: number | null;
+  poligono: [number, number][] | null; // desenho sobre a imagem da câmera, de 0 a 1
   sentou_em: string | null;
   atendida_em: string | null;
   saiu_em: string | null;
@@ -52,11 +54,32 @@ export interface Alerta {
   resolvido_em: string | null;
 }
 
+export interface AjustesVisao {
+  proporcao_em_pe?: number;
+  margem_atendimento?: number;
+  confianca_minima?: number;
+}
+
 export interface Camera {
   id: number;
   nome: string;
   ativa: boolean;
   ultima_observacao_em: string | null;
+  ajustes_visao: AjustesVisao | null;
+}
+
+/** O que a visão achou na última foto da câmera. Sem imagem. */
+export interface LeituraCamera {
+  em: string;
+  pessoas: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    em_pe: boolean;
+    mesa: number | null;
+  }[];
+  mesas: { mesa: number; sentados: number; em_pe: number }[];
 }
 
 export interface Salao {
@@ -70,4 +93,5 @@ export interface Salao {
 export type MensagemAoVivo =
   | { tipo: "salao"; salao: Salao }
   | { tipo: "mesa"; mesa: Mesa }
-  | { tipo: "alerta"; alerta: Alerta };
+  | { tipo: "alerta"; alerta: Alerta }
+  | { tipo: "camera"; camera: Camera };

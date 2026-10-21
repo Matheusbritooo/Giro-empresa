@@ -1,4 +1,4 @@
-import type { Alerta, EstadoMesa, Mesa, MensagemAoVivo, Salao } from "./tipos";
+import type { Alerta, Camera, EstadoMesa, Mesa, MensagemAoVivo, Salao } from "./tipos";
 
 export type Tom = "livre" | "aguardando" | "atrasada" | "ocupada" | "limpar";
 
@@ -30,6 +30,11 @@ export function aplicarMensagem(
       ? salao.mesas.map((m) => (m.id === mensagem.mesa.id ? mensagem.mesa : m))
       : [...salao.mesas, mensagem.mesa].sort((a, b) => a.numero - b.numero);
     return { ...estado, salao: { ...salao, mesas: mesas.filter((m) => m.ativa) } };
+  }
+
+  if (mensagem.tipo === "camera") {
+    const cameras = salao.cameras.map((c) => (c.id === mensagem.camera.id ? mensagem.camera : c));
+    return { ...estado, salao: { ...salao, cameras } };
   }
 
   const alerta = mensagem.alerta;
@@ -131,4 +136,16 @@ export function textoAlerta(alerta: Alerta): string {
   return alerta.tipo === "sem_atendimento"
     ? `Mesa ${alerta.mesa_numero} está sem atendimento`
     : `Mesa ${alerta.mesa_numero} vagou e precisa ser limpa`;
+}
+
+const SEM_SINAL_MS = 90_000; // 9 fotos perdidas seguidas
+
+/** Câmeras ligadas que já mandaram imagem e pararam. Sem elas, os alertas param de chegar. */
+export function camerasSemSinal(cameras: Camera[], agoraMs: number): Camera[] {
+  return cameras.filter(
+    (c) =>
+      c.ativa &&
+      c.ultima_observacao_em !== null &&
+      agoraMs - Date.parse(c.ultima_observacao_em) > SEM_SINAL_MS,
+  );
 }
