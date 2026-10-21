@@ -23,3 +23,10 @@ updates:
   - package-ecosystem: docker
     directories: [/infra]
     schedule: { interval: monthly }
+    ignore:
+      # Node e Python ficam numa versão com suporte longo. Trocar de versão grande
+      # é decisão do grupo, testada junto com o resto (não um PR automático).
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+      - dependency-name: python
+        update-types: [version-update:semver-major, version-update:semver-minor]
