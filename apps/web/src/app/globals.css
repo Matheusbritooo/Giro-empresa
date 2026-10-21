@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+/*
+  Paleta do salão.
+  Claro: granilite de piso de restaurante. Escuro: lousa de cardápio, para o salão à meia-luz.
+  Estados da mesa: sempre cor + padrão + palavra, nunca só cor.
+*/
+:root {
+  --fundo: #f1f3ef;
+  --superficie: #ffffff;
+  --tinta: #1c2321;
+  --tinta-suave: #5d6863;
+  --linha: #d5dad4;
+
+  --livre: #8a958f;
+  --aguardando: #c98f12;
+  --atrasada: #d2462e;
+  --ocupada: #2f5da8;
+  --limpar: #7a3e8e;
+  --sobre-cor: #ffffff;
+  --sobre-aguardando: #1c2321;
+
+  --foco: #2f5da8;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo: #1d2623;
+    --superficie: #26312d;
+    --tinta: #e8ede9;
+    --tinta-suave: #a3b0aa;
+    --linha: #3a4842;
+
+    --livre: #7f8c86;
+    --aguardando: #e0a82e;
+    --atrasada: #ef6a50;
+    --ocupada: #6d95dd;
+    --limpar: #b27ac4;
+    --sobre-cor: #14100a;
+    --sobre-aguardando: #14100a;
+
+    --foco: #8fb2ee;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-superficie: var(--superficie);
+  --color-tinta: var(--tinta);
+  --color-tinta-suave: var(--tinta-suave);
+  --color-linha: var(--linha);
+  --color-livre: var(--livre);
+  --color-aguardando: var(--aguardando);
+  --color-atrasada: var(--atrasada);
+  --color-ocupada: var(--ocupada);
+  --color-limpar: var(--limpar);
+  --color-sobre-cor: var(--sobre-cor);
+  --color-sobre-aguardando: var(--sobre-aguardando);
+
+  --font-sans: "Atkinson Hyperlegible Next Variable", system-ui, sans-serif;
+  --font-placa: "Big Shoulders Display Variable", "Arial Narrow", sans-serif;
+}
+
+body {
+  background: var(--fundo);
+  color: var(--tinta);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 3px solid var(--foco);
+  outline-offset: 2px;
+}
+
+.numeros {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mesa para limpar: hachurado, para não depender só da cor. */
+.hachurado {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 7px,
+    color-mix(in srgb, var(--sobre-cor) 22%, transparent) 7px 10px
+  );
+}
+
+/* Mesa esperando atendimento além do limite: um pulso no contorno chama o olho. */
+@keyframes chamar {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--atrasada) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--atrasada) 0%, transparent);
+  }
+}
+
+.chamando {
+  animation: chamar 1.6s ease-in-out infinite;
+}
+
+/* A marca: o "o" de giro é uma mesa redonda com cadeiras que dá uma volta ao abrir. */
+@keyframes girar {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.giro-abrir {
+  animation: girar 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chamando,
+  .giro-abrir {
+    animation: none;
+  }
+}
+
+dialog::backdrop {
+  background: color-mix(in srgb, var(--tinta) 45%, transparent);
+}
