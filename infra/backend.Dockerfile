@@ -2,7 +2,7 @@
 FROM python:3.13-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.32 /uv /bin/uv
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv PYTHONUNBUFFERED=1
+ENV UV_NO_CACHE=1 UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv PYTHONUNBUFFERED=1
 
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
@@ -10,7 +10,8 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY . .
 RUN uv sync --frozen --no-dev
 
-RUN useradd --system --uid 1001 giro && chown -R giro /app
+# Roda sem ser root. Só lê os arquivos, então não precisa ser dono deles.
+RUN useradd --system --uid 1001 giro
 USER giro
 EXPOSE 8000
 

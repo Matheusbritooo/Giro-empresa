@@ -55,3 +55,37 @@ Cada decisão tem o contexto, o que foi decidido e o que isso custa. Quando uma 
 | Painel | Next.js 16, Tailwind 4, PWA | Um app só para computador e celular, instalável sem loja |
 | Fontes | Big Shoulders Display (números de mesa) e Atkinson Hyperlegible Next (texto) | Números legíveis de longe; texto feito para leitura fácil. Servidas pelo próprio painel, sem chamar o Google |
 | Servidor | Docker, Caddy | Um servidor só no começo, HTTPS automático |
+
+## 8. Detector YOLOX (substitui a escolha da decisão 3)
+
+**Contexto.** A decisão 3 previa RF-DETR ou RT-DETR. Na hora de construir, os dois exigem PyTorch para gerar o modelo em ONNX, o que pesa a instalação e o servidor.
+
+**Decisão.** YOLOX, da Megvii: licença Apache 2.0, modelo pronto em ONNX publicado pelos autores, roda com ONNX Runtime sem PyTorch. Três tamanhos, com tempo medido por foto num núcleo de CPU: `yolox_s` 220 ms (padrão), `yolox_tiny` 65 ms, `yolox_nano` 25 ms. O arquivo do modelo é conferido por hash antes de usar. A contagem por mesa foi escrita à mão (`giro/visao/leitura.py`) em vez de usar a biblioteca `supervision`, que traria OpenCV e Matplotlib para o servidor.
+
+**Consequência.** Com 2 câmeras por restaurante e uma foto a cada 10 s (0,2 foto por segundo), um núcleo com `yolox_s` atende uns 20 restaurantes, e um servidor de 4 núcleos, uns 80. Isso confirma a conta da decisão 2. Se a precisão do `yolox_s` não bastar no vídeo real, o próximo passo é testar o modelo em resolução maior, não trocar de licença.
+
+## 9. Visão num serviço separado da API
+
+**Decisão.** A visão roda num processo próprio (`giro/visao/servico.py`, porta 8001). Ela recebe a foto, confere o token da câmera na própria API (com cache de 10 s), conta pessoas por mesa e manda só os números para a mesma rota que o simulador usa. A API pede a prévia para a visão por rotas internas protegidas por segredo, que o Caddy nunca expõe.
+
+**Consequência.** Análise de imagem, que pesa no processador, não atrasa o painel ao vivo nem os alertas. Dá para colocar a visão em outra máquina quando crescer. Se a visão cair, o painel continua no ar e mostra "câmera parou de mandar imagem".
+
+## 10. Prévia pixelada, só em memória
+
+**Decisão.** Para o técnico desenhar as mesas, o painel mostra a última foto da câmera com cada pessoa transformada em blocos grandes (6 na largura da pessoa). A prévia fica na memória do serviço de visão por 3 minutos e é servida com `Cache-Control: no-store`. A foto original não sobrevive ao fim da análise.
+
+**Consequência.** O desenho das mesas não exige ver ninguém. Cumpre o item 1.9 do TCM: a imagem é tratada com o mínimo necessário e nunca vira identificação de pessoa.
+
+## 11. Conector no restaurante em vez de FTP do gravador
+
+**Contexto.** O TCM diz que "o gravador envia à nuvem um quadro a cada dez segundos". Boa parte dos DVRs faz isso por FTP, que manda usuário, senha e a foto do salão sem criptografia pela internet.
+
+**Decisão.** Fase 2 usa o conector GIRO (`giro/conector.py`): um programa que roda num computador do restaurante (ou no notebook do vendedor na demonstração), lê a imagem do DVR pela rede local (RTSP ou foto HTTP), reduz para 1280 px e manda por HTTPS. Uma foto de ~150 KB a cada 10 s dá uns 120 kbps, dentro dos 160 kbps do TCM.
+
+**Consequência.** Exige um computador ligado no restaurante, o que o TCM evitava ("nada é instalado"). Receber por FTPS (FTP com criptografia), que alguns DVRs suportam, pode eliminar o conector numa fase seguinte. Vale atualizar o item 1.3 do TCM com essa condição.
+
+## 12. Regra de sentado e em pé provisória
+
+**Decisão.** Sem vídeo real ainda, a regra usa a proporção da caixa da pessoa (em pé = mais de 2,2 vezes mais alta que larga) e a posição do ponto de apoio em relação ao desenho da mesa. Cada câmera pode ser calibrada pelo painel.
+
+**Consequência.** É o ponto de maior risco técnico do produto: câmera muito alta deixa gente em pé "baixa" na imagem. A ferramenta `giro/visao/avaliar.py` e a skill `validar-visao` medem o acerto contra uma contagem feita à mão e sugerem a calibração. A meta antes do primeiro cliente pagante é acertar 95% das vezes se a mesa está ocupada e 85% das vezes se o garçom está na mesa.

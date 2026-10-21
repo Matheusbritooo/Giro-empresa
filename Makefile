@@ -3,13 +3,13 @@
 BACKEND := services/backend
 WEB := apps/web
 
-.PHONY: ajuda instalar banco dados dev dev-api dev-web demo testes lint e2e
+.PHONY: ajuda instalar banco dados dev dev-api dev-web dev-visao demo testes lint e2e
 
 ajuda: ## Mostra esta lista
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  make %-10s %s\n", $$1, $$2}'
 
 instalar: ## Instala tudo e liga a trava de commit (rode uma vez por clone)
-	cd $(BACKEND) && uv sync
+	cd $(BACKEND) && uv sync --all-extras
 	cd $(WEB) && pnpm install
 	git config core.hooksPath .githooks
 
@@ -19,11 +19,19 @@ banco: ## Sobe o Postgres local no Docker
 dados: ## Cria as tabelas e a Cantina do Marcos (dados de demonstração)
 	cd $(BACKEND) && uv run alembic upgrade head && uv run python -m giro.seed
 
-dev: ## Sobe API (:8000) e painel (:3000) juntos
-	$(MAKE) -j2 dev-api dev-web
+# Segredo só de desenvolvimento entre a API e o serviço de visão.
+SEGREDO_VISAO_DEV := segredo-de-desenvolvimento-da-visao
+
+dev: ## Sobe API (:8000), visão (:8001) e painel (:3000) juntos
+	$(MAKE) -j3 dev-api dev-visao dev-web
 
 dev-api:
-	cd $(BACKEND) && uv run uvicorn --factory giro.api.app:criar_app --reload --port 8000
+	cd $(BACKEND) && GIRO_VISAO_URL=http://localhost:8001 GIRO_VISAO_SEGREDO=$(SEGREDO_VISAO_DEV) \
+		uv run uvicorn --factory giro.api.app:criar_app --reload --port 8000
+
+dev-visao:
+	cd $(BACKEND) && GIRO_VISAO_SEGREDO=$(SEGREDO_VISAO_DEV) \
+		uv run --extra visao uvicorn --factory giro.visao.servico:criar_app --port 8001
 
 dev-web:
 	cd $(WEB) && pnpm dev

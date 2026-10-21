@@ -9,8 +9,8 @@ fi
 
 cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"
 
-# Backend (Python): cria .venv com tudo do uv.lock, inclusive pytest e ruff.
-(cd services/backend && uv sync)
+# Backend (Python): cria .venv com tudo do uv.lock, inclusive visão, conector, pytest e ruff.
+(cd services/backend && uv sync --all-extras)
 
 # Painel (Next.js): pnpm install aproveita o cache do container entre sessões.
 (cd apps/web && CI=true pnpm install --config.confirmModulesPurge=false)

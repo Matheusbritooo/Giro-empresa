@@ -35,9 +35,22 @@ services:
       GIRO_VAPID_CHAVE_PRIVADA: ${GIRO_VAPID_CHAVE_PRIVADA:-}
       GIRO_VAPID_CHAVE_PUBLICA: ${GIRO_VAPID_CHAVE_PUBLICA:-}
       GIRO_VAPID_CONTATO: ${GIRO_VAPID_CONTATO:-mailto:contato@giro.demo}
+      GIRO_VISAO_URL: http://visao:8001
+      GIRO_VISAO_SEGREDO: ${GIRO_VISAO_SEGREDO:?defina GIRO_VISAO_SEGREDO em infra/.env}
     depends_on:
       banco:
         condition: service_healthy
+
+  visao:
+    build:
+      context: ../services/backend
+      dockerfile: ../../infra/visao.Dockerfile
+    restart: unless-stopped
+    profiles: ["completo"]
+    environment:
+      GIRO_VISAO_API_URL: http://api:8000
+      GIRO_VISAO_SEGREDO: ${GIRO_VISAO_SEGREDO:?defina GIRO_VISAO_SEGREDO em infra/.env}
+    depends_on: [api]
 
   web:
     build:
@@ -59,7 +72,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy:/data
-    depends_on: [api, web]
+    depends_on: [api, web, visao]
 
 volumes:
   banco:

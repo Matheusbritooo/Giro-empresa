@@ -12,6 +12,9 @@ Cliente: restaurante de bairro com 6 a 20 mesas, na região oeste da Grande São
 | Ocupação confirmada | 20 s vendo gente sentada | `giro/dominio/mesa.py` (`Regras`) |
 | Saída confirmada | 1 min com a mesa vazia | `giro/dominio/mesa.py` |
 | Alerta de cliente sem atendimento | 5 min (o dono pode mudar de 1 a 30) | `Restaurante.alerta_atendimento_seg` |
+| Sentada na mesa | caixa da pessoa até 2,2x mais alta que larga, com o meio da base dentro do desenho da mesa | `giro/visao/leitura.py` (`Ajustes`) |
+| Em pé junto à mesa (garçom) | caixa mais alta que isso, até 5% da foto de distância do desenho | `giro/visao/leitura.py` |
+| Detector de pessoas | YOLOX (Apache 2.0) em ONNX, só CPU: ~220 ms por foto no `yolox_s` | `giro/visao/detector.py`, `modelo.py` |
 | Assinatura e ativação | R$ 299/mês e R$ 290 (Fase 4) | ainda não está no código |
 | Custo de nuvem orçado | R$ 100 por cliente/mês (visão R$ 65) | anexo A.1 do TCM |
 
@@ -20,6 +23,8 @@ Estados da mesa: `livre` → `aguardando` → `ocupada` → `para_limpar` → `l
 ## Privacidade (LGPD): inegociável
 
 - Imagem de câmera nunca é gravada (disco, banco, log, fila ou serviço externo). Analisa em memória e descarta. Fica só evento em texto.
+- A prévia da câmera, usada para desenhar as mesas, tem as pessoas pixeladas e vive só na memória do serviço de visão por 3 minutos.
+- Vídeo de restaurante para calibrar a visão fica fora do repositório e só com autorização do dono (skill `validar-visao`).
 - Nada de reconhecimento facial ou de identificar quem é a pessoa. O sistema só conta pessoas por mesa.
 - Toda tabela de cliente tem `restaurante_id` e toda rota filtra por ele. Um restaurante nunca vê o outro.
 - A trava `scripts/verificar-commit.sh` bloqueia `.env`, chaves e imagens no repositório. Rode a skill `checagem-lgpd` antes de juntar mudanças em câmera, banco, API ou logs.
@@ -32,6 +37,8 @@ services/backend/   Python 3.12+, FastAPI, SQLAlchemy, Alembic (uv)
   giro/servicos/    liga o domínio ao banco, ao painel ao vivo e ao push
   giro/api/         rotas; dependências de login e restaurante em deps.py
   giro/simulador/   faz o papel da câmera; cenários em cenarios/*.yaml
+  giro/visao/       serviço de visão: detector, regra de mesa, prévia pixelada, avaliação
+  giro/conector.py  pega a imagem do DVR (RTSP ou foto HTTP) e manda para a visão
   migrations/       Alembic
 apps/web/           Next.js 16 (App Router, Cache Components), Tailwind 4, PWA (pnpm)
 infra/              docker-compose e Dockerfiles
@@ -39,19 +46,24 @@ scripts/            trava de commit
 .claude/            hooks, skills e agentes deste projeto
 ```
 
-O simulador e a futura visão computacional (Fase 2) mandam o mesmo formato para `POST /api/ingest/observacoes`: número da mesa, pessoas sentadas e pessoas em pé. A visão entra no lugar do simulador sem mudar o resto.
+Caminho de uma foto: DVR ► conector ► `POST /visao/quadros` (serviço de visão, porta 8001) ► detecta e conta por mesa ► `POST /api/ingest/observacoes` (só números) ► máquina de estados ► painel. O simulador manda direto para `/api/ingest/observacoes`, no mesmo formato. A API busca a prévia na visão por `/interno/*`, protegido por `GIRO_VISAO_SEGREDO`; essas rotas nunca ficam expostas.
 
 ## Comandos
 
 Backend (em `services/backend`):
 ```bash
-uv sync                                         # dependências
+uv sync --all-extras                            # dependências, inclusive visão e conector
 uv run alembic upgrade head && uv run python -m giro.seed   # banco + Cantina do Marcos
 uv run uvicorn --factory giro.api.app:criar_app --reload    # API em :8000 (docs em /api/docs)
 uv run pytest -q                                # testes (SQLite)
 uv run ruff check giro tests migrations && uv run ruff format giro tests migrations
 uv run python -m giro.simulador verificar       # cenários do salão
+uv run python -m giro.visao.modelo              # baixa o detector (conferindo o hash)
+uv run python -m giro.conector --help           # conector do DVR
+uv run python -m giro.visao.avaliar --help      # medir a visão com vídeo real
 ```
+
+`make dev` na raiz sobe API, visão e painel já ligados entre si.
 
 Painel (em `apps/web`):
 ```bash
@@ -68,7 +80,7 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 
 1. Backend: `ruff check`, `ruff format --check`, `pytest` e `simulador verificar` passando.
 2. Painel: `lint`, `typecheck`, `format:check`, `test` e, se mexeu em tela ou fluxo, `e2e`.
-3. Mudou regra da mesa: atualize ou crie cenário (skill `simular-salao`).
+3. Mudou regra da mesa: atualize ou crie cenário (skill `simular-salao`). Mudou a visão: `tests/test_visao.py` e, com vídeo, a skill `validar-visao`.
 4. Mudou banco: migração Alembic (skill `mudanca-no-banco`).
 5. Mexeu em dado de cliente: skill `checagem-lgpd`.
 
@@ -86,8 +98,10 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - `simular-salao`: roda e cria cenários, prepara demonstração ao vivo.
 - `checagem-lgpd`: checklist de privacidade e isolamento antes de juntar.
 - `mudanca-no-banco`: migração Alembic segura.
+- `validar-visao`: medir e calibrar a visão com vídeo real de salão.
 - Agente `guardiao-lgpd`: revisão de privacidade, só leitura.
 - Agente `testador-salao`: roda a bateria inteira e relata, não corrige.
+- Agente `especialista-visao`: calibra detector, desenho das mesas e regra de sentado/em pé.
 
 ## Glossário
 
