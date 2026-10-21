@@ -110,9 +110,9 @@ def test_previa_pixeliza_as_pessoas_e_reduz_a_foto():
     original = Image.fromarray(rng.integers(0, 255, (1200, 1600, 3), dtype=np.uint8))
     alvo = Pessoa(x1=0.25, y1=0.25, x2=0.5, y2=0.75, confianca=0.9, proporcao=2.0)
     previa = Image.open(BytesIO(previa_sem_rostos(original, [alvo])))
-    assert previa.width == 960
-    regiao = np.asarray(previa.convert("L"))[300:400, 260:440].astype(float)
-    fora = np.asarray(previa.convert("L"))[50:150, 700:880].astype(float)
+    assert previa.width == 640
+    regiao = np.asarray(previa.convert("L"))[200:280, 175:295].astype(float)
+    fora = np.asarray(previa.convert("L"))[30:100, 460:590].astype(float)
     # Dentro da pessoa a imagem vira blocos lisos; fora continua com o ruído original.
     assert np.abs(np.diff(regiao, axis=1)).mean() < np.abs(np.diff(fora, axis=1)).mean() / 4
 

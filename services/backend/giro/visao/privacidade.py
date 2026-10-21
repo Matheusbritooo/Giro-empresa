@@ -12,7 +12,7 @@ from PIL import Image
 
 from giro.visao.detector import Pessoa
 
-LARGURA_PREVIA = 960
+LARGURA_PREVIA = 640  # dá para desenhar as mesas e mostra pouco detalhe
 FOLGA = 0.12  # aumenta a área borrada em 12% para cobrir cabelo, ombros e mãos
 BLOCOS = 6
 

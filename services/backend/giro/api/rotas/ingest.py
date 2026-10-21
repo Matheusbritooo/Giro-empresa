@@ -58,6 +58,7 @@ def configuracao(camera: CameraAutenticada, db: Db) -> ConfiguracaoCamera:
     return ConfiguracaoCamera(
         camera_id=camera.id,
         restaurante_id=camera.restaurante_id,
-        mesas=[ZonaMesaSaida(numero=m.numero, poligono=m.poligono) for m in mesas],
+        # `if m.poligono` cobre linha antiga gravada como JSON null em vez de NULL.
+        mesas=[ZonaMesaSaida(numero=m.numero, poligono=m.poligono) for m in mesas if m.poligono],
         ajustes=camera.ajustes_visao or {},
     )

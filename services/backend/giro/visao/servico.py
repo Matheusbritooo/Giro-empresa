@@ -36,8 +36,15 @@ from giro.visao.privacidade import previa_sem_rostos
 
 log = logging.getLogger("giro.visao")
 
-# Foto grande demais pode ser ataque ("bomba de descompressão"). 4000 x 4000 já sobra.
+# Foto grande demais pode ser ataque ("bomba de descompressão"). Trava geral do Pillow; o
+# serviço ainda recusa antes, pelo limite `pixels_max`.
 Image.MAX_IMAGE_PIXELS = 16_000_000
+
+# Para pixelar, melhor sobrar do que faltar: a prévia esconde toda pessoa achada com pouca
+# certeza. A contagem por mesa descarta depois o que fica abaixo de `confianca_minima`.
+LIMIAR_PREVIA = 0.1
+FORMATOS = ["JPEG", "PNG"]
+MAX_CONFIGS = 10_000  # tokens guardados no cache, para chute de token não encher a memória
 
 
 class ConfigVisao(BaseSettings):
@@ -49,6 +56,7 @@ class ConfigVisao(BaseSettings):
     threads: int | None = None
     simultaneos: int = max(1, (os.cpu_count() or 2) // 2)  # fotos analisadas ao mesmo tempo
     tamanho_max_mb: float = 4
+    pixels_max: int = 9_000_000  # 4K (3840 x 2160) passa; o conector manda 1280 de largura
     previa_minutos: float = 3
     cache_config_seg: float = 10  # desenho novo de mesa vale em até ~20 s
 
@@ -94,7 +102,12 @@ class _Memoria:
 
     def guardar_config(self, chave: str, config: dict[str, Any] | None, segundos: float) -> None:
         with self._trava:
-            self._configs[chave] = (time.monotonic() + segundos, config)
+            agora = time.monotonic()
+            if len(self._configs) >= MAX_CONFIGS:
+                self._configs = {c: i for c, i in self._configs.items() if i[0] > agora}
+                while len(self._configs) >= MAX_CONFIGS:  # todos válidos: sai o mais antigo
+                    self._configs.pop(next(iter(self._configs)))
+            self._configs[chave] = (agora + segundos, config)
 
 
 def criar_app(
@@ -145,37 +158,53 @@ def criar_app(
         token = authorization[7:] if authorization.lower().startswith("bearer ") else ""
         if not token.startswith("cam_"):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token de câmera inválido")
-        tamanho = int(request.headers.get("content-length") or 0)
+        try:
+            tamanho = int(request.headers.get("content-length") or 0)
+        except ValueError:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "content-length inválido") from None
         if tamanho > limite_bytes:
-            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "foto grande demais")
-        corpo = await request.body()
-        if len(corpo) > limite_bytes:
             raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "foto grande demais")
         em = x_giro_em or datetime.now(UTC)
         if em.tzinfo is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "X-Giro-Em sem fuso")
-        return await run_in_threadpool(processar, token, corpo, em)
+        # Confere o token antes de receber a foto: quem não é câmera não ocupa memória.
+        camera = await run_in_threadpool(configuracao_da_camera, token)
+        corpo = bytearray()
+        async for pedaco in request.stream():
+            corpo += pedaco
+            if len(corpo) > limite_bytes:
+                raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "foto grande demais")
+        return await run_in_threadpool(processar, token, camera, bytes(corpo), em)
 
-    def processar(token: str, corpo: bytes, em: datetime) -> dict[str, Any]:
-        camera = configuracao_da_camera(token)
+    def abrir_foto(corpo: bytes) -> Image.Image:
+        try:
+            imagem = Image.open(BytesIO(corpo), formats=FORMATOS)
+        except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as erro:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, "arquivo não é uma foto JPEG ou PNG"
+            ) from erro
+        # O tamanho vem do cabeçalho do arquivo: dá para recusar antes de descompactar.
+        if imagem.width * imagem.height > config.pixels_max:
+            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "foto com pixels demais")
+        try:
+            imagem.load()
+        except (OSError, Image.DecompressionBombError) as erro:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "foto corrompida") from erro
+        return imagem
+
+    def processar(token: str, camera: dict[str, Any], corpo: bytes, em: datetime) -> dict[str, Any]:
         if not vagas.acquire(timeout=5):
             # Serviço ocupado: a foto se perde, a próxima chega em 10 s. Melhor que fila infinita.
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "ocupado, tente a próxima")
         try:
-            try:
-                imagem = Image.open(BytesIO(corpo))
-                imagem.load()
-            except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as erro:
-                raise HTTPException(
-                    status.HTTP_422_UNPROCESSABLE_CONTENT, "arquivo não é uma foto"
-                ) from erro
+            imagem = abrir_foto(corpo)
             ajustes = Ajustes.de_dict(camera["ajustes"])
-            pessoas = detector.detectar(imagem, limiar=ajustes.confianca_minima)
+            pessoas = detector.detectar(imagem, limiar=LIMIAR_PREVIA)
             zonas = [
                 ZonaMesa(m["numero"], [tuple(p) for p in m["poligono"]]) for m in camera["mesas"]
             ]
-            leitura = ler(pessoas, zonas, ajustes)
-            previa = previa_sem_rostos(imagem, pessoas)
+            leitura = ler(pessoas, zonas, ajustes)  # só conta quem passa de confianca_minima
+            previa = previa_sem_rostos(imagem, pessoas)  # pixela todo mundo achado
         finally:
             vagas.release()
         # Daqui para frente só existem números e a prévia pixelada; a foto original morre aqui.

@@ -78,9 +78,11 @@ Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 2. Num computador na mesma rede do gravador (o do caixa serve, ou o notebook do vendedor na demonstração), rode o conector:
    ```bash
    cd services/backend
-   uv run python -m giro.conector --token cam_... --visao https://SEU-DOMINIO \
-       --fonte "rtsp://usuario:senha@192.168.0.20:554/cam/realmonitor?channel=1&subtype=0"
+   export GIRO_TOKEN=cam_...
+   export GIRO_FONTE="rtsp://usuario:senha@192.168.0.20:554/cam/realmonitor?channel=1&subtype=0"
+   uv run python -m giro.conector --visao https://SEU-DOMINIO
    ```
+   Com as variáveis, a senha do gravador não fica no histórico do terminal nem na lista de programas abertos. O endereço da visão precisa ser `https://` (o conector recusa `http` fora da própria máquina).
    Endereços comuns (confira no manual do modelo):
 
    | Gravador | Transmissão (RTSP) | Foto (HTTP) |
@@ -91,7 +93,7 @@ Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 3. Em até 10 segundos a foto aparece em **Câmeras**, com as pessoas pixeladas. Toque em **Desenhar** ao lado de cada mesa e marque os cantos da mesa com as cadeiras.
 4. Confira a contagem ao lado de cada mesa. Se errar, ajuste a **Calibração** na mesma tela.
 
-Para testar sem gravador, o conector também aceita um vídeo gravado do salão (`--fonte salao.mp4`) ou uma pasta de fotos. A senha do gravador nunca aparece no terminal e nenhuma foto é gravada em disco.
+Para testar sem gravador, o conector também aceita um vídeo gravado do salão (`--fonte salao.mp4`) ou uma pasta de fotos. Quando mostra a fonte na tela, o conector troca usuário e senha por `***`, e nenhuma foto é gravada em disco.
 
 ## Como funciona
 

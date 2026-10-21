@@ -64,7 +64,7 @@ class Camera(Base):
     ativa: Mapped[bool] = mapped_column(default=True)
     ultima_observacao_em: Mapped[datetime | None]
     # Calibração da visão desta câmera (giro/visao/leitura.py, classe Ajustes). Vazio = padrão.
-    ajustes_visao: Mapped[dict[str, float] | None] = mapped_column(JSON)
+    ajustes_visao: Mapped[dict[str, float] | None] = mapped_column(JSON(none_as_null=True))
     criado_em: Mapped[datetime] = mapped_column(default=agora)
 
 
@@ -81,7 +81,7 @@ class Mesa(Base):
     pos_x: Mapped[int] = mapped_column(default=0)
     pos_y: Mapped[int] = mapped_column(default=0)
     # Desenho da mesa sobre a imagem da câmera (Fase 2): lista de pontos [x, y] de 0 a 1.
-    poligono: Mapped[list[list[float]] | None] = mapped_column(JSON)
+    poligono: Mapped[list[list[float]] | None] = mapped_column(JSON(none_as_null=True))
     ativa: Mapped[bool] = mapped_column(default=True)
 
     estado: Mapped[str] = mapped_column(String(20), default=Estado.LIVRE.value)

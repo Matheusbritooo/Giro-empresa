@@ -14,6 +14,7 @@ import httpx  # noqa: E402
 
 from giro.api.cliente_visao import ClienteVisao  # noqa: E402
 from giro.banco import agora  # noqa: E402
+from giro.visao import servico as modulo_servico  # noqa: E402
 from giro.visao.detector import Pessoa  # noqa: E402
 from giro.visao.servico import ConfigVisao, criar_app  # noqa: E402
 from tests.conftest import TOKEN_CAMERA, TOKEN_CAMERA_OUTRO  # noqa: E402
@@ -136,6 +137,65 @@ def test_foto_em_pedacos_sem_tamanho_declarado_tambem_tem_limite(app, cliente, d
     assert detector.chamadas == 0
 
 
+def test_foto_com_pixels_demais_e_recusada_antes_de_abrir(app, cliente, detector):
+    servico = criar_app(
+        ConfigVisao(pixels_max=10_000), detector=detector, cliente_api=TestClient(app)
+    )
+    resposta = enviar(TestClient(servico), corpo=jpeg(320, 240))
+    assert resposta.status_code == 413
+    assert detector.chamadas == 0
+
+
+def test_so_aceita_jpeg_ou_png(visao, detector):
+    cliente_visao, _ = visao
+    bmp = BytesIO()
+    Image.new("RGB", (32, 24)).save(bmp, format="BMP")
+    assert enviar(cliente_visao, corpo=bmp.getvalue()).status_code == 422
+    png = BytesIO()
+    Image.new("RGB", (32, 24)).save(png, format="PNG")
+    assert enviar(cliente_visao, corpo=png.getvalue()).status_code == 200
+    assert detector.chamadas == 1
+
+
+def test_tamanho_declarado_invalido_e_recusado(visao, detector):
+    cliente_visao, _ = visao
+    resposta = cliente_visao.post(
+        "/visao/quadros",
+        content=jpeg(),
+        headers={"authorization": f"Bearer {TOKEN_CAMERA}", "content-length": "muito"},
+    )
+    assert resposta.status_code == 400
+    assert detector.chamadas == 0
+
+
+def test_previa_pixela_ate_quem_nao_entra_na_contagem(visao, detector, monkeypatch):
+    """Pessoa achada com pouca certeza não conta na mesa, mas some da prévia do mesmo jeito."""
+    cliente_visao, _ = visao
+    detector.pessoas.append(Pessoa(0.7, 0.2, 0.77, 0.3, 0.2, 1.2))  # na mesa 2, certeza 20%
+    pixeladas = []
+    original = modulo_servico.previa_sem_rostos
+
+    def espiar(imagem, pessoas):
+        pixeladas.extend(pessoas)
+        return original(imagem, pessoas)
+
+    monkeypatch.setattr(modulo_servico, "previa_sem_rostos", espiar)
+    resposta = enviar(cliente_visao).json()
+    assert resposta["pessoas"] == 3
+    assert {"mesa": 2, "sentados": 0, "em_pe": 0} in resposta["mesas"]
+    assert len(pixeladas) == 4
+
+
+def test_cache_de_token_tem_tamanho_maximo(monkeypatch):
+    monkeypatch.setattr(modulo_servico, "MAX_CONFIGS", 3)
+    memoria = modulo_servico._Memoria()
+    for i in range(10):
+        memoria.guardar_config(f"chute-{i}", None, 60)
+    assert len(memoria._configs) == 3
+    assert memoria.config("chute-9") == (True, None)
+    assert memoria.config("chute-0") == (False, None)
+
+
 def test_previa_pixelada_e_leitura_para_quem_desenha_as_mesas(visao, como):
     cliente_visao, camera_id = visao
     enviar(cliente_visao)
@@ -152,11 +212,13 @@ def test_previa_pixelada_e_leitura_para_quem_desenha_as_mesas(visao, como):
     assert [p["em_pe"] for p in leitura["pessoas"]] == [False, False, True]
 
 
-def test_previa_respeita_restaurante_e_perfil(visao, como):
+def test_previa_e_leitura_respeitam_restaurante_e_perfil(visao, como):
     cliente_visao, camera_id = visao
     enviar(cliente_visao)
-    assert como("dono@vizinha.demo").get(f"/api/cameras/{camera_id}/previa").status_code == 404
-    assert como("equipe@cantina.demo").get(f"/api/cameras/{camera_id}/previa").status_code == 403
+    vizinho, equipe = como("dono@vizinha.demo"), como("equipe@cantina.demo")
+    for rota in ("previa", "leitura"):
+        assert vizinho.get(f"/api/cameras/{camera_id}/{rota}").status_code == 404
+        assert equipe.get(f"/api/cameras/{camera_id}/{rota}").status_code == 403
 
 
 def test_sem_foto_recente_avisa_para_ligar_o_conector(visao, como):
@@ -197,6 +259,19 @@ def test_configuracao_so_entrega_mesas_desenhadas_desta_camera(visao, cliente):
         "/api/ingest/configuracao", headers={"authorization": f"Bearer {TOKEN_CAMERA_OUTRO}"}
     )
     assert outra.json()["mesas"] == []
+
+
+def test_apagar_desenho_tira_a_mesa_da_visao_e_mantem_a_camera(visao, como, cliente):
+    _, camera_id = visao
+    gerente = como("gerente@cantina.demo")
+    mesa_1 = next(m for m in gerente.get("/api/mesas").json() if m["numero"] == 1)
+    resposta = gerente.patch(f"/api/mesas/{mesa_1['id']}", json={"poligono": None})
+    assert resposta.json()["poligono"] is None
+    assert resposta.json()["camera_id"] == camera_id
+    config = cliente.get(
+        "/api/ingest/configuracao", headers={"authorization": f"Bearer {TOKEN_CAMERA}"}
+    ).json()
+    assert [m["numero"] for m in config["mesas"]] == [2]
 
 
 def test_desenho_da_mesa_e_validado(como):
@@ -250,13 +325,30 @@ def test_calibracao_da_camera(visao, como, cliente):
 cv2 = pytest.importorskip("cv2")
 np = pytest.importorskip("numpy")
 
-from giro.conector import esconder_senha, foto_http, preparar_jpeg, rodar  # noqa: E402
+from giro.conector import (  # noqa: E402
+    conferir_visao,
+    esconder_senha,
+    foto_http,
+    preparar_jpeg,
+    rodar,
+)
 
 
 def test_conector_esconde_a_senha_do_dvr_no_terminal():
     url = "rtsp://admin:Senha123@192.168.0.20:554/cam/realmonitor?channel=1"
     assert esconder_senha(url) == "rtsp://***@192.168.0.20:554/cam/realmonitor?channel=1"
     assert esconder_senha("/videos/salao.mp4") == "/videos/salao.mp4"
+    na_busca = "http://192.168.0.20/snap.jpg?usr=admin&pwd=Senha123&loginUse=admin&chn=1"
+    assert esconder_senha(na_busca) == (
+        "http://192.168.0.20/snap.jpg?usr=admin&pwd=***&loginUse=***&chn=1"
+    )
+
+
+def test_conector_so_manda_foto_por_https_para_fora():
+    assert conferir_visao("https://giro.exemplo.com/") == "https://giro.exemplo.com"
+    assert conferir_visao("http://localhost:8001") == "http://localhost:8001"
+    with pytest.raises(SystemExit, match="https"):
+        conferir_visao("http://giro.exemplo.com")
 
 
 def test_conector_reduz_a_foto_antes_de_mandar():

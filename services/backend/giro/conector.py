@@ -6,6 +6,9 @@ na mesma rede do gravador (DVR/NVR). Nenhuma foto é gravada em disco.
   uv run --extra conector python -m giro.conector --token cam_... --visao https://SEU-DOMINIO \\
       --fonte "rtsp://usuario:senha@192.168.0.20:554/cam/realmonitor?channel=1&subtype=0"
 
+Token e fonte também podem vir das variáveis GIRO_TOKEN e GIRO_FONTE, para a senha do
+gravador não ficar no histórico do terminal nem na lista de processos.
+
 Fontes aceitas:
   rtsp://...            transmissão do DVR (Intelbras, Hikvision e afins)
   http(s)://...         endereço de foto do DVR, ex. http://192.168.0.20/cgi-bin/snapshot.cgi
@@ -16,6 +19,7 @@ Fontes aceitas:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from collections.abc import Callable, Iterator
@@ -23,7 +27,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import cv2
 import httpx
@@ -33,6 +37,9 @@ LARGURA_MAXIMA = 1280  # suficiente para contar pessoas; deixa cada foto com ~10
 QUALIDADE_JPEG = 75
 EXTENSOES_VIDEO = {".mp4", ".avi", ".mkv", ".mov", ".m4v"}
 EXTENSOES_FOTO = {".jpg", ".jpeg", ".png"}
+HOSTS_LOCAIS = {"localhost", "127.0.0.1", "::1"}
+# Alguns gravadores pedem usuário e senha no endereço (?user=admin&password=...).
+PARAMETROS_SECRETOS = ("pass", "pwd", "senha", "user", "login", "token", "auth")
 
 _mostrar = partial(print, flush=True)
 
@@ -46,12 +53,28 @@ class Quadro:
 def esconder_senha(url: str) -> str:
     """Para aparecer no terminal sem expor usuário e senha do DVR."""
     partes = urlsplit(url)
-    if partes.password is None and partes.username is None:
+    if partes.scheme.lower() not in ("rtsp", "rtsps", "http", "https"):
         return url
-    host = partes.hostname or ""
-    if partes.port:
-        host += f":{partes.port}"
-    return urlunsplit(partes._replace(netloc=f"***@{host}"))
+    if partes.password is not None or partes.username is not None:
+        host = partes.hostname or ""
+        if partes.port:
+            host += f":{partes.port}"
+        partes = partes._replace(netloc=f"***@{host}")
+    if partes.query:
+        parametros = [
+            (nome, "***" if any(s in nome.lower() for s in PARAMETROS_SECRETOS) else valor)
+            for nome, valor in parse_qsl(partes.query, keep_blank_values=True)
+        ]
+        partes = partes._replace(query=urlencode(parametros, safe="*"))
+    return urlunsplit(partes)
+
+
+def conferir_visao(url: str) -> str:
+    """A foto sai do restaurante: fora da própria máquina, só por HTTPS."""
+    partes = urlsplit(url)
+    if partes.scheme == "https" or (partes.scheme == "http" and partes.hostname in HOSTS_LOCAIS):
+        return url.rstrip("/")
+    raise SystemExit("--visao precisa começar com https:// (http só vale para localhost)")
 
 
 def preparar_jpeg(imagem: np.ndarray) -> bytes:
@@ -253,8 +276,16 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--fonte", required=True, help="rtsp://, http(s)://, vídeo ou pasta")
-    parser.add_argument("--token", required=True, help="chave da câmera (Ajustes > Câmeras)")
+    parser.add_argument(
+        "--fonte",
+        default=os.environ.get("GIRO_FONTE"),
+        help="rtsp://, http(s)://, vídeo ou pasta (ou a variável GIRO_FONTE)",
+    )
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("GIRO_TOKEN"),
+        help="chave da câmera, em Ajustes > Câmeras (ou a variável GIRO_TOKEN)",
+    )
     parser.add_argument(
         "--visao", default="http://localhost:8001", help="endereço do serviço de visão"
     )
@@ -263,9 +294,12 @@ def main() -> int:
         "--velocidade", type=float, default=1, help="só para vídeo/pasta: 1 = tempo real"
     )
     args = parser.parse_args()
+    if not args.fonte or not args.token:
+        parser.error("informe --fonte e --token (ou GIRO_FONTE e GIRO_TOKEN)")
+    visao = conferir_visao(args.visao)
 
-    _mostrar(f"Conector GIRO: {esconder_senha(args.fonte)} → {args.visao}")
-    with httpx.Client(base_url=args.visao.rstrip("/"), timeout=30) as cliente:
+    _mostrar(f"Conector GIRO: {esconder_senha(args.fonte)} → {visao}")
+    with httpx.Client(base_url=visao, timeout=30) as cliente:
         try:
             aceitas = rodar(args.fonte, args.token, cliente, args.intervalo, args.velocidade)
         except KeyboardInterrupt:
