@@ -1,15 +1,31 @@
 "use client";
 
+import { PerformanceMonitor } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useMovimentoReduzido } from "@/lib/midia";
 import { situacao, tempoDecorrido } from "@/lib/salao";
 import type { Mesa } from "@/lib/tipos";
 
 import { ALVO_INICIAL, ANCORA_CAMERA, Cena, type Controles, DIRECAO_INICIAL } from "./cena";
+import { QualidadeProvider } from "./contexto-qualidade";
 import { montarPlanta } from "./planta";
+import {
+  ajustesDoNivel,
+  escolherNivel,
+  type Nivel,
+  nivelAbaixo,
+  nivelForcado,
+  sondarNavegador,
+} from "./qualidade";
 import { RotuloMesa } from "./rotulo";
+import { EXPOSICAO } from "./tom";
+
+// Os efeitos (postprocessing) só são baixados quando o aparelho aguenta usá-los.
+const Efeitos = lazy(() => import("./efeitos"));
+/** Espera o salão assentar (texturas, primeiros quadros) antes de medir se está travando. */
+const ESPERA_PARA_MEDIR_MS = 4000;
 
 /** Primeira posição da câmera, antes do ajuste fino que faz o salão caber na tela. */
 function vistaInicial(largura: number, profundidade: number): [number, number, number] {
@@ -41,6 +57,12 @@ export default function Salao3D({
   aoAbrir: (mesaId: number) => void;
 }) {
   const [verComoCamera, setVerComoCamera] = useState(false);
+  // O nível sai do aparelho; se a imagem travar, o monitor desce um nível (nunca sobe).
+  const [aparelho] = useState(sondarNavegador);
+  const [nivel, setNivel] = useState<Nivel>(() => escolherNivel(aparelho));
+  const forcado = nivelForcado(aparelho) !== null;
+  const ajustes = ajustesDoNivel(nivel);
+  const baixarNivel = useCallback(() => setNivel(nivelAbaixo), []);
   const movimentoReduzido = useMovimentoReduzido();
   const controles = useRef<Controles>(null);
   const placas = useRef(new Map<string, HTMLElement>());
@@ -80,28 +102,40 @@ export default function Salao3D({
     <div
       className="@container relative isolate h-[min(68vh,660px)] min-h-[380px] overflow-hidden rounded-2xl border border-linha bg-superficie"
       data-testid="salao-3d"
+      data-qualidade={nivel}
     >
       <Canvas
-        shadows
-        dpr={[1, 2]}
+        shadows={ajustes.sombras === "nenhuma" ? false : "percentage"}
+        dpr={ajustes.dpr}
+        frameloop={ajustes.animar ? "always" : "demand"}
         camera={{ fov: 32, near: 0.1, far: 160, position: posicaoInicial }}
-        gl={{ antialias: true, powerPreference: "high-performance" }}
+        // Com os efeitos, o SMAA alisa as bordas: o antisserrilhado do navegador só pesaria.
+        gl={{ antialias: !ajustes.efeitos, powerPreference: "high-performance" }}
         onCreated={({ gl }) => {
-          gl.toneMappingExposure = 1.08;
+          gl.toneMappingExposure = EXPOSICAO;
+          gl.shadowMap.autoUpdate = ajustes.sombras === "dinamicas";
         }}
         aria-label="Salão em 3D. Arraste para girar e use a roda do mouse ou dois dedos para aproximar."
       >
-        <Cena
-          planta={planta}
-          agoraMs={agoraMs}
-          limiteSeg={limiteSeg}
-          nome={nome}
-          verComoCamera={verComoCamera}
-          movimentoReduzido={movimentoReduzido}
-          controles={controles}
-          aoAbrir={aoAbrir}
-          aoProjetar={projetar}
-        />
+        <QualidadeProvider nivel={nivel}>
+          <Cena
+            planta={planta}
+            agoraMs={agoraMs}
+            limiteSeg={limiteSeg}
+            nome={nome}
+            verComoCamera={verComoCamera}
+            movimentoReduzido={movimentoReduzido}
+            controles={controles}
+            aoAbrir={aoAbrir}
+            aoProjetar={projetar}
+          />
+          {ajustes.efeitos && (
+            <Suspense fallback={null}>
+              <Efeitos oclusao={ajustes.oclusao} />
+            </Suspense>
+          )}
+          {!forcado && nivel !== "baixo" && <VigiaDeDesempenho aoTravar={baixarNivel} />}
+        </QualidadeProvider>
       </Canvas>
 
       {/* Placas das mesas: botões comuns, em ordem de número, que o projetor põe sobre cada mesa. */}
@@ -161,4 +195,18 @@ export default function Salao3D({
       </p>
     </div>
   );
+}
+
+/**
+ * Mede os quadros por segundo e desce um nível se o salão começar a travar (abaixo de 30).
+ * Depois de 3 idas e vindas, para de mexer.
+ */
+function VigiaDeDesempenho({ aoTravar }: { aoTravar: () => void }) {
+  const [medindo, setMedindo] = useState(false);
+  useEffect(() => {
+    const espera = setTimeout(() => setMedindo(true), ESPERA_PARA_MEDIR_MS);
+    return () => clearTimeout(espera);
+  }, []);
+  if (!medindo) return null;
+  return <PerformanceMonitor flipflops={3} bounds={() => [30, 55]} onDecline={aoTravar} />;
 }

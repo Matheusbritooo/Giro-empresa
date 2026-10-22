@@ -15,6 +15,14 @@ updates:
     groups:
       painel-menores:
         update-types: [minor, patch]
+    ignore:
+      # O postprocessing 6.39.5 (efeitos do salão 3D) exige three abaixo de 0.187. Subir o
+      # three antes de sair um postprocessing compatível quebra a instalação do painel.
+      # Quando sair, tire estas duas linhas e suba os três juntos, testando o 3D.
+      - dependency-name: three
+        versions: [">=0.187.0"]
+      - dependency-name: "@types/three"
+        versions: [">=0.187.0"]
 
   - package-ecosystem: github-actions
     directory: /

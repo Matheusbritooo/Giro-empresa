@@ -8,9 +8,10 @@ import type * as THREE from "three";
 import type { Tom } from "@/lib/salao";
 
 import { aparencia, roupaDe } from "./aparencia";
-import type { CoresDoSalao } from "./cores";
+import { useQualidade, useRefazerSombra } from "./contexto-qualidade";
+import type { CoresDoSalao, CoresNaCena } from "./cores";
 import {
-  ALTURA_TAMPO,
+  ALTURA_TOALHA,
   formaTapete,
   geometriaCadeira,
   geometriaCardapio,
@@ -33,7 +34,10 @@ interface Props {
   comGarcom: boolean;
   verComoCamera: boolean;
   movimentoReduzido: boolean;
+  /** Tokens do painel (texto), para o contorno da câmera nas pessoas. */
   cores: CoresDoSalao;
+  /** As mesmas cores prontas para o 3D (pré-corrigidas quando há efeitos). */
+  coresTela: CoresNaCena;
   aoAbrir: (mesaId: number) => void;
 }
 
@@ -46,12 +50,16 @@ function Mesa3D({
   verComoCamera,
   movimentoReduzido,
   cores,
+  coresTela,
   aoAbrir,
 }: Props) {
   const [apontada, setApontada] = useState(false);
+  const { animar, sombras } = useQualidade();
   const a = aparencia();
   const mesa = geometriaMesa(item.forma);
   const cadeira = geometriaCadeira();
+  // A sombra só se refaz quando algo que faz sombra muda nesta mesa.
+  useRefazerSombra(`${item.x}:${item.z}:${item.mesa.lugares}:${tom}:${sentados}:${comGarcom}`);
 
   function clicar(evento: ThreeEvent<MouseEvent>) {
     evento.stopPropagation();
@@ -73,6 +81,7 @@ function Mesa3D({
         }}
       >
         <mesh geometry={mesa.tampo} material={a.tampo} castShadow receiveShadow />
+        <mesh geometry={mesa.toalha} material={a.toalha} castShadow receiveShadow />
         <mesh geometry={mesa.pes} material={a.metal} castShadow />
         {item.assentos.map((assento, i) => (
           <group
@@ -103,13 +112,17 @@ function Mesa3D({
         </group>
       )}
 
+      {sombras === "nenhuma" && (
+        <SombraDeContato meiaX={item.meiaPegada.x} meiaZ={item.meiaPegada.z} />
+      )}
+
       <Tapete
         meiaX={item.meiaPegada.x + FOLGA_TAPETE}
         meiaZ={item.meiaPegada.z + FOLGA_TAPETE}
         tom={tom}
-        cor={cores[tom]}
+        cor={coresTela[tom]}
         destacado={apontada}
-        movimentoReduzido={movimentoReduzido}
+        parado={movimentoReduzido || !animar}
       />
     </group>
   );
@@ -129,6 +142,7 @@ export const MesaNoSalao3D = memo(
     antes.verComoCamera === depois.verComoCamera &&
     antes.movimentoReduzido === depois.movimentoReduzido &&
     antes.cores === depois.cores &&
+    antes.coresTela === depois.coresTela &&
     antes.aoAbrir === depois.aoAbrir,
 );
 
@@ -151,7 +165,7 @@ function SobreAMesa({
   const usados = tom === "limpar" ? Math.max(2, Math.ceil(assentos.length / 2)) : sentados;
 
   return (
-    <group position-y={ALTURA_TAMPO}>
+    <group position-y={ALTURA_TOALHA}>
       {assentos.map((assento, i) => {
         const lugar = lugarNaMesa(assento);
         const copo = lugarNaMesa({ ...assento, rotacao: assento.rotacao - 0.4 }, 0.6);
@@ -224,8 +238,27 @@ function SobreAMesa({
 }
 
 /**
+ * Sem sombra projetada (nível baixo), uma mancha escura e macia no chão debaixo da mesa e
+ * das cadeiras faz o papel da sombra. Custa um quadrado transparente.
+ */
+function SombraDeContato({ meiaX, meiaZ }: { meiaX: number; meiaZ: number }) {
+  return (
+    <mesh
+      rotation-x={-Math.PI / 2}
+      position-y={0.003}
+      scale={[meiaX * 2 + 0.3, meiaZ * 2 + 0.3, 1]}
+      material={aparencia().sombraContato}
+      renderOrder={0}
+    >
+      <planeGeometry />
+    </mesh>
+  );
+}
+
+/**
  * Tapete do estado no chão, com cor e padrão: livre só tem contorno tracejado (quieta),
- * para limpar é listrada e a mesa atrasada pulsa, como na planta.
+ * para limpar é listrada e a mesa atrasada pulsa, como na planta. Parado (movimento
+ * reduzido ou aparelho fraco), a atrasada ganha um halo fixo em vez do pulso.
  */
 function Tapete({
   meiaX,
@@ -233,14 +266,14 @@ function Tapete({
   tom,
   cor,
   destacado,
-  movimentoReduzido,
+  parado,
 }: {
   meiaX: number;
   meiaZ: number;
   tom: Tom;
-  cor: string;
+  cor: THREE.Color;
   destacado: boolean;
-  movimentoReduzido: boolean;
+  parado: boolean;
 }) {
   const forma = useMemo(() => formaTapete(meiaX, meiaZ), [meiaX, meiaZ]);
   const contorno = useMemo(
@@ -253,7 +286,7 @@ function Tapete({
   const base = tom === "livre" ? 0 : destacado ? 0.55 : 0.34;
 
   useFrame(({ clock }) => {
-    if (!atrasada || movimentoReduzido) return;
+    if (!atrasada || parado) return;
     const fase = (clock.elapsedTime % 1.6) / 1.6;
     if (preenchimento.current) {
       preenchimento.current.opacity = base + 0.18 * Math.sin(fase * Math.PI * 2);
@@ -291,13 +324,19 @@ function Tapete({
         opacity={0.95}
         toneMapped={false}
       />
-      {atrasada && !movimentoReduzido && (
-        <mesh ref={pulso} rotation-x={-Math.PI / 2} position-y={0.008} renderOrder={2}>
+      {atrasada && (
+        <mesh
+          ref={pulso}
+          rotation-x={-Math.PI / 2}
+          position-y={0.008}
+          scale={parado ? 1.1 : 1}
+          renderOrder={2}
+        >
           <shapeGeometry args={[forma, 6]} />
           <meshBasicMaterial
             color={cor}
             transparent
-            opacity={0.5}
+            opacity={parado ? 0.3 : 0.5}
             depthWrite={false}
             toneMapped={false}
           />

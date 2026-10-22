@@ -5,6 +5,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 import { aparencia } from "./aparencia";
+import { useQualidade, useRefazerSombra } from "./contexto-qualidade";
+import { REPETICAO, uvEmMetros } from "./geometrias";
 
 export const ALTURA_PAREDE = 3;
 const ESPESSURA = 0.16;
@@ -29,6 +31,31 @@ export const Sala = memo(function Sala({
   const fundo = -profundidade / 2;
   const esquerda = -largura / 2;
   const janelas = posicoesJanelas(largura);
+  useRefazerSombra(`${largura}:${profundidade}`);
+
+  // Paredes com a textura em metros: o reboco e o lambri não esticam numa parede comprida.
+  const paredes = useMemo(() => {
+    const parede = (l: number, p: number, veio: "x" | "z") =>
+      uvEmMetros(new THREE.BoxGeometry(l, ALTURA_PAREDE, p), REPETICAO.reboco, veio);
+    const lambri = (l: number, p: number, veio: "x" | "z") =>
+      uvEmMetros(new THREE.BoxGeometry(l, LAMBRI, p), REPETICAO.lambri, veio);
+    const friso = (l: number, p: number, veio: "x" | "z") =>
+      uvEmMetros(new THREE.BoxGeometry(l, 0.05, p), REPETICAO.madeira, veio);
+    return {
+      fundo: parede(largura + ESPESSURA * 2, ESPESSURA, "x"),
+      esquerda: parede(ESPESSURA, profundidade, "z"),
+      lambriFundo: lambri(largura, 0.04, "x"),
+      lambriEsquerda: lambri(0.04, profundidade, "z"),
+      frisoFundo: friso(largura, 0.07, "x"),
+      frisoEsquerda: friso(0.07, profundidade, "z"),
+    };
+  }, [largura, profundidade]);
+  useEffect(
+    () => () => {
+      for (const g of Object.values(paredes)) g.dispose();
+    },
+    [paredes],
+  );
 
   return (
     <group>
@@ -36,31 +63,39 @@ export const Sala = memo(function Sala({
 
       {/* Parede do fundo e parede da esquerda, com lambri verde e friso de madeira. */}
       <mesh
+        geometry={paredes.fundo}
         position={[0, ALTURA_PAREDE / 2, fundo - ESPESSURA / 2]}
         material={a.reboco}
         receiveShadow
-      >
-        <boxGeometry args={[largura + ESPESSURA * 2, ALTURA_PAREDE, ESPESSURA]} />
-      </mesh>
+      />
       <mesh
+        geometry={paredes.esquerda}
         position={[esquerda - ESPESSURA / 2, ALTURA_PAREDE / 2, 0]}
         material={a.reboco}
         receiveShadow
-      >
-        <boxGeometry args={[ESPESSURA, ALTURA_PAREDE, profundidade]} />
-      </mesh>
-      <mesh position={[0, LAMBRI / 2, fundo + 0.02]} material={a.lambri} receiveShadow>
-        <boxGeometry args={[largura, LAMBRI, 0.04]} />
-      </mesh>
-      <mesh position={[esquerda + 0.02, LAMBRI / 2, 0]} material={a.lambri} receiveShadow>
-        <boxGeometry args={[0.04, LAMBRI, profundidade]} />
-      </mesh>
-      <mesh position={[0, LAMBRI + 0.025, fundo + 0.035]} material={a.friso}>
-        <boxGeometry args={[largura, 0.05, 0.07]} />
-      </mesh>
-      <mesh position={[esquerda + 0.035, LAMBRI + 0.025, 0]} material={a.friso}>
-        <boxGeometry args={[0.07, 0.05, profundidade]} />
-      </mesh>
+      />
+      <mesh
+        geometry={paredes.lambriFundo}
+        position={[0, LAMBRI / 2, fundo + 0.02]}
+        material={a.lambri}
+        receiveShadow
+      />
+      <mesh
+        geometry={paredes.lambriEsquerda}
+        position={[esquerda + 0.02, LAMBRI / 2, 0]}
+        material={a.lambri}
+        receiveShadow
+      />
+      <mesh
+        geometry={paredes.frisoFundo}
+        position={[0, LAMBRI + 0.025, fundo + 0.035]}
+        material={a.friso}
+      />
+      <mesh
+        geometry={paredes.frisoEsquerda}
+        position={[esquerda + 0.035, LAMBRI + 0.025, 0]}
+        material={a.friso}
+      />
 
       {janelas.map((x) => (
         <Janela key={x} x={x} z={fundo} />
@@ -134,17 +169,31 @@ function Janela({ x, z }: { x: number; z: number }) {
   );
 }
 
+/**
+ * Arandela de latão com cúpula de vidro leitoso acesa. A cúpula brilha acima de 1 (o brilho
+ * dos efeitos pega só ela) e uma luz pontual sem sombra esquenta a parede em volta.
+ */
 function Arandela({ posicao }: { posicao: [number, number, number] }) {
   const a = aparencia();
   return (
     <group position={posicao}>
-      <mesh material={a.metal} position-z={0.02}>
-        <cylinderGeometry args={[0.07, 0.07, 0.04, 20]} />
+      <mesh material={a.latao} position-z={0.012} rotation-x={Math.PI / 2}>
+        <cylinderGeometry args={[0.055, 0.06, 0.024, 24]} />
       </mesh>
-      <mesh material={a.luzQuente} position-z={0.09} rotation-x={Math.PI / 2}>
-        <sphereGeometry args={[0.09, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+      <mesh material={a.latao} position={[0, -0.02, 0.07]} rotation-x={Math.PI / 2}>
+        <cylinderGeometry args={[0.011, 0.011, 0.12, 10]} />
       </mesh>
-      <pointLight color="#ffc983" intensity={2.4} distance={6.5} decay={1.6} position-z={0.35} />
+      <mesh material={a.latao} position={[0, 0.005, 0.13]}>
+        <cylinderGeometry args={[0.03, 0.022, 0.03, 16]} />
+      </mesh>
+      {/* Cúpula em sino, aberta para cima, com a lâmpada acesa dentro. */}
+      <mesh material={a.luzQuente} position={[0, 0.06, 0.13]}>
+        <cylinderGeometry args={[0.085, 0.045, 0.1, 24, 1, true]} />
+      </mesh>
+      <mesh material={a.luzQuente} position={[0, 0.04, 0.13]}>
+        <sphereGeometry args={[0.035, 16, 10]} />
+      </mesh>
+      <pointLight color="#ffc27a" intensity={2.6} distance={6.5} decay={1.6} position-z={0.35} />
     </group>
   );
 }
@@ -248,6 +297,8 @@ function Planta({ posicao, semente }: { posicao: [number, number, number]; semen
 /** Nome do restaurante em letreiro de luz, desenhado com a fonte do painel. */
 function Letreiro({ nome, posicao }: { nome: string; posicao: [number, number, number] }) {
   const [textura, setTextura] = useState<THREE.CanvasTexture | null>(null);
+  // Com os efeitos, o néon passa de 1 e o brilho (bloom) o acende; sem eles, fica na cor certa.
+  const forca = useQualidade().efeitos ? 2.4 : 1;
 
   useEffect(() => {
     let vivo = true;
@@ -270,7 +321,13 @@ function Letreiro({ nome, posicao }: { nome: string; posicao: [number, number, n
   return (
     <mesh position={posicao}>
       <planeGeometry args={[altura * proporcao, altura]} />
-      <meshBasicMaterial map={textura} transparent toneMapped={false} depthWrite={false} />
+      <meshBasicMaterial
+        map={textura}
+        color={[forca, forca, forca]}
+        transparent
+        toneMapped={false}
+        depthWrite={false}
+      />
     </mesh>
   );
 }

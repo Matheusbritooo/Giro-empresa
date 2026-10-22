@@ -1,66 +1,13 @@
 /**
- * Materiais e texturas do salão: uma cantina à noite, com piso de tábua, parede de reboco
- * creme, lambri verde-garrafa e móveis de madeira escura. Tudo gerado no código, sem baixar
- * arquivo de imagem. Criados uma vez e divididos entre todas as mesas.
+ * Materiais e texturas do salão: uma cantina à noite, com piso de tábua envernizada, parede
+ * de reboco creme, lambri verde-garrafa, móveis de madeira escura e toalha xadrez. Tudo
+ * gerado no código, sem baixar arquivo de imagem. Criados uma vez e divididos entre todas
+ * as mesas; as texturas PBR chegam depois (`vestirSalao`), geradas aos poucos.
  */
 
 import * as THREE from "three";
 
-/** Sorteio repetível: o piso sai igual toda vez que a tela abre. */
-function sorteador(semente: number) {
-  let s = semente;
-  return () => {
-    s = (s * 1664525 + 1013904223) % 4294967296;
-    return s / 4294967296;
-  };
-}
-
-function texturaDeTabuas(): THREE.CanvasTexture {
-  const tamanho = 1024;
-  const tela = document.createElement("canvas");
-  tela.width = tela.height = tamanho;
-  const pincel = tela.getContext("2d") as CanvasRenderingContext2D;
-  const sorte = sorteador(7);
-  const fileiras = 11;
-  const altura = tamanho / fileiras;
-
-  for (let f = 0; f < fileiras; f++) {
-    let x = -sorte() * 400;
-    while (x < tamanho) {
-      const comprimento = 300 + sorte() * 420;
-      const tom = 22 + sorte() * 9;
-      const luz = 21 + sorte() * 9;
-      pincel.fillStyle = `hsl(${tom} 34% ${luz}%)`;
-      pincel.fillRect(x, f * altura, comprimento, altura);
-      // Veios da madeira: linhas finas onduladas, um pouco mais escuras.
-      pincel.strokeStyle = `hsl(${tom} 38% ${luz - 6}% / 0.4)`;
-      pincel.lineWidth = 1.2;
-      for (let v = 0; v < 7; v++) {
-        const y0 = f * altura + 8 + sorte() * (altura - 16);
-        const onda = 2 + sorte() * 4;
-        pincel.beginPath();
-        for (let px = 0; px <= comprimento; px += 16) {
-          const y = y0 + Math.sin((px + v * 37) / (40 + v * 9)) * onda;
-          if (px === 0) pincel.moveTo(x + px, y);
-          else pincel.lineTo(x + px, y);
-        }
-        pincel.stroke();
-      }
-      // Junta entre tábuas.
-      pincel.fillStyle = "rgb(28 18 12 / 0.75)";
-      pincel.fillRect(x, f * altura, 2, altura);
-      x += comprimento;
-    }
-    pincel.fillStyle = "rgb(28 18 12 / 0.8)";
-    pincel.fillRect(0, f * altura, tamanho, 2);
-  }
-
-  const textura = new THREE.CanvasTexture(tela);
-  textura.wrapS = textura.wrapT = THREE.RepeatWrapping;
-  textura.colorSpace = THREE.SRGBColorSpace;
-  textura.anisotropy = 8;
-  return textura;
-}
+import { texturasPBR, vestir } from "./texturas-three";
 
 /** Listras diagonais: o "hachurado" da mesa para limpar, igual ao da planta. */
 function texturaDeListras(): THREE.CanvasTexture {
@@ -85,15 +32,36 @@ function texturaDeListras(): THREE.CanvasTexture {
   return textura;
 }
 
+/** Mancha redonda e macia: sombra de contato desenhada, para quando não há sombra projetada. */
+function texturaDeSombra(): THREE.CanvasTexture {
+  const tamanho = 128;
+  const tela = document.createElement("canvas");
+  tela.width = tela.height = tamanho;
+  const pincel = tela.getContext("2d") as CanvasRenderingContext2D;
+  const meio = tamanho / 2;
+  const degrade = pincel.createRadialGradient(meio, meio, 0, meio, meio, meio);
+  degrade.addColorStop(0, "rgb(0 0 0 / 0.5)");
+  degrade.addColorStop(0.55, "rgb(0 0 0 / 0.34)");
+  degrade.addColorStop(1, "rgb(0 0 0 / 0)");
+  pincel.fillStyle = degrade;
+  pincel.fillRect(0, 0, tamanho, tamanho);
+  return new THREE.CanvasTexture(tela);
+}
+
 const padrao = (cor: string, aspereza = 0.6, extra: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial({ color: cor, roughness: aspereza, ...extra });
 
 function criar() {
-  const tabuas = texturaDeTabuas();
   return {
-    tabuas,
     listras: texturaDeListras(),
-    piso: new THREE.MeshStandardMaterial({ map: tabuas, roughness: 0.55, metalness: 0 }),
+    sombraContato: new THREE.MeshBasicMaterial({
+      map: texturaDeSombra(),
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+    // Até a textura ficar pronta, o piso é só da cor média da madeira.
+    piso: padrao("#5e3b25", 0.5),
     reboco: padrao("#e2d3ba", 0.95),
     lambri: padrao("#2d4a3e", 0.7),
     friso: padrao("#5b3a24", 0.5),
@@ -105,6 +73,15 @@ function criar() {
       clearcoatRoughness: 0.25,
     }),
     madeiraEscura: padrao("#3b2417", 0.62),
+    // Toalha de algodão: o "sheen" dá o brilho aveludado de tecido nas bordas.
+    toalha: new THREE.MeshPhysicalMaterial({
+      color: "#e4cdc5",
+      roughness: 0.9,
+      sheen: 0.6,
+      sheenRoughness: 0.75,
+      sheenColor: new THREE.Color("#fff4ea"),
+      side: THREE.DoubleSide, // por baixo da barra também se vê o pano
+    }),
     metal: padrao("#2b2a28", 0.35, { metalness: 0.85 }),
     louca: padrao("#f3efe6", 0.22),
     vidro: new THREE.MeshPhysicalMaterial({
@@ -143,7 +120,14 @@ function criar() {
       emissiveIntensity: 0.55,
       roughness: 0.1,
     }),
-    luzQuente: new THREE.MeshBasicMaterial({ color: "#ffd9a0", toneMapped: false }),
+    // Cúpula da arandela: brilha acima de 1, que é o que o brilho (bloom) pega.
+    luzQuente: new THREE.MeshStandardMaterial({
+      color: "#000000",
+      emissive: "#ffd9a0",
+      emissiveIntensity: 3.2,
+      side: THREE.DoubleSide,
+    }),
+    latao: padrao("#a7834a", 0.32, { metalness: 0.9 }),
   };
 }
 
@@ -155,6 +139,35 @@ let unica: Aparencia | null = null;
 export function aparencia(): Aparencia {
   unica ??= criar();
   return unica;
+}
+
+/** Lado das texturas já vestidas (0 = nenhuma). Nunca troca por uma menor. */
+let vestidas = 0;
+
+/**
+ * Gera as texturas PBR (aos poucos) e veste os materiais do salão com elas. Resolve quando
+ * terminou, para quem chamou pedir um quadro novo.
+ */
+export async function vestirSalao(tamanho: number): Promise<boolean> {
+  if (vestidas >= tamanho) return false;
+  const a = aparencia();
+  const [piso, reboco, lambri, madeira, toalha] = await Promise.all([
+    texturasPBR("piso", tamanho),
+    texturasPBR("reboco", tamanho),
+    texturasPBR("lambri", tamanho),
+    texturasPBR("madeira", tamanho),
+    texturasPBR("toalha", tamanho),
+  ]);
+  if (vestidas >= tamanho) return false;
+  vestidas = tamanho;
+  a.piso.color.set("#ffffff"); // a cor da tábua já vem na textura
+  vestir(a.piso, piso, { relevo: 0.9, oclusao: 0.7 });
+  vestir(a.reboco, reboco, { relevo: 0.6, oclusao: 0.4 });
+  vestir(a.lambri, lambri, { relevo: 1, oclusao: 0.7 });
+  for (const m of [a.tampo, a.madeiraEscura, a.friso]) vestir(m, madeira, { relevo: 0.5 });
+  a.toalha.color.set("#ffffff"); // o xadrez já vem na textura
+  vestir(a.toalha, toalha, { relevo: 0.7, oclusao: 0.5 });
+  return true;
 }
 
 /** Cor de roupa sempre igual para a mesma pessoa na mesma mesa, sem sorteio a cada tela. */

@@ -1,7 +1,10 @@
 import { useMemo } from "react";
+import * as THREE from "three";
 
 import { useTemaEscuro } from "@/lib/midia";
 import type { Tom } from "@/lib/salao";
+
+import { antesDoAces, EXPOSICAO } from "./tom";
 
 export type CoresDoSalao = Record<Tom, string> & { foco: string };
 
@@ -44,4 +47,28 @@ function lerCores(escuro: boolean): CoresDoSalao {
 export function useCoresDoSalao(): CoresDoSalao {
   const escuro = useTemaEscuro();
   return useMemo(() => lerCores(escuro), [escuro]);
+}
+
+/** As mesmas cores, prontas para o 3D (THREE.Color, em RGB linear). */
+export type CoresNaCena = Record<keyof CoresDoSalao, THREE.Color>;
+
+/**
+ * Cor de um token para o tapete e o contorno da mesa. Com os efeitos ligados, o tom ACES
+ * entra na imagem pronta; a cor vai pré-corrigida para sair igual ao token (veja tom.ts).
+ */
+export function corNaCena(hex: string, comEfeitos: boolean): THREE.Color {
+  const cor = new THREE.Color(hex);
+  if (!comEfeitos) return cor;
+  const [r, g, b] = antesDoAces([cor.r, cor.g, cor.b], EXPOSICAO);
+  return cor.setRGB(r, g, b);
+}
+
+export function useCoresNaCena(cores: CoresDoSalao, comEfeitos: boolean): CoresNaCena {
+  return useMemo(() => {
+    const saida = {} as CoresNaCena;
+    for (const nome of Object.keys(cores) as (keyof CoresDoSalao)[]) {
+      saida[nome] = corNaCena(cores[nome], comEfeitos);
+    }
+    return saida;
+  }, [cores, comEfeitos]);
 }
