@@ -2,7 +2,7 @@
 
 import { Line } from "@react-three/drei";
 import { type ThreeEvent, useFrame } from "@react-three/fiber";
-import { memo, useMemo, useRef, useState } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as THREE from "three";
 
 import type { Tom } from "@/lib/salao";
@@ -256,7 +256,14 @@ function Tapete({
   const preenchimento = useRef<THREE.MeshBasicMaterial>(null);
   const pulso = useRef<THREE.Mesh>(null);
   const atrasada = tom === "atrasada";
-  const base = tom === "livre" ? 0 : destacado ? 0.55 : 0.34;
+  // Sobre o piso de madeira, cor fraca muda de tom (o azul virava lilás): ocupada e esperando
+  // vão mais fortes. Para limpar fica mais leve porque já tem o listrado.
+  const base = tom === "livre" ? 0 : (tom === "limpar" ? 0.34 : 0.5) + (destacado ? 0.15 : 0);
+
+  // O pulso mexe na opacidade por fora do React: ao sair de "atrasada" (ou parar), volta à base.
+  useLayoutEffect(() => {
+    if (preenchimento.current) preenchimento.current.opacity = base;
+  }, [tom, parado, base]);
 
   useFrame(({ clock }) => {
     if (!atrasada || parado) return;

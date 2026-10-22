@@ -26,7 +26,16 @@ type Agendar = (passo: (tempoLivre: () => number) => void) => void;
 
 const agendar: Agendar = (passo) => {
   if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-    window.requestIdleCallback((prazo) => passo(() => prazo.timeRemaining()), { timeout: 200 });
+    window.requestIdleCallback(
+      (prazo) => {
+        // Sem folga (o prazo venceu): ainda assim anda uma fatia de tempo, não uma fatia de linhas.
+        const inicio = performance.now();
+        passo(() =>
+          prazo.didTimeout ? FATIA_MS - (performance.now() - inicio) : prazo.timeRemaining(),
+        );
+      },
+      { timeout: 200 },
+    );
   } else {
     setTimeout(() => {
       const inicio = performance.now();

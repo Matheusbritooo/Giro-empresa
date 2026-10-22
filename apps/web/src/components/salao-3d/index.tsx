@@ -2,8 +2,10 @@
 
 import { PerformanceMonitor } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
+import { NoToneMapping } from "three";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { LimiteDeErro } from "@/components/limite-de-erro";
 import { useMovimentoReduzido } from "@/lib/midia";
 import { situacao, tempoDecorrido } from "@/lib/salao";
 import type { Alerta, Mesa } from "@/lib/tipos";
@@ -29,6 +31,10 @@ export type { PedidoDeFoco } from "./voo-camera";
 const Efeitos = lazy(() => import("./efeitos"));
 /** Espera o salão assentar (texturas, primeiros quadros) antes de medir se está travando. */
 const ESPERA_PARA_MEDIR_MS = 4000;
+/** Se a placa de vídeo some e não volta nesse tempo, a página mostra a planta. */
+const ESPERA_CONTEXTO_MS = 5000;
+/** Distância mínima entre uma placa e a borda da área do 3D (px). */
+const MARGEM_PLACA = 8;
 
 /** Primeira posição da câmera, antes do ajuste fino que faz o salão caber na tela. */
 function vistaInicial(largura: number, profundidade: number): [number, number, number] {
@@ -54,6 +60,7 @@ export default function Salao3D({
   nome,
   foco = null,
   aoAbrir,
+  aoFalhar,
 }: {
   mesas: Mesa[];
   alertas: Alerta[];
@@ -63,6 +70,8 @@ export default function Salao3D({
   /** Leva a câmera até esta mesa ("Ver no salão" nos alertas). */
   foco?: PedidoDeFoco | null;
   aoAbrir: (mesaId: number) => void;
+  /** O 3D não tem como continuar (a placa de vídeo sumiu e não voltou). */
+  aoFalhar?: () => void;
 }) {
   const [verComoCamera, setVerComoCamera] = useState(false);
   // O nível sai do aparelho; se a imagem travar, o monitor desce um nível (nunca sobe).
@@ -75,10 +84,19 @@ export default function Salao3D({
   const controles = useRef<Controles>(null);
   const voo = useRef<Voo>(null);
   const raiz = useRef<HTMLDivElement>(null);
-  const placas = useRef(new Map<string, HTMLElement>());
+  const placas = useRef(
+    new Map<string, { elemento: HTMLElement; largura: number; altura: number }>(),
+  );
+  const area = useRef<HTMLDivElement>(null);
+  const tamanhoArea = useRef({ largura: 0, altura: 0 });
+  const aoFalharRef = useRef(aoFalhar);
   const planta = useMemo(() => montarPlanta(mesas), [mesas]);
   // A câmera do Canvas só usa a posição inicial; depois quem manda é quem arrasta.
   const [posicaoInicial] = useState(() => vistaInicial(planta.largura, planta.profundidade));
+
+  useEffect(() => {
+    aoFalharRef.current = aoFalhar;
+  }, [aoFalhar]);
 
   // Se o 3D sair da tela com o mouse em cima de uma mesa, o cursor volta ao normal.
   useEffect(
@@ -88,11 +106,34 @@ export default function Salao3D({
     [],
   );
 
-  /** Guarda o botão de cada placa para o projetor movê-lo sem redesenhar a página. */
+  // Tamanho da área do 3D, para as placas não saírem cortadas pela borda.
+  useEffect(() => {
+    const elemento = area.current;
+    if (!elemento) return;
+    const medir = () => {
+      tamanhoArea.current = { largura: elemento.clientWidth, altura: elemento.clientHeight };
+    };
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(elemento);
+    return () => observador.disconnect();
+  }, []);
+
+  /**
+   * Guarda o botão de cada placa (e o tamanho dele) para o projetor movê-lo sem redesenhar a
+   * página. Medir aqui, uma vez por renderização, evita ler o layout a cada quadro.
+   */
   const registrar = useCallback(
     (id: string) => (elemento: HTMLElement | null) => {
-      if (elemento) placas.current.set(id, elemento);
-      else placas.current.delete(id);
+      if (elemento) {
+        placas.current.set(id, {
+          elemento,
+          largura: elemento.offsetWidth,
+          altura: elemento.offsetHeight,
+        });
+      } else {
+        placas.current.delete(id);
+      }
     },
     [],
   );
@@ -101,9 +142,16 @@ export default function Salao3D({
     (id: string, x: number, y: number, visivel: boolean, perto: number) => {
       const placa = placas.current.get(id);
       if (!placa) return;
-      placa.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -50%)`;
-      placa.style.visibility = visivel ? "visible" : "hidden";
-      placa.style.zIndex = String(Math.round(perto * 1000)); // a mais perto fica por cima
+      // De perto, a placa poderia sair da área: fica presa dentro dela, com uma folga.
+      const { largura, altura } = tamanhoArea.current;
+      const meiaL = placa.largura / 2 + MARGEM_PLACA;
+      const meiaA = placa.altura / 2 + MARGEM_PLACA;
+      const px = largura > 2 * meiaL ? Math.min(Math.max(x, meiaL), largura - meiaL) : x;
+      const py = altura > 2 * meiaA ? Math.min(Math.max(y, meiaA), altura - meiaA) : y;
+      const estilo = placa.elemento.style;
+      estilo.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, 0) translate(-50%, -50%)`;
+      estilo.visibility = visivel ? "visible" : "hidden";
+      estilo.zIndex = String(Math.round(perto * 1000)); // a mais perto fica por cima
     },
     [],
   );
@@ -126,113 +174,136 @@ export default function Salao3D({
   return (
     <div
       ref={raiz}
-      className="@container relative isolate h-[min(68vh,660px)] min-h-[380px] overflow-hidden rounded-2xl border border-linha bg-superficie"
+      className="@container flex flex-col overflow-hidden rounded-2xl border border-linha bg-superficie"
       data-testid="salao-3d"
       data-qualidade={nivel}
     >
-      <Canvas
-        shadows={ajustes.sombras === "nenhuma" ? false : "percentage"}
-        dpr={ajustes.dpr}
-        frameloop={ajustes.animar ? "always" : "demand"}
-        camera={{ fov: 32, near: 0.1, far: 160, position: posicaoInicial }}
-        // Com os efeitos, o SMAA alisa as bordas: o antisserrilhado do navegador só pesaria.
-        gl={{ antialias: !ajustes.efeitos, powerPreference: "high-performance" }}
-        onCreated={({ gl }) => {
-          gl.toneMappingExposure = EXPOSICAO;
-          gl.shadowMap.autoUpdate = ajustes.sombras === "dinamicas";
-        }}
-        aria-label="Salão em 3D. Arraste para girar e use a roda do mouse ou dois dedos para aproximar."
-      >
-        <QualidadeProvider nivel={nivel}>
-          <Cena
-            planta={planta}
-            alertas={alertas}
-            agoraMs={agoraMs}
-            limiteSeg={limiteSeg}
-            nome={nome}
-            verComoCamera={verComoCamera}
-            movimentoReduzido={movimentoReduzido}
-            controles={controles}
-            foco={foco}
-            vooRef={voo}
-            aoAbrir={aoAbrir}
-            aoProjetar={projetar}
-            aoChegarNaMesa={aoChegarNaMesa}
-            aoMudarDestinoGarcom={aoMudarDestinoGarcom}
-          />
-          {ajustes.efeitos && (
-            <Suspense fallback={null}>
-              <Efeitos oclusao={ajustes.oclusao} />
-            </Suspense>
-          )}
-          {!forcado && nivel !== "baixo" && <VigiaDeDesempenho aoTravar={baixarNivel} />}
-        </QualidadeProvider>
-      </Canvas>
-
-      {/* Placas das mesas: botões comuns, em ordem de número, que o projetor põe sobre cada mesa. */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {planta.mesas.map(({ mesa }) => {
-          const s = situacao(mesa, agoraMs, limiteSeg);
-          return (
-            <RotuloMesa
-              key={mesa.id}
-              ref={registrar(String(mesa.id))}
-              mesa={mesa}
-              situacao={s}
-              cronometro={s.desde ? tempoDecorrido(s.desde, agoraMs) : null}
-              aoAbrir={aoAbrir}
-            />
-          );
-        })}
-        {verComoCamera && (
-          <span
-            ref={registrar(ANCORA_CAMERA)}
-            style={{ visibility: "hidden" }}
-            className="absolute top-0 left-0 whitespace-nowrap rounded-md bg-tinta/85 px-2 py-1 text-xs font-semibold text-fundo"
-          >
-            Câmera do salão: 1 foto a cada 10 s
-          </span>
-        )}
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-[2000] flex flex-wrap items-start justify-between gap-2">
-        {/* As pessoas do 3D são desenho: a câmera do restaurante não filma nem guarda imagem. */}
-        <p
-          data-testid="selo-ilustrativo"
-          className="max-w-[17rem] rounded-md bg-superficie/85 px-2 py-1 text-xs font-semibold text-tinta"
+      <div ref={area} className="relative isolate h-[min(64vh,620px)] min-h-[360px]">
+        <Canvas
+          shadows={ajustes.sombras === "nenhuma" ? false : "percentage"}
+          dpr={ajustes.dpr}
+          frameloop={ajustes.animar ? "always" : "demand"}
+          camera={{ fov: 32, near: 0.1, far: 160, position: posicaoInicial }}
+          // Antisserrilhado sempre: se o aparelho cair para o nível sem efeitos (sem SMAA) no
+          // meio do uso, o renderizador já criado não ganha antisserrilhado depois.
+          gl={{ antialias: true, powerPreference: "high-performance" }}
+          onCreated={({ gl }) => {
+            gl.toneMappingExposure = EXPOSICAO;
+            // Com os efeitos, o tom sai no EffectComposer: já nasce sem tom para não recompilar tudo.
+            if (ajustes.efeitos) gl.toneMapping = NoToneMapping;
+            gl.shadowMap.autoUpdate = ajustes.sombras === "dinamicas";
+            // Placa de vídeo perdida (driver reiniciou, aba em segundo plano no celular): se não
+            // voltar logo, a página mostra a planta em vez de um quadro em branco.
+            let espera: ReturnType<typeof setTimeout> | undefined;
+            gl.domElement.addEventListener("webglcontextlost", () => {
+              espera = setTimeout(() => aoFalharRef.current?.(), ESPERA_CONTEXTO_MS);
+            });
+            gl.domElement.addEventListener("webglcontextrestored", () => clearTimeout(espera));
+          }}
+          aria-label="Salão em 3D. Arraste para girar e use a roda do mouse ou dois dedos para aproximar."
         >
-          Pessoas ilustrativas: a câmera só conta, não filma ninguém.
-        </p>
+          <QualidadeProvider nivel={nivel}>
+            {/* Cena e efeitos no mesmo Suspense: o primeiro quadro já passa pelo EffectComposer e os shaders compilam uma vez só. */}
+            <Suspense fallback={null}>
+              <Cena
+                planta={planta}
+                alertas={alertas}
+                agoraMs={agoraMs}
+                limiteSeg={limiteSeg}
+                nome={nome}
+                verComoCamera={verComoCamera}
+                movimentoReduzido={movimentoReduzido}
+                controles={controles}
+                foco={foco}
+                vooRef={voo}
+                aoAbrir={aoAbrir}
+                aoProjetar={projetar}
+                aoChegarNaMesa={aoChegarNaMesa}
+                aoMudarDestinoGarcom={aoMudarDestinoGarcom}
+              />
+              {/* Sem os efeitos (se o pedaço não carregar), o salão segue com a imagem simples. */}
+              {ajustes.efeitos && (
+                <LimiteDeErro reserva={null}>
+                  <Efeitos oclusao={ajustes.oclusao} />
+                </LimiteDeErro>
+              )}
+            </Suspense>
+            {!forcado && nivel !== "baixo" && <VigiaDeDesempenho aoTravar={baixarNivel} />}
+          </QualidadeProvider>
+        </Canvas>
+
+        {/* Placas das mesas: botões comuns, em ordem de número, que o projetor põe sobre cada mesa. */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          {planta.mesas.map(({ mesa }) => {
+            const s = situacao(mesa, agoraMs, limiteSeg);
+            return (
+              <RotuloMesa
+                key={mesa.id}
+                ref={registrar(String(mesa.id))}
+                mesa={mesa}
+                situacao={s}
+                cronometro={s.desde ? tempoDecorrido(s.desde, agoraMs) : null}
+                aoAbrir={aoAbrir}
+              />
+            );
+          })}
+          {verComoCamera && (
+            <span
+              ref={registrar(ANCORA_CAMERA)}
+              style={{ visibility: "hidden" }}
+              className="absolute top-0 left-0 whitespace-nowrap rounded-md bg-tinta/85 px-2 py-1 text-xs font-semibold text-fundo"
+            >
+              Câmera do salão: 1 foto a cada 10 s
+            </span>
+          )}
+        </div>
+
         {verComoCamera && (
-          <p className="max-w-[22rem] rounded-lg bg-tinta/85 px-3 py-2 text-sm text-fundo">
+          <p className="pointer-events-none absolute top-3 right-3 z-[2000] max-w-[min(22rem,calc(100%-1.5rem))] rounded-lg bg-tinta/85 px-3 py-2 text-sm text-fundo">
             A câmera enxerga formas, não rostos. Ela só conta quem está sentado em cada mesa
             (contorno branco) e quem está em pé junto dela (contorno amarelo).
           </p>
         )}
+
+        <div className="absolute bottom-3 left-3 z-[2000] flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-pressed={verComoCamera}
+            onClick={() => setVerComoCamera((v) => !v)}
+            className={`min-h-10 rounded-lg px-3 text-sm font-semibold shadow-md ${
+              verComoCamera ? "bg-ocupada text-sobre-cor" : "bg-superficie/90 text-tinta"
+            }`}
+          >
+            Ver como a câmera
+          </button>
+          <button
+            type="button"
+            onClick={voltarAVistaInicial}
+            className="min-h-10 rounded-lg bg-superficie/90 px-3 text-sm font-semibold text-tinta shadow-md"
+          >
+            Voltar à vista inicial
+          </button>
+        </div>
       </div>
 
-      <div className="absolute bottom-3 left-3 z-[2000] flex flex-wrap gap-2">
-        <button
-          type="button"
-          aria-pressed={verComoCamera}
-          onClick={() => setVerComoCamera((v) => !v)}
-          className={`min-h-10 rounded-lg px-3 text-sm font-semibold shadow-md ${
-            verComoCamera ? "bg-ocupada text-sobre-cor" : "bg-superficie/90 text-tinta"
-          }`}
-        >
-          Ver como a câmera
-        </button>
-        <button
-          type="button"
-          onClick={voltarAVistaInicial}
-          className="min-h-10 rounded-lg bg-superficie/90 px-3 text-sm font-semibold text-tinta shadow-md"
-        >
-          Voltar à vista inicial
-        </button>
+      {/* Faixa fixa embaixo do 3D: o selo nunca cobre placa nem é coberto por elas. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-linha px-3 py-2 text-xs">
+        {/* As pessoas do 3D são desenho: a câmera do restaurante não filma nem guarda imagem. */}
+        <p data-testid="selo-ilustrativo" className="font-semibold text-tinta">
+          Pessoas ilustrativas: a câmera só conta, não filma ninguém.
+        </p>
+        <p className="flex flex-wrap items-center gap-x-3 text-tinta-suave">
+          <span className="hidden md:inline">Arraste para girar. Role para aproximar.</span>
+          <a
+            href="/modelos/CREDITOS.md"
+            target="_blank"
+            rel="noopener"
+            className="underline underline-offset-2 hover:text-tinta"
+          >
+            Créditos dos desenhos
+          </a>
+        </p>
       </div>
-      <p className="pointer-events-none absolute right-3 bottom-3 z-[2000] hidden rounded-md bg-superficie/85 px-2 py-1 text-xs text-tinta-suave md:block">
-        Arraste para girar. Role para aproximar.
-      </p>
     </div>
   );
 }

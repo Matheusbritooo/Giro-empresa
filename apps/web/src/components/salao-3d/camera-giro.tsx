@@ -104,21 +104,25 @@ export const CameraDoSalao = memo(function CameraDoSalao({
         </group>
       </group>
 
-      <mesh geometry={cone} renderOrder={3}>
-        <meshBasicMaterial
-          color={cor}
-          transparent
-          opacity={verComoCamera ? 0.1 : 0.035}
-          side={THREE.DoubleSide}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
+      {/* O campo de visão só aparece cheio no modo câmera; fora dele ficam só as arestas, de leve,
+          para não tingir o salão (no tema escuro o azul lavava tudo). */}
+      {verComoCamera && (
+        <mesh geometry={cone} renderOrder={3}>
+          <meshBasicMaterial
+            color={cor}
+            transparent
+            opacity={0.1}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      )}
       <lineSegments geometry={arestas} renderOrder={4}>
         <lineBasicMaterial
           color={cor}
           transparent
-          opacity={verComoCamera ? 0.85 : 0.28}
+          opacity={verComoCamera ? 0.85 : 0.12}
           toneMapped={false}
         />
       </lineSegments>

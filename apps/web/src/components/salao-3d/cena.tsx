@@ -13,6 +13,7 @@ import {
 } from "react";
 import * as THREE from "three";
 
+import { LimiteDeErro } from "@/components/limite-de-erro";
 import { situacao } from "@/lib/salao";
 import type { Alerta } from "@/lib/tipos";
 
@@ -94,6 +95,8 @@ export function Cena({
   const cores = useCoresDoSalao();
   const qualidade = useQualidade();
   const coresTela = useCoresNaCena(cores, qualidade.efeitos);
+  // O campo de visão não precisa bater com o token: vai sem a correção do tom, mais discreto.
+  const corDaCamera = useMemo(() => new THREE.Color(cores.foco), [cores.foco]);
   const { largura, profundidade } = planta;
   const maior = Math.max(largura, profundidade);
   const posicaoCamera = useMemo<[number, number, number]>(
@@ -132,7 +135,12 @@ export function Cena({
 
   return (
     <>
-      <ControleDoDesenho planta={planta} agoraMs={agoraMs} texturas={qualidade.texturas} />
+      <ControleDoDesenho
+        planta={planta}
+        tons={planta.mesas.map((m) => situacao(m.mesa, agoraMs, limiteSeg).tom).join()}
+        verComoCamera={verComoCamera}
+        texturas={qualidade.texturas}
+      />
 
       {/* Interior quente à noite: o céu do hemisfério é o teto iluminado, o chão é madeira. */}
       <hemisphereLight args={["#ffdfb8", "#2a1b12", 0.5]} />
@@ -155,7 +163,7 @@ export function Cena({
         shadow-normalBias={0.03}
         shadow-radius={qualidade.sombras === "dinamicas" ? 5 : 3}
       />
-      <Ambiente />
+      <Ambiente comFoto={qualidade.nivel !== "baixo"} />
 
       <Sala largura={largura} profundidade={profundidade} nome={nome} />
 
@@ -178,28 +186,30 @@ export function Cena({
         aoAbrir={aoAbrir}
       />
 
-      <Suspense fallback={null}>
-        <Garcom3D
-          planta={planta}
-          mesas={mesas}
-          alertas={alertas}
-          agoraMs={agoraMs}
-          verComoCamera={verComoCamera}
-          corContorno={cores.aguardando}
-          parado={parado}
-          aoMudarDestino={aoMudarDestinoGarcom}
-        />
-      </Suspense>
+      {/* Se o modelo do garçom não carregar, o salão segue sem ele (não derruba o 3D). */}
+      <LimiteDeErro reserva={null}>
+        <Suspense fallback={null}>
+          <Garcom3D
+            planta={planta}
+            mesas={mesas}
+            alertas={alertas}
+            agoraMs={agoraMs}
+            verComoCamera={verComoCamera}
+            corContorno={coresTela.aguardando}
+            parado={parado}
+            aoMudarDestino={aoMudarDestinoGarcom}
+          />
+        </Suspense>
+      </LimiteDeErro>
 
       <CameraDoSalao
         posicao={posicaoCamera}
         area={area}
-        cor={coresTela.foco}
+        cor={corDaCamera}
         verComoCamera={verComoCamera}
         movimentoReduzido={movimentoReduzido}
       />
 
-      <Projetor ancoras={ancoras} aoProjetar={aoProjetar} />
       <Enquadrar planta={planta} />
       <VooDaCamera
         planta={planta}
@@ -227,6 +237,8 @@ export function Cena({
         maxAzimuthAngle={1.35}
         onChange={limitarAlvo}
       />
+      {/* Por último: as placas seguem a câmera do mesmo quadro (depois do voo e dos controles). */}
+      <Projetor ancoras={ancoras} aoProjetar={aoProjetar} />
     </>
   );
 }
@@ -240,11 +252,14 @@ export function Cena({
  */
 function ControleDoDesenho({
   planta,
-  agoraMs,
+  tons,
+  verComoCamera,
   texturas,
 }: {
   planta: PlantaSalao;
-  agoraMs: number;
+  /** Estado de cada mesa: só redesenha quando algum muda, não a cada segundo do relógio. */
+  tons: string;
+  verComoCamera: boolean;
   texturas: number;
 }) {
   const { sombras } = useQualidade();
@@ -260,7 +275,7 @@ function ControleDoDesenho({
 
   useEffect(() => {
     invalidate();
-  }, [planta, agoraMs, invalidate]);
+  }, [planta, tons, verComoCamera, invalidate]);
 
   useEffect(() => {
     let vivo = true;

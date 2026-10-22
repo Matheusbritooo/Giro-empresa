@@ -344,7 +344,8 @@ export function geometriaMesa(forma: Forma): {
         ),
         pes: juntar([
           cilindro(0.045, ALTURA_TAMPO - espessura, 0, (ALTURA_TAMPO - espessura) / 2, 0),
-          cilindro(0.24, 0.025, 0, 0.0125, 0, 32),
+          // Base menor que o alcance dos pés de quem senta (0,39 m na mesa de 2), para não encostar.
+          cilindro(0.18, 0.025, 0, 0.0125, 0, 32),
         ]),
         toalha,
       };
@@ -407,14 +408,15 @@ export function contornoPessoa(emPe: boolean): THREE.EdgesGeometry {
 
 export function geometriaPrato(): THREE.BufferGeometry {
   return lembrar("prato", () => {
-    // Perfil do prato girado em volta do eixo: fundo raso e aba levantada.
+    // Perfil do prato girado em volta do eixo: fundo raso e aba levantada. Vai da borda para
+    // o centro: nessa ordem a face da frente do fundo olha para cima (a de trás não é desenhada).
     const perfil = [
-      new THREE.Vector2(0, 0.002),
-      new THREE.Vector2(0.075, 0.002),
-      new THREE.Vector2(0.09, 0.007),
-      new THREE.Vector2(0.122, 0.017),
-      new THREE.Vector2(0.126, 0.02),
       new THREE.Vector2(0.12, 0.021),
+      new THREE.Vector2(0.126, 0.02),
+      new THREE.Vector2(0.122, 0.017),
+      new THREE.Vector2(0.09, 0.007),
+      new THREE.Vector2(0.075, 0.002),
+      new THREE.Vector2(0, 0.002),
     ];
     return new THREE.LatheGeometry(perfil, 40);
   });

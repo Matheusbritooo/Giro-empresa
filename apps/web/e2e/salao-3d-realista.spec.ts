@@ -41,7 +41,7 @@ test("salão 3D no nível alto: pessoas ilustrativas, garçom e 'Ver no salão' 
   await expect(page.getByTestId("mesa-10")).toHaveAttribute("data-estado", "atrasada");
 
   // "Ver no salão" leva a câmera até a mesa: a placa dela fica perto do meio do 3D.
-  await alerta.getByRole("button", { name: "Ver a mesa 10 no salão" }).click();
+  await alerta.getByRole("button", { name: "Ver no salão a mesa 10" }).click();
   await expect(salao).toHaveAttribute("data-camera-em", "mesa-10", { timeout: 30_000 });
   const area = await salao.boundingBox();
   const placa = await page.getByTestId("mesa-10").boundingBox();

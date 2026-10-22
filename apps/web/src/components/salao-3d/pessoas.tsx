@@ -4,10 +4,12 @@ import type { ThreeEvent } from "@react-three/fiber";
 import { lazy, Suspense, useMemo } from "react";
 import * as THREE from "three";
 
+import { LimiteDeErro } from "@/components/limite-de-erro";
 import type { Mesa } from "@/lib/tipos";
 
 import { aparencia, roupaDe } from "./aparencia";
-import { useRefazerSombra } from "./contexto-qualidade";
+import { useQualidade, useRefazerSombra } from "./contexto-qualidade";
+import { corNaCena } from "./cores";
 import { escolherPessoas, type PessoaEscolhida } from "./escolha-pessoas";
 import { contornoPessoa, geometriaSentada } from "./geometrias";
 import { MANIFESTO } from "./modelos";
@@ -65,7 +67,7 @@ export function montarSentados(planta: PlantaSalao): Sentado[] {
 }
 
 /** Contorno que a câmera desenha: branco para quem está sentado, amarelo para quem está em pé. */
-export function Contorno({ emPe, cor }: { emPe: boolean; cor: string }) {
+export function Contorno({ emPe, cor }: { emPe: boolean; cor: THREE.ColorRepresentation }) {
   return (
     <lineSegments geometry={contornoPessoa(emPe)} renderOrder={10}>
       <lineBasicMaterial
@@ -94,6 +96,9 @@ export interface PropsPessoas {
  */
 export function PessoasNoSalao({ planta, verComoCamera, respirar, aoAbrir }: PropsPessoas) {
   const sentados = useMemo(() => montarSentados(planta), [planta]);
+  const { efeitos } = useQualidade();
+  // Branco do contorno pré-corrigido para o tom dos efeitos, como as cores dos estados.
+  const branco = useMemo(() => corNaCena("#ffffff", efeitos), [efeitos]);
   const chave = sentados
     .map((s) => `${s.mesaId}.${s.assento}.${s.escolha.cliente}.${s.escolha.pose}`)
     .join("|");
@@ -102,13 +107,16 @@ export function PessoasNoSalao({ planta, verComoCamera, respirar, aoAbrir }: Pro
 
   return (
     <>
-      <Suspense fallback={<PessoasSimples sentados={sentados} aoAbrir={aoAbrir} />}>
-        <PessoasRealistas sentados={sentados} respirar={respirar} aoAbrir={aoAbrir} />
-      </Suspense>
+      {/* Se o pedaço do pacote com os modelos não chegar, fica todo mundo no desenho simples. */}
+      <LimiteDeErro reserva={<PessoasSimples sentados={sentados} aoAbrir={aoAbrir} />}>
+        <Suspense fallback={<PessoasSimples sentados={sentados} aoAbrir={aoAbrir} />}>
+          <PessoasRealistas sentados={sentados} respirar={respirar} aoAbrir={aoAbrir} />
+        </Suspense>
+      </LimiteDeErro>
       {verComoCamera &&
         sentados.map((s) => (
           <group key={`${s.mesaId}:${s.assento}`} matrixAutoUpdate={false} matrix={s.cadeira}>
-            <Contorno emPe={false} cor="#ffffff" />
+            <Contorno emPe={false} cor={branco} />
           </group>
         ))}
     </>
@@ -126,7 +134,7 @@ export function clicarNaPessoa(
 }
 
 /** Pessoas simples, sem rosto: a reserva enquanto os modelos realistas não chegam. */
-function PessoasSimples({
+export function PessoasSimples({
   sentados,
   aoAbrir,
 }: {

@@ -81,7 +81,7 @@ export function Garcom3D({
   alertas: Alerta[];
   agoraMs: number;
   verComoCamera: boolean;
-  corContorno: string;
+  corContorno: THREE.ColorRepresentation;
   /** Sem animação: vai direto ao destino e fica numa pose só. */
   parado: boolean;
   /** Avisa para onde ele está indo ("mesa-7" ou "balcao"), para a página e os testes. */

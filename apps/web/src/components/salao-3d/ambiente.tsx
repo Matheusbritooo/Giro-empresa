@@ -3,6 +3,8 @@
 import { Environment, Lightformer } from "@react-three/drei";
 import { Suspense, use } from "react";
 
+import { LimiteDeErro } from "@/components/limite-de-erro";
+
 /** Quanto a luz refletida do ambiente pesa: pouco, para não lavar a noite da cantina. */
 const INTENSIDADE = 0.3;
 
@@ -53,17 +55,26 @@ function ComFoto() {
   );
 }
 
-/** Reflexos nos copos, no verniz e no piso. Enquanto a foto 360° chega, só os recortes de luz. */
-export function Ambiente() {
+/** Só os recortes de luz, sem foto (mesma resolução da versão com foto: não recompila). */
+function SemFoto() {
   return (
-    <Suspense
-      fallback={
-        <Environment resolution={128} environmentIntensity={INTENSIDADE}>
-          <Recortes />
-        </Environment>
-      }
-    >
-      <ComFoto />
-    </Suspense>
+    <Environment resolution={256} environmentIntensity={INTENSIDADE}>
+      <Recortes />
+    </Environment>
+  );
+}
+
+/**
+ * Reflexos nos copos, no verniz e no piso. Enquanto a foto 360° chega, ou se ela não
+ * carregar, ficam só os recortes de luz. No nível baixo a foto nem é baixada.
+ */
+export function Ambiente({ comFoto = true }: { comFoto?: boolean }) {
+  if (!comFoto) return <SemFoto />;
+  return (
+    <LimiteDeErro reserva={<SemFoto />}>
+      <Suspense fallback={<SemFoto />}>
+        <ComFoto />
+      </Suspense>
+    </LimiteDeErro>
   );
 }

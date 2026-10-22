@@ -2,13 +2,15 @@
 
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 
+import { LimiteDeErro } from "@/components/limite-de-erro";
+
 import { useRefazerSombra } from "./contexto-qualidade";
-import { MANIFESTO, URLS_CLIENTES } from "./modelos";
-import { clicarNaPessoa, type Sentado } from "./pessoas";
+import { type ClienteDoManifesto, MANIFESTO, urlDoModelo } from "./modelos";
+import { clicarNaPessoa, PessoasSimples, type Sentado } from "./pessoas";
 
 /** Respiração: período (s), inclinação do tronco (rad) e quanto o peito sobe (fração). */
 const RESPIRACAO = { periodo: 4.2, inclinacao: 0.008, subida: 0.006 };
@@ -28,13 +30,12 @@ interface Pose {
   pelve: THREE.Vector3;
 }
 
-/** Tira de cada .glb as malhas de cada pose, para dividir entre todas as instâncias. */
-function separarPoses(modelos: GLTF[]): Map<string, Pose> {
+/** Tira do .glb de um cliente as malhas de cada pose, para dividir entre todas as instâncias. */
+function separarPoses(cliente: ClienteDoManifesto, modelo: GLTF): Map<string, Pose> {
   const poses = new Map<string, Pose>();
-  MANIFESTO.clientes.forEach((cliente, i) => {
-    const cena = modelos[i]?.scene;
-    if (!cena) return;
-    cena.updateMatrixWorld(true);
+  const cena = modelo.scene;
+  cena.updateMatrixWorld(true);
+  {
     for (const nome of cliente.poses) {
       const no = cena.children.find((o: THREE.Object3D) => (o.userData.name ?? o.name) === nome);
       if (!no) continue;
@@ -49,12 +50,9 @@ function separarPoses(modelos: GLTF[]): Map<string, Pose> {
         });
       });
       const p = (no.userData.pelve as [number, number, number] | undefined) ?? PELVE_PADRAO;
-      poses.set(`${cliente.id}|${nome}`, {
-        partes,
-        pelve: new THREE.Vector3(...p),
-      });
+      poses.set(nome, { partes, pelve: new THREE.Vector3(...p) });
     }
-  });
+  }
   return poses;
 }
 
@@ -77,9 +75,10 @@ function matrizDaPessoa(s: Sentado): THREE.Matrix4 {
 }
 
 /**
- * Os clientes sentados com os modelos realistas (Rocketbox, MIT). Cada cliente+pose vira um
- * InstancedMesh por material: a mesma geometria e o mesmo material servem a todas as mesas,
- * e a placa de vídeo desenha todo mundo daquela pose de uma vez.
+ * Os clientes sentados com os modelos realistas (Rocketbox, MIT). Cada cliente baixa o próprio
+ * .glb, só se alguém estiver usando aquele cliente, e tem reserva própria: enquanto o arquivo
+ * chega, ou se ele não carregar, aquelas pessoas ficam no desenho simples e o resto do salão
+ * segue normal. Cada pose vira um InstancedMesh por material, dividido entre todas as mesas.
  */
 export default function PessoasRealistas({
   sentados,
@@ -90,19 +89,63 @@ export default function PessoasRealistas({
   respirar: boolean;
   aoAbrir: (mesaId: number) => void;
 }) {
+  const porCliente = useMemo(() => {
+    const mapa = new Map<string, Sentado[]>();
+    for (const s of sentados) {
+      const lista = mapa.get(s.escolha.cliente) ?? [];
+      lista.push(s);
+      mapa.set(s.escolha.cliente, lista);
+    }
+    return [...mapa.entries()];
+  }, [sentados]);
+
+  return (
+    <>
+      {porCliente.map(([id, lista]) => {
+        const cliente = MANIFESTO.clientes.find((c) => c.id === id);
+        const simples = <PessoasSimples sentados={lista} aoAbrir={aoAbrir} />;
+        if (!cliente) return <group key={id}>{simples}</group>;
+        return (
+          <LimiteDeErro key={id} reserva={simples}>
+            <Suspense fallback={simples}>
+              <ClienteNoSalao
+                cliente={cliente}
+                sentados={lista}
+                respirar={respirar}
+                aoAbrir={aoAbrir}
+              />
+            </Suspense>
+          </LimiteDeErro>
+        );
+      })}
+    </>
+  );
+}
+
+/** Todas as pessoas de um mesmo cliente (modelo), agrupadas por pose e lado. */
+function ClienteNoSalao({
+  cliente,
+  sentados,
+  respirar,
+  aoAbrir,
+}: {
+  cliente: ClienteDoManifesto;
+  sentados: Sentado[];
+  respirar: boolean;
+  aoAbrir: (mesaId: number) => void;
+}) {
   // Sem Draco (os arquivos não usam) e com o decodificador meshopt que vem no pacote.
-  const modelos = useGLTF(URLS_CLIENTES, false, true) as unknown as GLTF[];
-  const poses = useMemo(() => separarPoses(modelos), [modelos]);
-  // Quando os modelos chegam no lugar das pessoas simples, a sombra muda junto.
-  useRefazerSombra(sentados);
+  const modelo = useGLTF(urlDoModelo(cliente.arquivo), false, true) as unknown as GLTF;
+  const poses = useMemo(() => separarPoses(cliente, modelo), [cliente, modelo]);
+  // Quando o modelo chega no lugar das pessoas simples, a sombra muda junto.
+  useRefazerSombra(modelo);
 
   const grupos = useMemo(() => {
     const porChave = new Map<string, { pose: string; espelhar: boolean; lista: Sentado[] }>();
     for (const s of sentados) {
-      const pose = `${s.escolha.cliente}|${s.escolha.pose}`;
-      const chave = `${pose}|${s.escolha.espelhar ? "e" : "d"}`;
+      const chave = `${s.escolha.pose}|${s.escolha.espelhar ? "e" : "d"}`;
       const grupo = porChave.get(chave) ?? {
-        pose,
+        pose: s.escolha.pose,
         espelhar: s.escolha.espelhar,
         lista: [],
       };
@@ -116,7 +159,7 @@ export default function PessoasRealistas({
     <>
       {grupos.map(([chave, grupo]) => {
         const pose = poses.get(grupo.pose);
-        if (!pose) return null;
+        if (!pose) return <PessoasSimples key={chave} sentados={grupo.lista} aoAbrir={aoAbrir} />;
         return (
           <GrupoDePessoas
             // Quantidade nova: outro InstancedMesh (o tamanho dele é fixo).
@@ -212,6 +255,3 @@ function GrupoDePessoas({
     </group>
   );
 }
-
-// Começa a baixar assim que este pedaço do pacote chega, antes de a cena pedir.
-useGLTF.preload(URLS_CLIENTES, false, true);

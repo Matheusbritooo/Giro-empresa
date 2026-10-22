@@ -54,7 +54,8 @@ export function ListaAlertas({
                 <Botao
                   variante="secundario"
                   className="px-3 text-sm"
-                  aria-label={`Ver a mesa ${alerta.mesa_numero} no salão`}
+                  // Começa pelo texto visível (quem usa comando de voz fala o que vê).
+                  aria-label={`Ver no salão a mesa ${alerta.mesa_numero}`}
                   onClick={() => aoVerNoSalao(alerta)}
                 >
                   Ver no salão

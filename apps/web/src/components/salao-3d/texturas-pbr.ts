@@ -203,11 +203,13 @@ export function pisoEmFatias(tamanho = 512, semente = 7): GeracaoFatiada {
         const i = y * n + x;
         relevo[i] = vale + (aneis * 0.05 + fibra * 0.04) * vale;
 
-        const base = 0.4 + tom * 0.13;
+        // Nogueira envernizada: marrom mais neutro (o laranja saturava na vista geral e
+        // mudava o tom dos tapetes coloridos das mesas).
+        const base = 0.37 + tom * 0.12;
         const escuro = 0.8 + 0.2 * aneis;
         const r = base * escuro * (0.93 + fibra * 0.1);
         const sujeira = 0.5 + 0.5 * vale;
-        pintar(cor, i * 4, r * sujeira, r * 0.63 * sujeira, r * 0.4 * sujeira);
+        pintar(cor, i * 4, r * sujeira, r * 0.69 * sujeira, r * 0.5 * sujeira);
 
         const desgaste = fbm(u, v, 3, 3, semente + 77);
         const aspereza = 0.24 + desgaste * 0.24 + fibra * 0.06 + (1 - vale) * 0.5;

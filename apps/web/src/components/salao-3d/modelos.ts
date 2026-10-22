@@ -38,5 +38,4 @@ export function urlDoModelo(arquivo: string): string {
   return `/modelos/${arquivo}`;
 }
 
-export const URLS_CLIENTES = MANIFESTO.clientes.map((c) => urlDoModelo(c.arquivo));
 export const URL_GARCOM = urlDoModelo(MANIFESTO.garcom.arquivo);

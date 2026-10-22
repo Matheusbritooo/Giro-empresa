@@ -130,13 +130,35 @@ function criar() {
   };
 }
 
+/** 1 pixel neutro: o shader nasce com os mapas e não recompila quando a textura chega. */
+function pixel(r: number, g: number, b: number, srgb: boolean): THREE.DataTexture {
+  const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1);
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  t.needsUpdate = true;
+  return t;
+}
+function neutro(m: THREE.MeshStandardMaterial) {
+  m.map = pixel(255, 255, 255, true);
+  m.normalMap = pixel(128, 128, 255, false);
+  const orm = pixel(255, Math.round(m.roughness * 255), 0, false);
+  m.roughnessMap = orm;
+  m.aoMap = orm;
+  m.roughness = 1;
+}
+function criarComNeutros() {
+  const a = criar();
+  for (const m of [a.piso, a.reboco, a.lambri, a.tampo, a.madeiraEscura, a.friso, a.toalha])
+    neutro(m);
+  return a;
+}
+
 export type Aparencia = ReturnType<typeof criar>;
 
 let unica: Aparencia | null = null;
 
 /** Os materiais do salão. Criados na primeira vez que o 3D abre. */
 export function aparencia(): Aparencia {
-  unica ??= criar();
+  unica ??= criarComNeutros();
   return unica;
 }
 

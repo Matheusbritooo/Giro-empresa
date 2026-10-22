@@ -107,6 +107,8 @@ export default function PaginaSalao() {
 
   function mudarVista(nova: Vista) {
     setVista(nova);
+    // Um "Ver no salão" antigo não pode fazer a câmera voar sozinha quando o 3D reabrir.
+    setFoco(null);
     try {
       localStorage.setItem(CHAVE_VISTA, nova);
     } catch {
@@ -116,6 +118,7 @@ export default function PaginaSalao() {
 
   function quandoO3DFalhar() {
     setCom3D(false);
+    setFoco(null);
     setVista("planta");
     setRecado({
       tipo: "erro",
@@ -218,6 +221,7 @@ export default function PaginaSalao() {
                 limiteSeg={limite}
                 nome={salao.restaurante.nome}
                 aoAbrir={setMesaAberta}
+                aoFalhar={quandoO3DFalhar}
               />
             </LimiteDeErro>
           ) : (

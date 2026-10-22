@@ -100,11 +100,16 @@ export const Sala = memo(function Sala({
       {janelas.map((x) => (
         <Janela key={x} x={x} z={fundo} />
       ))}
-      {janelas.slice(0, -1).map((x, i) => (
-        <Arandela key={x} posicao={[(x + janelas[i + 1]) / 2, 2.25, fundo + 0.08]} />
-      ))}
+      {janelas
+        .slice(0, -1)
+        .map((x, i) => (x + janelas[i + 1]) / 2)
+        // O meio da parede é do letreiro: arandela ali ficava pregada em cima do nome.
+        .filter((meio) => Math.abs(meio) > 1.5)
+        .map((meio) => (
+          <Arandela key={meio} posicao={[meio, 2.25, fundo + 0.08]} />
+        ))}
 
-      <Letreiro nome={nome} posicao={[0, 2.05, fundo + 0.03]} />
+      <Letreiro nome={nome} posicao={[0, 2.05, fundo + 0.06]} />
       <Balcao x={esquerda} z={fundo + 1.1} comprimento={Math.min(3.4, profundidade * 0.4)} />
       <Planta posicao={[largura / 2 - 0.65, 0, fundo + 0.65]} semente={1} />
       <Planta posicao={[esquerda + 0.65, 0, profundidade / 2 - 0.7]} semente={2} />
@@ -298,7 +303,8 @@ function Planta({ posicao, semente }: { posicao: [number, number, number]; semen
 function Letreiro({ nome, posicao }: { nome: string; posicao: [number, number, number] }) {
   const [textura, setTextura] = useState<THREE.CanvasTexture | null>(null);
   // Com os efeitos, o néon passa de 1 e o brilho (bloom) o acende; sem eles, fica na cor certa.
-  const forca = useQualidade().efeitos ? 2.4 : 1;
+  // Mais forte que isso, a letra estoura em branco e o brilho come a forma.
+  const forca = useQualidade().efeitos ? 1.4 : 1;
 
   useEffect(() => {
     let vivo = true;
@@ -318,17 +324,24 @@ function Letreiro({ nome, posicao }: { nome: string; posicao: [number, number, n
   if (!textura) return null;
   const proporcao = textura.image.width / textura.image.height;
   const altura = 0.8;
+  const largura = altura * proporcao;
   return (
-    <mesh position={posicao}>
-      <planeGeometry args={[altura * proporcao, altura]} />
-      <meshBasicMaterial
-        map={textura}
-        color={[forca, forca, forca]}
-        transparent
-        toneMapped={false}
-        depthWrite={false}
-      />
-    </mesh>
+    <group position={posicao}>
+      {/* Placa de madeira escura atrás do néon: sem ela, a letra clara somia no reboco creme. */}
+      <mesh position-z={-0.035} material={aparencia().madeiraEscura} castShadow>
+        <boxGeometry args={[largura * 0.92, altura * 0.78, 0.04]} />
+      </mesh>
+      <mesh>
+        <planeGeometry args={[largura, altura]} />
+        <meshBasicMaterial
+          map={textura}
+          color={[forca, forca, forca]}
+          transparent
+          toneMapped={false}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
   );
 }
 
