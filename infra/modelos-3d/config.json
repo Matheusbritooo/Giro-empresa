@@ -1,0 +1,132 @@
+{
+  "textura_px": 512,
+  "triangulos_por_pose": 5600,
+  "limites": {
+    "cliente_kb": 700,
+    "clientes_total_kb": 3584,
+    "garcom_kb": 900,
+    "decoracao_kb": 700,
+    "pasta_total_kb": 6144,
+    "triangulos_pose": [4500, 6500]
+  },
+  "clientes": [
+    {
+      "id": "ana",
+      "avatar": "Female_Adult_01",
+      "sexo": "F",
+      "altura": 1.64,
+      "pelve_z": 0.12,
+      "dy": 0.015,
+      "poses": [
+        { "papel": "parado", "clipe": "f_sit_table_idle_neutral_01", "quadro": 171 },
+        { "papel": "conversando", "clipe": "f_sit_table_gestic_thoughtful", "quadro": 401 },
+        { "papel": "pensativo", "clipe": "f_sit_table_idle_touch_face", "quadro": 11 }
+      ]
+    },
+    {
+      "id": "yumi",
+      "avatar": "Female_Adult_03",
+      "sexo": "F",
+      "altura": 1.6,
+      "pelve_z": 0.12,
+      "dy": 0.0,
+      "poses": [
+        { "papel": "parado", "clipe": "f_sit_table_idle_neutral_01", "quadro": 181 },
+        { "papel": "conversando", "clipe": "f_sit_table_gestic_thoughtful", "quadro": 391, "pelve_z": 0.14 },
+        { "papel": "respirando", "clipe": "f_sit_table_breathe_01", "quadro": 321, "pelve_z": 0.17 }
+      ]
+    },
+    {
+      "id": "luiza",
+      "avatar": "Female_Adult_11",
+      "sexo": "F",
+      "altura": 1.63,
+      "pelve_z": 0.15,
+      "dy": -0.02,
+      "poses": [
+        { "papel": "parado", "clipe": "f_sit_table_idle_neutral_01", "quadro": 211 },
+        { "papel": "conversando", "clipe": "f_sit_table_gestic_thoughtful", "quadro": 71, "pelve_z": 0.12 },
+        { "papel": "respirando", "clipe": "f_sit_table_breathe_01", "quadro": 321, "pelve_z": 0.18 }
+      ]
+    },
+    {
+      "id": "pedro",
+      "avatar": "Male_Adult_06",
+      "sexo": "M",
+      "altura": 1.675,
+      "pelve_z": -0.01,
+      "dy": 0.0,
+      "poses": [
+        { "papel": "parado", "clipe": "m_sit_table_idle_neutral_01", "quadro": 891 },
+        { "papel": "conversando", "clipe": "m_sit_table_idle_neutral_02", "quadro": 541 },
+        { "papel": "relaxado", "clipe": "m_sit_table_idle_relaxed_01", "quadro": 891 }
+      ]
+    },
+    {
+      "id": "jorge",
+      "avatar": "Male_Adult_12",
+      "sexo": "M",
+      "altura": 1.68,
+      "pelve_z": -0.01,
+      "dy": 0.0,
+      "poses": [
+        { "papel": "parado", "clipe": "m_sit_table_idle_neutral_01", "quadro": 921 },
+        { "papel": "conversando", "clipe": "m_sit_table_gestic_thoughtful", "quadro": 21 },
+        { "papel": "respirando", "clipe": "m_sit_table_breathe_01", "quadro": 161 }
+      ]
+    },
+    {
+      "id": "ravi",
+      "avatar": "Male_Adult_17",
+      "sexo": "M",
+      "altura": 1.703,
+      "pelve_z": 0.0,
+      "dy": 0.005,
+      "poses": [
+        { "papel": "parado", "clipe": "m_sit_table_idle_neutral_01", "quadro": 911 },
+        { "papel": "conversando", "clipe": "m_sit_table_idle_neutral_02", "quadro": 541 },
+        { "papel": "relaxado", "clipe": "m_sit_table_idle_relaxed_01", "quadro": 1041 }
+      ]
+    }
+  ],
+  "garcom": {
+    "avatar": "Business_Male_06",
+    "altura": 1.76,
+    "avental": true,
+    "clipes": {
+      "parado": { "arquivo": "m_idle_neutral_01", "procurar_laco": [90, 180], "fundir": 12 },
+      "andando": { "arquivo": "m_walk_neutral_01", "no_lugar": true, "fundir": 0 },
+      "anotando": { "arquivo": "m_documents_note", "procurar_laco": [90, 240], "fundir": 12 }
+    }
+  },
+  "decoracao": [
+    {
+      "id": "planta",
+      "fonte": "DiffuseTransmissionPlant",
+      "licenca": "CC-BY-4.0 e CC0-1.0",
+      "opcoes": {
+        "remover_malhas": ["firefly", "pointlight", "chase", "path"],
+        "sem_animacao": true,
+        "simplificar": { "dirt": 0.04, "leaves": 0.7, "pot": 0.6 }
+      }
+    },
+    {
+      "id": "arandela",
+      "fonte": "AnisotropyBarnLamp",
+      "licenca": "CC-BY-4.0",
+      "opcoes": { "simplificar": { "Lamp Metal": 0.5 } }
+    },
+    {
+      "id": "vaso-flores",
+      "fonte": "GlassVaseFlowers",
+      "licenca": "CC0-1.0",
+      "opcoes": { "remover_malhas": ["GlassTransmission", "Flowers2"] }
+    },
+    {
+      "id": "geladeira",
+      "fonte": "CommercialRefrigerator",
+      "licenca": "CC-BY-4.0",
+      "opcoes": { "sem_animacao": true, "simplificar": { "ChampagneBottles": 0.03 } }
+    }
+  ]
+}

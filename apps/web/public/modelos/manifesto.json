@@ -1,0 +1,183 @@
+{
+  "versao": 1,
+  "unidade": "metro",
+  "frente": "+z",
+  "clientes": [
+    {
+      "id": "ana",
+      "arquivo": "pessoas/cliente-ana.glb",
+      "sexo": "F",
+      "poses": [
+        "pose_0",
+        "pose_1",
+        "pose_2"
+      ],
+      "papeis": {
+        "pose_0": "parado",
+        "pose_1": "conversando",
+        "pose_2": "pensativo"
+      },
+      "altura": 1.64,
+      "triangulos": 5599,
+      "triangulos_por_pose": {
+        "pose_0": 5599,
+        "pose_1": 5598,
+        "pose_2": 5598
+      },
+      "bytes": 303300
+    },
+    {
+      "id": "yumi",
+      "arquivo": "pessoas/cliente-yumi.glb",
+      "sexo": "F",
+      "poses": [
+        "pose_0",
+        "pose_1",
+        "pose_2"
+      ],
+      "papeis": {
+        "pose_0": "parado",
+        "pose_1": "conversando",
+        "pose_2": "respirando"
+      },
+      "altura": 1.6,
+      "triangulos": 5599,
+      "triangulos_por_pose": {
+        "pose_0": 5599,
+        "pose_1": 5599,
+        "pose_2": 5599
+      },
+      "bytes": 321628
+    },
+    {
+      "id": "luiza",
+      "arquivo": "pessoas/cliente-luiza.glb",
+      "sexo": "F",
+      "poses": [
+        "pose_0",
+        "pose_1",
+        "pose_2"
+      ],
+      "papeis": {
+        "pose_0": "parado",
+        "pose_1": "conversando",
+        "pose_2": "respirando"
+      },
+      "altura": 1.63,
+      "triangulos": 5599,
+      "triangulos_por_pose": {
+        "pose_0": 5599,
+        "pose_1": 5599,
+        "pose_2": 5598
+      },
+      "bytes": 281976
+    },
+    {
+      "id": "pedro",
+      "arquivo": "pessoas/cliente-pedro.glb",
+      "sexo": "M",
+      "poses": [
+        "pose_0",
+        "pose_1",
+        "pose_2"
+      ],
+      "papeis": {
+        "pose_0": "parado",
+        "pose_1": "conversando",
+        "pose_2": "relaxado"
+      },
+      "altura": 1.675,
+      "triangulos": 5598,
+      "triangulos_por_pose": {
+        "pose_0": 5597,
+        "pose_1": 5598,
+        "pose_2": 5598
+      },
+      "bytes": 345936
+    },
+    {
+      "id": "jorge",
+      "arquivo": "pessoas/cliente-jorge.glb",
+      "sexo": "M",
+      "poses": [
+        "pose_0",
+        "pose_1",
+        "pose_2"
+      ],
+      "papeis": {
+        "pose_0": "parado",
+        "pose_1": "conversando",
+        "pose_2": "respirando"
+      },
+      "altura": 1.68,
+      "triangulos": 5598,
+      "triangulos_por_pose": {
+        "pose_0": 5598,
+        "pose_1": 5598,
+        "pose_2": 5598
+      },
+      "bytes": 190432
+    },
+    {
+      "id": "ravi",
+      "arquivo": "pessoas/cliente-ravi.glb",
+      "sexo": "M",
+      "poses": [
+        "pose_0",
+        "pose_1",
+        "pose_2"
+      ],
+      "papeis": {
+        "pose_0": "parado",
+        "pose_1": "conversando",
+        "pose_2": "relaxado"
+      },
+      "altura": 1.703,
+      "triangulos": 5598,
+      "triangulos_por_pose": {
+        "pose_0": 5598,
+        "pose_1": 5598,
+        "pose_2": 5598
+      },
+      "bytes": 181456
+    }
+  ],
+  "garcom": {
+    "arquivo": "pessoas/garcom.glb",
+    "clipes": {
+      "parado": 3.1,
+      "andando": 1.2,
+      "anotando": 8
+    },
+    "velocidade": 0.988,
+    "altura": 1.76,
+    "triangulos": 7790,
+    "bytes": 315796
+  },
+  "decoracao": [
+    {
+      "id": "planta",
+      "arquivo": "decoracao/planta.glb",
+      "bytes": 552676,
+      "licenca": "CC-BY-4.0 e CC0-1.0"
+    },
+    {
+      "id": "arandela",
+      "arquivo": "decoracao/arandela.glb",
+      "bytes": 121236,
+      "licenca": "CC-BY-4.0"
+    },
+    {
+      "id": "vaso-flores",
+      "arquivo": "decoracao/vaso-flores.glb",
+      "bytes": 128768,
+      "licenca": "CC0-1.0"
+    },
+    {
+      "id": "geladeira",
+      "arquivo": "decoracao/geladeira.glb",
+      "bytes": 341484,
+      "licenca": "CC-BY-4.0"
+    }
+  ]
+}
