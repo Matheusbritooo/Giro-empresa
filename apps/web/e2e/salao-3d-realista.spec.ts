@@ -73,7 +73,8 @@ test("'Ver no salão' leva a câmera até a mesa e o garçom vai atender", async
   // Duas pessoas sentaram na mesa 10 há 6 minutos e ninguém foi até lá.
   await camera(request, 10, -6, 0, 2);
   const alerta = page.getByTestId("alerta-sem_atendimento-10");
-  await expect(alerta).toContainText("Mesa 10 está sem atendimento");
+  // Com o 3D aberto e sem placa de vídeo (CI), a página leva alguns segundos para responder.
+  await expect(alerta).toContainText("Mesa 10 está sem atendimento", { timeout: 15_000 });
   await expect(page.getByTestId("mesa-10")).toHaveAttribute("data-estado", "atrasada");
 
   // "Ver no salão" leva a câmera até a mesa: a mesa fica no meio do 3D e a placa logo acima.

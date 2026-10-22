@@ -300,6 +300,9 @@ const PONTO = new THREE.Vector3();
  */
 function Projetor({ ancoras, aoProjetar }: { ancoras: Ancora[]; aoProjetar: AoProjetar }) {
   useFrame(({ camera, size }) => {
+    // A matriz da câmera só é refeita no desenho: sem isto, as placas ficam um quadro atrás
+    // do voo e dos controles (num aparelho lento, a placa aparecia longe da mesa).
+    camera.updateMatrixWorld();
     for (const a of ancoras) {
       PONTO.set(a.x, a.y, a.z).project(camera);
       const naFrente = PONTO.z < 1 && Math.abs(PONTO.x) < 1.2 && Math.abs(PONTO.y) < 1.2;
