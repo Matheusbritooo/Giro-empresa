@@ -39,6 +39,8 @@ Visão computacional (Fase 2):
 
 ![Tela Câmeras: desenho das mesas sobre a foto](docs/telas/cameras-desenhando.png)
 
+![Alerta da mesa 10 com "Ver no salão": a câmera do 3D vai até a mesa que espera atendimento](docs/telas/salao-3d-perto.png)
+
 ![Salão em 3D no modo "Ver como a câmera"](docs/telas/salao-3d-camera.png)
 
 *Ilustração de salão vazio usada como foto da câmera. Com gente, cada pessoa aparece pixelada e com uma caixa branca (sentada) ou amarela (em pé).*
