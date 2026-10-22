@@ -371,7 +371,10 @@ export function geometriaMesa(forma: Forma): {
   });
 }
 
-/** Pessoa sentada na cadeira (a cadeira está na origem), com os braços apoiados na mesa. */
+/**
+ * Pessoa simples sentada na cadeira (a cadeira está na origem), com os braços apoiados na mesa.
+ * Só aparece enquanto os modelos realistas (pessoas-realistas.tsx) não chegam.
+ */
 export function geometriaSentada(): { roupa: THREE.BufferGeometry; pele: THREE.BufferGeometry } {
   return lembrar("sentada", () => {
     const roupa: THREE.BufferGeometry[] = [];
@@ -390,37 +393,6 @@ export function geometriaSentada(): { roupa: THREE.BufferGeometry; pele: THREE.B
       new THREE.SphereGeometry(0.112, 24, 18).scale(0.9, 1.06, 0.95).translate(0, 1.3, 0.05),
     );
     return { roupa: juntar(roupa), pele: juntar(pele) };
-  });
-}
-
-/** Garçom em pé, com avental e bandeja na mão direita. */
-export function geometriaGarcom(): {
-  roupa: THREE.BufferGeometry;
-  pele: THREE.BufferGeometry;
-  avental: THREE.BufferGeometry;
-  bandeja: THREE.BufferGeometry;
-} {
-  return lembrar("garcom", () => {
-    const roupa: THREE.BufferGeometry[] = [];
-    for (const lado of [-1, 1]) {
-      roupa.push(capsula(0.08, 0.66).translate(lado * 0.1, 0.44, 0)); // perna
-      roupa.push(caixa(0.1, 0.07, 0.24, lado * 0.1, 0.035, 0.04)); // sapato
-    }
-    roupa.push(capsula(0.18, 0.36).translate(0, 1.2, 0)); // tronco
-    roupa.push(capsula(0.06, 0.46, 0.08).translate(-0.27, 1.1, 0.02)); // braço esquerdo, solto
-    roupa.push(capsula(0.06, 0.2).translate(0.27, 1.22, 0)); // braço direito
-    roupa.push(capsula(0.055, 0.24, Math.PI / 2).translate(0.27, 1.06, 0.17)); // antebraço
-    return {
-      roupa: juntar(roupa),
-      pele: juntar([
-        cilindro(0.052, 0.09, 0, 1.52, 0),
-        new THREE.SphereGeometry(0.114, 24, 18).scale(0.9, 1.06, 0.95).translate(0, 1.66, 0.01),
-        esfera(0.052, -0.28, 0.82, 0.05),
-        esfera(0.052, 0.27, 1.06, 0.33),
-      ]),
-      avental: caixa(0.36, 0.55, 0.02, 0, 0.78, 0.17),
-      bandeja: cilindro(0.17, 0.014, 0.27, 1.1, 0.36, 32),
-    };
   });
 }
 

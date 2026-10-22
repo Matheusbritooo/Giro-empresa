@@ -19,7 +19,7 @@ Projeto do TCM *O Segredo do Meu Negócio* (Técnico em Administração), da equ
 **Fases 0 (fundação), 1 (salão no simulador) e 2 (visão computacional) prontas.**
 
 - Mapa de mesas ao vivo, com cronômetro em cada mesa e as cadeiras ocupadas desenhadas em volta.
-- **Salão em 3D**: a cantina inteira em maquete (piso de tábua, balcão, janelas, a câmera no canto), com os clientes sentados em cada mesa, o cardápio na mesa de quem espera, o prato servido e a louça suja na mesa para limpar. Gira com o dedo ou o mouse, e tocar na placa da mesa abre o mesmo detalhe com "Liberar mesa". O botão **Ver como a câmera** mostra o campo de visão e o contorno que a visão desenha em volta de cada pessoa. No computador abre em 3D; no celular, na planta (dá para trocar, e o aparelho lembra).
+- **Salão em 3D realista**: a cantina inteira à noite (piso de tábua, lambri, toalha xadrez, balcão, arandelas, a câmera no canto), com clientes de verdade sentados em cada mesa ocupada, o cardápio na mesa de quem espera, o prato servido e a louça suja na mesa para limpar. Um garçom anda pelos corredores até a mesa de quem tocou "Vou atender", anota o pedido e volta ao balcão. Nos alertas, **Ver no salão** leva a câmera do 3D até a mesa. Gira com o dedo ou o mouse, e tocar na placa da mesa abre o mesmo detalhe com "Liberar mesa". O botão **Ver como a câmera** mostra o campo de visão e o contorno que a visão desenha em volta de cada pessoa. As pessoas são ilustrativas (o selo no canto diz isso): a câmera só conta, não filma ninguém. O acabamento se ajusta ao aparelho (alto, médio ou baixo; dá para forçar com `?qualidade=alto` na URL). No computador abre em 3D; no celular, na planta (dá para trocar, e o aparelho lembra).
 - Alerta de cliente sem atendimento (5 min, ajustável pelo dono) e alerta de mesa vaga, com som no painel e notificação no celular.
 - Botões "Vou atender" e "Liberar mesa": quando um garçom toca, todos os aparelhos atualizam na hora.
 - Registro de cada visita à mesa (sentou, foi atendida, saiu, foi liberada), que é a base dos indicadores da Fase 3.
@@ -73,7 +73,8 @@ Prefere Postgres, como em produção? `make banco` sobe um no Docker. Depois, an
    ```
 3. Mostre o alerta da mesa 4 sem atendimento, toque em "Vou atender" no celular e veja o computador atualizar. No computador, o salão em 3D mostra a mesa 4 pulsando em vermelho.
 4. Quando a mesa 1 vagar, toque em "Liberar mesa". Toque na mesa 7 para mostrar a linha do tempo: quando sentaram, quanto esperaram e há quanto tempo está parada.
-5. Feche com **Ver como a câmera** no 3D: a câmera do salão, o que ela enxerga e a frase de privacidade (conta pessoas, não reconhece ninguém).
+5. No alerta da mesa 4, toque em **Ver no salão**: a câmera do 3D vai até a mesa e o garçom aparece indo atender.
+6. Feche com **Ver como a câmera** no 3D: a câmera do salão, o que ela enxerga e a frase de privacidade (conta pessoas, não reconhece ninguém).
 
 Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 
@@ -129,6 +130,18 @@ docs/               decisões técnicas e telas
 scripts/            trava de commit (LGPD e segredos)
 .claude/            hooks, skills e agentes do Claude Code para este projeto
 ```
+
+## Modelos 3D do salão
+
+As pessoas do salão em 3D são os avatares da [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) (licença MIT): 6 clientes com 3 poses sentadas cada (pose assada, sem esqueleto) e um garçom com esqueleto e os clipes parado, andando e anotando. Os arquivos prontos ficam em `apps/web/public/modelos/` (uns 2 MB, baixados do próprio painel quando o 3D abre, nunca de CDN), com o `manifesto.json`, os créditos em `CREDITOS.md` e a licença em `LICENSE-Rocketbox.md`. A luz de ambiente é uma foto 360° CC0 (Poly Haven, via `@pmndrs/assets`), também empacotada no painel.
+
+Para gerar os modelos de novo (Blender como módulo do Python, `bpy` 5.2.2, e Node):
+
+```bash
+BPY_PYTHON=/caminho/venv-bpy/bin/python infra/modelos-3d/gerar.sh
+```
+
+O passo a passo, as medidas conferidas em cada pose e como trocar uma pessoa estão em [`infra/modelos-3d/README.md`](infra/modelos-3d/README.md). Nada disso roda na CI.
 
 ## Testes
 

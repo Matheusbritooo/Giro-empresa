@@ -1,9 +1,68 @@
 "use client";
 
-import type * as THREE from "three";
+import type { ThreeEvent } from "@react-three/fiber";
+import { lazy, Suspense, useMemo } from "react";
+import * as THREE from "three";
 
-import { aparencia } from "./aparencia";
-import { contornoPessoa, geometriaGarcom, geometriaSentada } from "./geometrias";
+import type { Mesa } from "@/lib/tipos";
+
+import { aparencia, roupaDe } from "./aparencia";
+import { useRefazerSombra } from "./contexto-qualidade";
+import { escolherPessoas, type PessoaEscolhida } from "./escolha-pessoas";
+import { contornoPessoa, geometriaSentada } from "./geometrias";
+import { MANIFESTO } from "./modelos";
+import type { PlantaSalao } from "./planta";
+
+// Os modelos de gente (e o leitor de .glb) só chegam quando o 3D abre.
+const PessoasRealistas = lazy(() => import("./pessoas-realistas"));
+
+/** Uma pessoa sentada numa cadeira do salão. */
+export interface Sentado {
+  mesaId: number;
+  /** Mesa e assento, para a cor da roupa da pessoa simples. */
+  numero: number;
+  assento: number;
+  /** Onde fica a cadeira no salão (posição e rotação), sem a pose da pessoa. */
+  cadeira: THREE.Matrix4;
+  escolha: PessoaEscolhida;
+}
+
+/** Quantos a câmera viu sentados numa mesa que está esperando ou ocupada. */
+export function pessoasSentadas(mesa: Mesa): number {
+  if (mesa.estado !== "aguardando" && mesa.estado !== "ocupada") return 0;
+  return Math.min(Math.max(mesa.pessoas, 1), mesa.lugares);
+}
+
+const EIXO_Y = new THREE.Vector3(0, 1, 0);
+
+/** Todas as pessoas sentadas no salão, com quem é cada uma (sempre a mesma na mesma visita). */
+export function montarSentados(planta: PlantaSalao): Sentado[] {
+  const saida: Sentado[] = [];
+  for (const item of planta.mesas) {
+    const escolhas = escolherPessoas(
+      item,
+      pessoasSentadas(item.mesa),
+      item.mesa.sentou_em,
+      MANIFESTO.clientes,
+    );
+    escolhas.forEach((escolha, i) => {
+      const a = item.assentos[i];
+      const cadeira = new THREE.Matrix4().compose(
+        new THREE.Vector3(item.x + a.x, 0, item.z + a.z),
+        new THREE.Quaternion().setFromAxisAngle(EIXO_Y, a.rotacao),
+        new THREE.Vector3(1, 1, 1),
+      );
+      saida.push({
+        mesaId: item.mesa.id,
+        numero: item.mesa.numero,
+        assento: i,
+        cadeira,
+        escolha,
+      });
+    });
+  }
+  return saida;
+}
 
 /** Contorno que a câmera desenha: branco para quem está sentado, amarelo para quem está em pé. */
 export function Contorno({ emPe, cor }: { emPe: boolean; cor: string }) {
@@ -20,39 +79,80 @@ export function Contorno({ emPe, cor }: { emPe: boolean; cor: string }) {
   );
 }
 
-export function PessoaSentada({
-  roupa,
-  verComoCamera,
-}: {
-  roupa: THREE.Material;
+export interface PropsPessoas {
+  planta: PlantaSalao;
   verComoCamera: boolean;
-}) {
-  const g = geometriaSentada();
+  /** Respiração sutil (só no nível alto, sem movimento reduzido). */
+  respirar: boolean;
+  aoAbrir: (mesaId: number) => void;
+}
+
+/**
+ * Os clientes sentados. Enquanto os modelos realistas baixam, ficam as pessoas simples (sem
+ * rosto), para o salão aparecer na hora. No modo "Ver como a câmera", cada uma ganha o
+ * contorno branco de quem a câmera conta sentado.
+ */
+export function PessoasNoSalao({ planta, verComoCamera, respirar, aoAbrir }: PropsPessoas) {
+  const sentados = useMemo(() => montarSentados(planta), [planta]);
+  const chave = sentados
+    .map((s) => `${s.mesaId}.${s.assento}.${s.escolha.cliente}.${s.escolha.pose}`)
+    .join("|");
+  // Gente nova ou que foi embora muda a sombra do salão.
+  useRefazerSombra(chave);
+
   return (
-    <group>
-      <mesh geometry={g.roupa} material={roupa} castShadow receiveShadow />
-      <mesh geometry={g.pele} material={aparencia().argila} castShadow />
-      {verComoCamera && <Contorno emPe={false} cor="#ffffff" />}
-    </group>
+    <>
+      <Suspense fallback={<PessoasSimples sentados={sentados} aoAbrir={aoAbrir} />}>
+        <PessoasRealistas sentados={sentados} respirar={respirar} aoAbrir={aoAbrir} />
+      </Suspense>
+      {verComoCamera &&
+        sentados.map((s) => (
+          <group key={`${s.mesaId}:${s.assento}`} matrixAutoUpdate={false} matrix={s.cadeira}>
+            <Contorno emPe={false} cor="#ffffff" />
+          </group>
+        ))}
+    </>
   );
 }
 
-export function Garcom({
-  verComoCamera,
-  corContorno,
+/** Tocar numa pessoa abre a mesa dela (arrastar para girar o salão não abre). */
+export function clicarNaPessoa(
+  evento: ThreeEvent<MouseEvent>,
+  mesaId: number | undefined,
+  aoAbrir: (mesaId: number) => void,
+) {
+  evento.stopPropagation();
+  if (mesaId !== undefined && evento.delta < 6) aoAbrir(mesaId);
+}
+
+/** Pessoas simples, sem rosto: a reserva enquanto os modelos realistas não chegam. */
+function PessoasSimples({
+  sentados,
+  aoAbrir,
 }: {
-  verComoCamera: boolean;
-  corContorno: string;
+  sentados: Sentado[];
+  aoAbrir: (mesaId: number) => void;
 }) {
-  const g = geometriaGarcom();
+  const g = geometriaSentada();
   const a = aparencia();
   return (
-    <group>
-      <mesh geometry={g.roupa} material={a.colete} castShadow />
-      <mesh geometry={g.pele} material={a.argila} castShadow />
-      <mesh geometry={g.avental} material={a.avental} castShadow />
-      <mesh geometry={g.bandeja} material={a.metal} castShadow />
-      {verComoCamera && <Contorno emPe cor={corContorno} />}
-    </group>
+    <>
+      {sentados.map((s) => (
+        <group
+          key={`${s.mesaId}:${s.assento}`}
+          matrixAutoUpdate={false}
+          matrix={s.cadeira}
+          onClick={(e) => clicarNaPessoa(e, s.mesaId, aoAbrir)}
+        >
+          <mesh
+            geometry={g.roupa}
+            material={roupaDe(a, s.numero, s.assento)}
+            castShadow
+            receiveShadow
+          />
+          <mesh geometry={g.pele} material={a.argila} castShadow />
+        </group>
+      ))}
+    </>
   );
 }

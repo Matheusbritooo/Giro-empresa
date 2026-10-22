@@ -42,7 +42,9 @@ services/backend/   Python 3.12+, FastAPI, SQLAlchemy, Alembic (uv)
   migrations/       Alembic
 apps/web/           Next.js 16 (App Router, Cache Components), Tailwind 4, PWA (pnpm)
   src/components/salao-3d/  salão em 3D (three.js + react-three-fiber), só baixado quando abre
-infra/              docker-compose e Dockerfiles; infra/render: demonstração online (render.yaml na raiz)
+  public/modelos/           pessoas e decoração em .glb (gerados por infra/modelos-3d)
+infra/              docker-compose e Dockerfiles; infra/render: demonstração online (render.yaml na raiz);
+                    infra/modelos-3d: gera os modelos 3D do salão (Blender, fora da CI)
 scripts/            trava de commit
 .claude/            hooks, skills e agentes deste projeto
 ```
@@ -92,7 +94,11 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - Estado da mesa sempre por cor + padrão + palavra, nunca só cor. Cores e fontes estão em `apps/web/src/app/globals.css`; não invente cor fora dos tokens.
 - Next.js 16 tem mudanças grandes: leia `apps/web/node_modules/next/dist/docs/` antes de usar API que você não viu neste código (veja `apps/web/AGENTS.md`).
 - Dados no painel: `useDados` (`src/lib/dados.ts`) para telas comuns e `useSalaoAoVivo` (`src/lib/ao-vivo.ts`) para o salão. Não chame setState direto dentro de useEffect (o lint barra).
-- Salão 3D: as contas de posição ficam em `salao-3d/planta.ts` (testadas sem 3D). As placas das mesas são botões comuns da página que o `Projetor` move; não use o `Html` do drei (perdia a placa da primeira mesa). Cores do 3D vêm dos tokens (`salao-3d/cores.ts`).
+- Salão 3D: as contas de posição ficam em `salao-3d/planta.ts` (testadas sem 3D), as do garçom em `garcom.ts`, as da câmera em `camera-mesa.ts` e a escolha de quem senta em `escolha-pessoas.ts`. As placas das mesas são botões comuns da página que o `Projetor` move; não use o `Html` do drei (perdia a placa da primeira mesa). Cores do 3D vêm dos tokens (`salao-3d/cores.ts`).
+- Modelos 3D (pessoas e decoração) ficam em `apps/web/public/modelos/` e são gerados por `infra/modelos-3d/gerar.sh` (Blender + gltf-transform), nunca editados à mão. Clientes têm pose assada (sem esqueleto) e só o garçom tem esqueleto. Carregue com `useGLTF(url, false, true)` (meshopt, sem Draco, sem CDN) e reaproveite geometria e material (InstancedMesh). Crédito e licença de cada modelo em `public/modelos/CREDITOS.md`.
+- Salão 3D tem 3 níveis de acabamento (`salao-3d/qualidade.ts`): alto (oclusão, brilho, sombra a cada quadro, respiração e garçom andando), médio e baixo (CI e aparelho fraco: sem efeitos, desenha sob demanda, garçom vai direto ao destino). Force com `?qualidade=alto|medio|baixo`. Sombra não se refaz sozinha fora do alto: quem muda o salão chama `useRefazerSombra`.
+- Luz de ambiente do 3D: só a foto 360° local (`@pmndrs/assets`, import dinâmico) e os `Lightformer`. Nunca use `preset=` no `Environment` do drei (baixa de CDN).
+- O selo "Pessoas ilustrativas: a câmera só conta, não filma ninguém." fica sempre visível no 3D (LGPD: o desenho não é imagem de câmera).
 - Dependência nova só com motivo; explique no commit.
 
 ## Skills e agentes do projeto

@@ -102,12 +102,11 @@ function criar() {
     massa: padrao("#e1bf78", 0.7),
     guardanapo: padrao("#eee8db", 0.9),
     cardapio: padrao("#6a1d1d", 0.55),
-    // Pessoas sem rosto e sem cor de pele: o sistema conta gente, não reconhece ninguém.
+    // Pessoas simples (reserva enquanto os modelos realistas baixam): sem rosto, cor de argila.
     argila: padrao("#cbc3b6", 0.85),
     roupas: ["#4b5e6f", "#7c4a39", "#5a6b49", "#8b7a5a", "#3f4a5d", "#6f5a70", "#9b8d7a"].map(
       (cor) => padrao(cor, 0.88),
     ),
-    colete: padrao("#22272b", 0.75),
     avental: padrao("#ebe5d8", 0.9),
     pedra: padrao("#2f2c29", 0.32),
     garrafaVerde: padrao("#2f5a3a", 0.1, { transparent: true, opacity: 0.8 }),

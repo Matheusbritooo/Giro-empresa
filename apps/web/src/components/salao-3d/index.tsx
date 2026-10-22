@@ -6,7 +6,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 
 import { useMovimentoReduzido } from "@/lib/midia";
 import { situacao, tempoDecorrido } from "@/lib/salao";
-import type { Mesa } from "@/lib/tipos";
+import type { Alerta, Mesa } from "@/lib/tipos";
 
 import { ALVO_INICIAL, ANCORA_CAMERA, Cena, type Controles, DIRECAO_INICIAL } from "./cena";
 import { QualidadeProvider } from "./contexto-qualidade";
@@ -21,6 +21,9 @@ import {
 } from "./qualidade";
 import { RotuloMesa } from "./rotulo";
 import { EXPOSICAO } from "./tom";
+import type { PedidoDeFoco, Voo } from "./voo-camera";
+
+export type { PedidoDeFoco } from "./voo-camera";
 
 // Os efeitos (postprocessing) só são baixados quando o aparelho aguenta usá-los.
 const Efeitos = lazy(() => import("./efeitos"));
@@ -45,15 +48,20 @@ function vistaInicial(largura: number, profundidade: number): [number, number, n
  */
 export default function Salao3D({
   mesas,
+  alertas,
   agoraMs,
   limiteSeg,
   nome,
+  foco = null,
   aoAbrir,
 }: {
   mesas: Mesa[];
+  alertas: Alerta[];
   agoraMs: number;
   limiteSeg: number;
   nome: string;
+  /** Leva a câmera até esta mesa ("Ver no salão" nos alertas). */
+  foco?: PedidoDeFoco | null;
   aoAbrir: (mesaId: number) => void;
 }) {
   const [verComoCamera, setVerComoCamera] = useState(false);
@@ -65,6 +73,8 @@ export default function Salao3D({
   const baixarNivel = useCallback(() => setNivel(nivelAbaixo), []);
   const movimentoReduzido = useMovimentoReduzido();
   const controles = useRef<Controles>(null);
+  const voo = useRef<Voo>(null);
+  const raiz = useRef<HTMLDivElement>(null);
   const placas = useRef(new Map<string, HTMLElement>());
   const planta = useMemo(() => montarPlanta(mesas), [mesas]);
   // A câmera do Canvas só usa a posição inicial; depois quem manda é quem arrasta.
@@ -98,8 +108,24 @@ export default function Salao3D({
     [],
   );
 
+  // Marcas na própria div (sem redesenhar a página): onde a câmera parou e para onde o
+  // garçom vai. Servem aos testes e a quem inspeciona a página.
+  const aoChegarNaMesa = useCallback((numero: number) => {
+    if (raiz.current) raiz.current.dataset.cameraEm = `mesa-${numero}`;
+  }, []);
+  const aoMudarDestinoGarcom = useCallback((destino: string) => {
+    if (raiz.current) raiz.current.dataset.garcom = destino;
+  }, []);
+
+  function voltarAVistaInicial() {
+    voo.current = null;
+    controles.current?.reset();
+    if (raiz.current) raiz.current.dataset.cameraEm = "inicio";
+  }
+
   return (
     <div
+      ref={raiz}
       className="@container relative isolate h-[min(68vh,660px)] min-h-[380px] overflow-hidden rounded-2xl border border-linha bg-superficie"
       data-testid="salao-3d"
       data-qualidade={nivel}
@@ -120,14 +146,19 @@ export default function Salao3D({
         <QualidadeProvider nivel={nivel}>
           <Cena
             planta={planta}
+            alertas={alertas}
             agoraMs={agoraMs}
             limiteSeg={limiteSeg}
             nome={nome}
             verComoCamera={verComoCamera}
             movimentoReduzido={movimentoReduzido}
             controles={controles}
+            foco={foco}
+            vooRef={voo}
             aoAbrir={aoAbrir}
             aoProjetar={projetar}
+            aoChegarNaMesa={aoChegarNaMesa}
+            aoMudarDestinoGarcom={aoMudarDestinoGarcom}
           />
           {ajustes.efeitos && (
             <Suspense fallback={null}>
@@ -164,12 +195,21 @@ export default function Salao3D({
         )}
       </div>
 
-      {verComoCamera && (
-        <p className="pointer-events-none absolute top-3 right-3 z-[2000] max-w-[22rem] rounded-lg bg-tinta/85 px-3 py-2 text-sm text-fundo">
-          A câmera enxerga formas, não rostos. Ela só conta quem está sentado em cada mesa (contorno
-          branco) e quem está em pé junto dela (contorno amarelo).
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-[2000] flex flex-wrap items-start justify-between gap-2">
+        {/* As pessoas do 3D são desenho: a câmera do restaurante não filma nem guarda imagem. */}
+        <p
+          data-testid="selo-ilustrativo"
+          className="max-w-[17rem] rounded-md bg-superficie/85 px-2 py-1 text-xs font-semibold text-tinta"
+        >
+          Pessoas ilustrativas: a câmera só conta, não filma ninguém.
         </p>
-      )}
+        {verComoCamera && (
+          <p className="max-w-[22rem] rounded-lg bg-tinta/85 px-3 py-2 text-sm text-fundo">
+            A câmera enxerga formas, não rostos. Ela só conta quem está sentado em cada mesa
+            (contorno branco) e quem está em pé junto dela (contorno amarelo).
+          </p>
+        )}
+      </div>
 
       <div className="absolute bottom-3 left-3 z-[2000] flex flex-wrap gap-2">
         <button
@@ -184,7 +224,7 @@ export default function Salao3D({
         </button>
         <button
           type="button"
-          onClick={() => controles.current?.reset()}
+          onClick={voltarAVistaInicial}
           className="min-h-10 rounded-lg bg-superficie/90 px-3 text-sm font-semibold text-tinta shadow-md"
         >
           Voltar à vista inicial

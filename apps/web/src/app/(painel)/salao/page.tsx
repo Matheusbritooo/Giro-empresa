@@ -19,6 +19,8 @@ import { podeGerirMesas, useSessao } from "@/lib/sessao";
 import type { Alerta, Mesa } from "@/lib/tipos";
 import { temWebGL } from "@/lib/webgl";
 
+import type { PedidoDeFoco } from "@/components/salao-3d";
+
 // O 3D (three.js) só é baixado quando alguém abre o salão em 3D.
 const Salao3D = dynamic(() => import("@/components/salao-3d"), {
   ssr: false,
@@ -58,6 +60,7 @@ export default function PaginaSalao() {
   const [com3D, setCom3D] = useState(() => typeof window !== "undefined" && temWebGL());
   const som = useRef(somLigado);
   const [mesaAberta, setMesaAberta] = useState<number | null>(null);
+  const [foco, setFoco] = useState<PedidoDeFoco | null>(null);
   const [recado, setRecado] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
 
   useEffect(() => {
@@ -137,6 +140,17 @@ export default function PaginaSalao() {
     }
   }
 
+  const com3DAberto = vista === "3d" && com3D && salao.mesas.length > 0;
+
+  /** Leva a câmera do 3D até a mesa do alerta e traz o 3D para a tela, se estiver longe. */
+  function verNoSalao(alerta: Alerta) {
+    setFoco({ mesaId: alerta.mesa_id, vez: Date.now() });
+    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document
+      .querySelector('[data-testid="salao-3d"]')
+      ?.scrollIntoView({ block: "nearest", behavior: reduzido ? "auto" : "smooth" });
+  }
+
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -180,6 +194,7 @@ export default function PaginaSalao() {
             agoraMs={agora}
             aoReconhecer={reconhecer}
             aoLiberar={(a) => liberar({ id: a.mesa_id, numero: a.mesa_numero })}
+            aoVerNoSalao={com3DAberto ? verNoSalao : undefined}
           />
         </section>
 
@@ -197,6 +212,8 @@ export default function PaginaSalao() {
             <LimiteDeErro reserva={null} aoFalhar={quandoO3DFalhar}>
               <Salao3D
                 mesas={salao.mesas}
+                alertas={salao.alertas}
+                foco={foco}
                 agoraMs={agora}
                 limiteSeg={limite}
                 nome={salao.restaurante.nome}

@@ -7,9 +7,9 @@ import type * as THREE from "three";
 
 import type { Tom } from "@/lib/salao";
 
-import { aparencia, roupaDe } from "./aparencia";
+import { aparencia } from "./aparencia";
 import { useQualidade, useRefazerSombra } from "./contexto-qualidade";
-import type { CoresDoSalao, CoresNaCena } from "./cores";
+import type { CoresNaCena } from "./cores";
 import {
   ALTURA_TOALHA,
   formaTapete,
@@ -22,7 +22,6 @@ import {
   geometriaMesa,
   geometriaPrato,
 } from "./geometrias";
-import { Garcom, PessoaSentada } from "./pessoas";
 import { type Assento, lugarNaMesa, type MesaNoSalao } from "./planta";
 
 const FOLGA_TAPETE = 0.2;
@@ -30,36 +29,23 @@ const FOLGA_TAPETE = 0.2;
 interface Props {
   item: MesaNoSalao;
   tom: Tom;
+  /** Quantos estão sentados (as pessoas ficam em pessoas.tsx; aqui, o que vai na mesa). */
   sentados: number;
-  comGarcom: boolean;
-  verComoCamera: boolean;
   movimentoReduzido: boolean;
-  /** Tokens do painel (texto), para o contorno da câmera nas pessoas. */
-  cores: CoresDoSalao;
-  /** As mesmas cores prontas para o 3D (pré-corrigidas quando há efeitos). */
+  /** As cores prontas para o 3D (pré-corrigidas quando há efeitos). */
   coresTela: CoresNaCena;
   aoAbrir: (mesaId: number) => void;
 }
 
 /** Uma mesa no salão: móveis, o que está em cima dela, quem está sentado e o tapete do estado. */
-function Mesa3D({
-  item,
-  tom,
-  sentados,
-  comGarcom,
-  verComoCamera,
-  movimentoReduzido,
-  cores,
-  coresTela,
-  aoAbrir,
-}: Props) {
+function Mesa3D({ item, tom, sentados, movimentoReduzido, coresTela, aoAbrir }: Props) {
   const [apontada, setApontada] = useState(false);
   const { animar, sombras } = useQualidade();
   const a = aparencia();
   const mesa = geometriaMesa(item.forma);
   const cadeira = geometriaCadeira();
   // A sombra só se refaz quando algo que faz sombra muda nesta mesa.
-  useRefazerSombra(`${item.x}:${item.z}:${item.mesa.lugares}:${tom}:${sentados}:${comGarcom}`);
+  useRefazerSombra(`${item.x}:${item.z}:${item.mesa.lugares}:${tom}:${sentados}`);
 
   function clicar(evento: ThreeEvent<MouseEvent>) {
     evento.stopPropagation();
@@ -83,20 +69,16 @@ function Mesa3D({
         <mesh geometry={mesa.tampo} material={a.tampo} castShadow receiveShadow />
         <mesh geometry={mesa.toalha} material={a.toalha} castShadow receiveShadow />
         <mesh geometry={mesa.pes} material={a.metal} castShadow />
-        {item.assentos.map((assento, i) => (
-          <group
+        {item.assentos.map((assento) => (
+          <mesh
             key={`${assento.x}:${assento.z}`}
+            geometry={cadeira}
+            material={a.madeiraEscura}
             position={[assento.x, 0, assento.z]}
             rotation-y={assento.rotacao}
-          >
-            <mesh geometry={cadeira} material={a.madeiraEscura} castShadow receiveShadow />
-            {i < sentados && (
-              <PessoaSentada
-                roupa={roupaDe(a, item.mesa.numero, i)}
-                verComoCamera={verComoCamera}
-              />
-            )}
-          </group>
+            castShadow
+            receiveShadow
+          />
         ))}
         <SobreAMesa
           assentos={item.assentos}
@@ -105,12 +87,6 @@ function Mesa3D({
           numero={item.mesa.numero}
         />
       </group>
-
-      {comGarcom && (
-        <group position={[item.meiaPegada.x + 0.32, 0, 0.18]} rotation-y={-Math.PI / 2}>
-          <Garcom verComoCamera={verComoCamera} corContorno={cores.aguardando} />
-        </group>
-      )}
 
       {sombras === "nenhuma" && (
         <SombraDeContato meiaX={item.meiaPegada.x} meiaZ={item.meiaPegada.z} />
@@ -138,10 +114,7 @@ export const MesaNoSalao3D = memo(
     antes.item.z === depois.item.z &&
     antes.tom === depois.tom &&
     antes.sentados === depois.sentados &&
-    antes.comGarcom === depois.comGarcom &&
-    antes.verComoCamera === depois.verComoCamera &&
     antes.movimentoReduzido === depois.movimentoReduzido &&
-    antes.cores === depois.cores &&
     antes.coresTela === depois.coresTela &&
     antes.aoAbrir === depois.aoAbrir,
 );

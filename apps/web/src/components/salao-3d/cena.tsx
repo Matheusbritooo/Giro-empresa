@@ -5,6 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import {
   type ComponentRef,
   type RefObject,
+  Suspense,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -13,19 +14,20 @@ import {
 import * as THREE from "three";
 
 import { situacao } from "@/lib/salao";
-import type { Mesa } from "@/lib/tipos";
+import type { Alerta } from "@/lib/tipos";
 
 import { Ambiente } from "./ambiente";
 import { vestirSalao } from "./aparencia";
 import { CameraDoSalao } from "./camera-giro";
 import { useQualidade } from "./contexto-qualidade";
 import { useCoresDoSalao, useCoresNaCena } from "./cores";
+import { Garcom3D } from "./garcom-3d";
 import { MesaNoSalao3D } from "./mesa-3d";
+import { PessoasNoSalao, pessoasSentadas } from "./pessoas";
 import { MARGEM, type PlantaSalao } from "./planta";
 import { ALTURA_PAREDE, Sala } from "./sala";
+import { type PedidoDeFoco, type Voo, VooDaCamera } from "./voo-camera";
 
-/** Garçom aparece junto da mesa logo depois do atendimento, como a câmera o veria. */
-const GARCOM_NA_MESA_MS = 45_000;
 const ALTURA_ROTULO = 1.9;
 export const ALVO_INICIAL: [number, number, number] = [0, 0.3, 0.4];
 /** De onde a vista começa: de frente, um pouco pela direita e do alto (ângulos em radianos). */
@@ -55,26 +57,39 @@ interface Ancora {
 
 export interface PropsCena {
   planta: PlantaSalao;
+  alertas: Alerta[];
   agoraMs: number;
   limiteSeg: number;
   nome: string;
   verComoCamera: boolean;
   movimentoReduzido: boolean;
   controles: RefObject<Controles | null>;
+  /** Pedido de levar a câmera até uma mesa ("Ver no salão" no alerta). */
+  foco: PedidoDeFoco | null;
+  vooRef: RefObject<Voo | null>;
   aoAbrir: (mesaId: number) => void;
   aoProjetar: AoProjetar;
+  /** A câmera chegou na mesa pedida. */
+  aoChegarNaMesa: (numero: number) => void;
+  /** O garçom mudou de destino ("mesa-7" ou "balcao"). */
+  aoMudarDestinoGarcom: (destino: string) => void;
 }
 
 export function Cena({
   planta,
+  alertas,
   agoraMs,
   limiteSeg,
   nome,
   verComoCamera,
   movimentoReduzido,
   controles,
+  foco,
+  vooRef,
   aoAbrir,
   aoProjetar,
+  aoChegarNaMesa,
+  aoMudarDestinoGarcom,
 }: PropsCena) {
   const cores = useCoresDoSalao();
   const qualidade = useQualidade();
@@ -112,6 +127,8 @@ export function Cena({
   }
 
   const comSombra = qualidade.sombras !== "nenhuma";
+  const parado = movimentoReduzido || !qualidade.animar;
+  const mesas = useMemo(() => planta.mesas.map((m) => m.mesa), [planta]);
 
   return (
     <>
@@ -148,14 +165,31 @@ export function Cena({
           item={item}
           tom={situacao(item.mesa, agoraMs, limiteSeg).tom}
           sentados={pessoasSentadas(item.mesa)}
-          comGarcom={garcomNaMesa(item.mesa, agoraMs)}
-          verComoCamera={verComoCamera}
           movimentoReduzido={movimentoReduzido}
-          cores={cores}
           coresTela={coresTela}
           aoAbrir={aoAbrir}
         />
       ))}
+
+      <PessoasNoSalao
+        planta={planta}
+        verComoCamera={verComoCamera}
+        respirar={qualidade.nivel === "alto" && !parado}
+        aoAbrir={aoAbrir}
+      />
+
+      <Suspense fallback={null}>
+        <Garcom3D
+          planta={planta}
+          mesas={mesas}
+          alertas={alertas}
+          agoraMs={agoraMs}
+          verComoCamera={verComoCamera}
+          corContorno={cores.aguardando}
+          parado={parado}
+          aoMudarDestino={aoMudarDestinoGarcom}
+        />
+      </Suspense>
 
       <CameraDoSalao
         posicao={posicaoCamera}
@@ -167,6 +201,13 @@ export function Cena({
 
       <Projetor ancoras={ancoras} aoProjetar={aoProjetar} />
       <Enquadrar planta={planta} />
+      <VooDaCamera
+        planta={planta}
+        pedido={foco}
+        movimentoReduzido={movimentoReduzido}
+        vooRef={vooRef}
+        aoChegar={aoChegarNaMesa}
+      />
 
       <OrbitControls
         ref={controles}
@@ -328,14 +369,4 @@ function cantosParaCaber(planta: PlantaSalao): THREE.Vector3[] {
   }
   pontos.push(new THREE.Vector3(0, 2.55, -planta.profundidade / 2)); // letreiro
   return pontos;
-}
-
-function pessoasSentadas(mesa: Mesa): number {
-  if (mesa.estado !== "aguardando" && mesa.estado !== "ocupada") return 0;
-  return Math.min(Math.max(mesa.pessoas, 1), mesa.lugares);
-}
-
-function garcomNaMesa(mesa: Mesa, agoraMs: number): boolean {
-  if (mesa.estado !== "ocupada" || !mesa.atendida_em) return false;
-  return agoraMs - Date.parse(mesa.atendida_em) < GARCOM_NA_MESA_MS;
 }
