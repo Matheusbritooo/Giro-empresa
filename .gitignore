@@ -21,3 +21,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Cópias de trabalho temporárias criadas pelo Claude Code para tarefas em paralelo
+.claude/worktrees/
