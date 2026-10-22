@@ -104,3 +104,52 @@ describe("salão montado a partir da planta", () => {
     expect(planta.largura).toBeGreaterThan(0);
   });
 });
+
+describe("corredores do salão", () => {
+  const layouts: Record<string, Mesa[]> = {
+    cantina: CANTINA,
+    grandes: [mesa(1, 10, 0, 0), mesa(2, 10, 1, 0), mesa(3, 8, 0, 1), mesa(4, 2, 2, 1)],
+    vazio: [],
+  };
+
+  for (const [nome, mesas] of Object.entries(layouts)) {
+    it(`${nome}: uma faixa antes, uma entre cada par e uma depois, dentro do piso`, () => {
+      const planta = montarPlanta(mesas);
+      const colunas = mesas.length ? Math.max(...mesas.map((m) => m.pos_x)) + 1 : 1;
+      const linhas = mesas.length ? Math.max(...mesas.map((m) => m.pos_y)) + 1 : 1;
+      expect(planta.corredoresX).toHaveLength(colunas + 1);
+      expect(planta.corredoresZ).toHaveLength(linhas + 1);
+      for (const [faixas, metade] of [
+        [planta.corredoresX, planta.largura / 2],
+        [planta.corredoresZ, planta.profundidade / 2],
+      ] as const) {
+        for (let i = 0; i < faixas.length; i++) {
+          expect(Math.abs(faixas[i])).toBeLessThan(metade - 1);
+          if (i > 0) expect(faixas[i]).toBeGreaterThan(faixas[i - 1]);
+        }
+      }
+    });
+
+    it(`${nome}: nenhuma faixa passa por mesa ou cadeira`, () => {
+      const planta = montarPlanta(mesas);
+      for (const m of planta.mesas) {
+        for (const x of planta.corredoresX) {
+          expect(Math.abs(x - m.x)).toBeGreaterThan(m.meiaPegada.x + 0.3);
+        }
+        for (const z of planta.corredoresZ) {
+          expect(Math.abs(z - m.z)).toBeGreaterThan(m.meiaPegada.z + 0.3);
+        }
+      }
+    });
+  }
+
+  it("cada mesa fica entre as faixas da sua coluna e da sua linha", () => {
+    const planta = montarPlanta(CANTINA);
+    for (const m of planta.mesas) {
+      expect(planta.corredoresX[m.mesa.pos_x]).toBeLessThan(m.x);
+      expect(planta.corredoresX[m.mesa.pos_x + 1]).toBeGreaterThan(m.x);
+      expect(planta.corredoresZ[m.mesa.pos_y]).toBeLessThan(m.z);
+      expect(planta.corredoresZ[m.mesa.pos_y + 1]).toBeGreaterThan(m.z);
+    }
+  });
+});

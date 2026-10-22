@@ -45,6 +45,14 @@ export interface PlantaSalao {
   mesas: MesaNoSalao[];
   largura: number; // tamanho do piso em x, com a margem até as paredes
   profundidade: number; // tamanho do piso em z
+  /**
+   * x das faixas livres que correm de fundo a frente: uma entre cada par de colunas, uma
+   * antes da primeira e uma depois da última. Em ordem crescente, todas dentro do piso.
+   * Por elas o garçom anda sem esbarrar em mesa nem cadeira.
+   */
+  corredoresX: number[];
+  /** O mesmo para as linhas: z das faixas livres que correm da esquerda para a direita. */
+  corredoresZ: number[];
 }
 
 export function formaDaMesa(lugares: number): Forma {
@@ -108,7 +116,13 @@ export function montarPlanta(mesas: Mesa[]): PlantaSalao {
     return { mesa, forma, assentos, meiaPegada: meiaPegada(forma, assentos) };
   });
   if (preparadas.length === 0) {
-    return { mesas: [], largura: PASSO + 2 * MARGEM, profundidade: PASSO + 2 * MARGEM };
+    return {
+      mesas: [],
+      largura: PASSO + 2 * MARGEM,
+      profundidade: PASSO + 2 * MARGEM,
+      corredoresX: corredores([PASSO]),
+      corredoresZ: corredores([PASSO]),
+    };
   }
 
   const colunas = Math.max(...preparadas.map((p) => p.mesa.pos_x)) + 1;
@@ -141,7 +155,27 @@ export function montarPlanta(mesas: Mesa[]): PlantaSalao {
     mesas: preparadas.map((p) => ({ ...p, x: xs[p.mesa.pos_x], z: zs[p.mesa.pos_y] })),
     largura: larguraTotal + 2 * MARGEM,
     profundidade: profundidadeTotal + 2 * MARGEM,
+    corredoresX: corredores(larguraColuna),
+    corredoresZ: corredores(alturaLinha),
   };
+}
+
+/**
+ * Faixas livres de uma grade com estes tamanhos de coluna (ou linha), centrada na origem.
+ * Entre duas colunas a faixa fica na divisa: cada mesa deixa pelo menos meio `CORREDOR`
+ * até ela. Antes da primeira e depois da última, a faixa fica meio `CORREDOR` para fora
+ * da grade, longe do balcão e das plantas que ficam junto às paredes.
+ */
+function corredores(tamanhos: number[]): number[] {
+  const total = tamanhos.reduce((a, b) => a + b, 0);
+  const faixas = [-total / 2 - CORREDOR / 2];
+  let divisa = -total / 2;
+  for (const t of tamanhos.slice(0, -1)) {
+    divisa += t;
+    faixas.push(divisa);
+  }
+  faixas.push(total / 2 + CORREDOR / 2);
+  return faixas;
 }
 
 /** Ponto na mesa em frente a um assento: onde vão o prato e o copo. */
