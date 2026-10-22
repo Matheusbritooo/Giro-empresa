@@ -97,3 +97,11 @@ Cada decisão tem o contexto, o que foi decidido e o que isso custa. Quando uma 
 **Decisão.** Render no plano grátis, configurado pelo `render.yaml` (Blueprint). Painel, API e simulador rodam num contêiner só (`infra/render/`), atrás de um Caddy sem HTTPS próprio: o Render entrega o certificado no endereço `onrender.com`. A visão fica de fora: medimos uns 190 MB para painel, API e simulador e uns 450 MB com a visão, perto demais do limite de 512 MB. Em produção pública, os dados de demonstração só são criados com `GIRO_DEMO=1`, a senha vem de `GIRO_SENHA_DEMO` (a `giro1234` do README é recusada) e o token da câmera do simulador sai do segredo do servidor.
 
 **Consequência.** Custo zero e link pronto em minutos. Em troca: o serviço dorme após 15 minutos sem visita (acorda em cerca de 1 minuto, com o salão zerado), o banco grátis expira em 30 dias e o servidor fica fora do Brasil. Por isso essa demonstração só recebe dados simulados. O primeiro cliente real vai para o servidor próprio com `infra/docker-compose.yml`.
+
+## 14. Salão em 3D com three.js, sem trocar a planta
+
+**Contexto.** Para a banca e para vender, o salão precisa impressionar no primeiro olhar e mostrar o que a câmera enxerga. A planta em grade continua sendo a forma mais rápida de ler o salão no celular no meio do serviço.
+
+**Decisão.** Uma vista 3D a mais na tela Salão, com `three` 0.186, `@react-three/fiber` 9 (React) e `@react-three/drei` 10 (controles de órbita, linhas e iluminação de ambiente). Tudo é desenhado no código (móveis, pessoas sem rosto, piso de tábua), sem baixar modelo nem imagem. Os dados são os mesmos da planta, ao vivo pelo WebSocket. A placa de cada mesa é um botão comum da página, posicionado sobre a mesa a cada quadro: funciona com teclado, leitor de tela e testes. O 3D só é baixado quando alguém abre a vista 3D (~280 KB comprimidos). Computador abre em 3D, celular abre na planta; aparelho sem WebGL ou com erro volta sozinho para a planta.
+
+**Consequência.** A demonstração ganha uma cena que explica o produto sem palavras, inclusive a parte de privacidade ("Ver como a câmera": formas e contornos, nenhum rosto). Em troca, três dependências a mais no painel e um teste de ponta a ponta que precisa de WebGL por software (`--enable-unsafe-swiftshader`) na CI.

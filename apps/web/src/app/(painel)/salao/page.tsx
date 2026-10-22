@@ -1,11 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ListaAlertas } from "@/components/alertas";
 import { AvisosDoAparelho } from "@/components/avisos-aparelho";
 import { DetalheMesa } from "@/components/detalhe-mesa";
+import { LimiteDeErro } from "@/components/limite-de-erro";
 import { AmostraTom, MesaNaPlanta } from "@/components/mesa";
 import { Aviso } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -15,8 +17,18 @@ import { useRestauranteAlvo } from "@/lib/restaurante";
 import { camerasSemSinal, contarPorTom, minutosEntre, type Tom } from "@/lib/salao";
 import { podeGerirMesas, useSessao } from "@/lib/sessao";
 import type { Alerta, Mesa } from "@/lib/tipos";
+import { temWebGL } from "@/lib/webgl";
+
+// O 3D (three.js) só é baixado quando alguém abre o salão em 3D.
+const Salao3D = dynamic(() => import("@/components/salao-3d"), {
+  ssr: false,
+  loading: () => <MontandoSalao3D />,
+});
 
 const CHAVE_SOM = "giro:som";
+const CHAVE_VISTA = "giro:vista";
+
+type Vista = "3d" | "planta";
 
 function lerPreferenciaSom(): boolean {
   try {
@@ -26,10 +38,24 @@ function lerPreferenciaSom(): boolean {
   }
 }
 
+/** Computador abre em 3D; celular abre na planta, que é mais rápida de ler no meio do serviço. */
+function lerVistaInicial(): Vista {
+  if (typeof window === "undefined" || !temWebGL()) return "planta";
+  try {
+    const guardada = localStorage.getItem(CHAVE_VISTA);
+    if (guardada === "3d" || guardada === "planta") return guardada;
+  } catch {
+    // navegador sem armazenamento: escolhe pelo tamanho da tela
+  }
+  return window.matchMedia("(min-width: 1024px)").matches ? "3d" : "planta";
+}
+
 export default function PaginaSalao() {
   const { sessao } = useSessao();
   const restaurante = useRestauranteAlvo();
   const [somLigado, setSomLigado] = useState(lerPreferenciaSom);
+  const [vista, setVista] = useState<Vista>(lerVistaInicial);
+  const [com3D, setCom3D] = useState(() => typeof window !== "undefined" && temWebGL());
   const som = useRef(somLigado);
   const [mesaAberta, setMesaAberta] = useState<number | null>(null);
   const [recado, setRecado] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
@@ -74,6 +100,24 @@ export default function PaginaSalao() {
     } catch (e) {
       setRecado({ tipo: "erro", texto: (e as Error).message });
     }
+  }
+
+  function mudarVista(nova: Vista) {
+    setVista(nova);
+    try {
+      localStorage.setItem(CHAVE_VISTA, nova);
+    } catch {
+      // sem armazenamento: vale só enquanto a página estiver aberta
+    }
+  }
+
+  function quandoO3DFalhar() {
+    setCom3D(false);
+    setVista("planta");
+    setRecado({
+      tipo: "erro",
+      texto: "Este aparelho não conseguiu abrir o salão em 3D. Mostrando a planta.",
+    });
   }
 
   function mudarSom(ligado: boolean) {
@@ -143,9 +187,22 @@ export default function PaginaSalao() {
           aria-label="Planta do salão"
           className="flex flex-col gap-4 lg:col-start-1 lg:row-span-2 lg:row-start-1"
         >
-          <Contagem mesas={salao.mesas} agoraMs={agora} limiteSeg={limite} />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Contagem mesas={salao.mesas} agoraMs={agora} limiteSeg={limite} />
+            {com3D && salao.mesas.length > 0 && <SeletorVista vista={vista} aoMudar={mudarVista} />}
+          </div>
           {salao.mesas.length === 0 ? (
             <SalaoVazio podeCadastrar={!!sessao && podeGerirMesas(sessao.usuario.papel)} />
+          ) : vista === "3d" && com3D ? (
+            <LimiteDeErro reserva={null} aoFalhar={quandoO3DFalhar}>
+              <Salao3D
+                mesas={salao.mesas}
+                agoraMs={agora}
+                limiteSeg={limite}
+                nome={salao.restaurante.nome}
+                aoAbrir={setMesaAberta}
+              />
+            </LimiteDeErro>
           ) : (
             <Planta mesas={salao.mesas}>
               {salao.mesas.map((m) => (
@@ -230,6 +287,42 @@ function Contagem({
         </li>
       ))}
     </ul>
+  );
+}
+
+function SeletorVista({ vista, aoMudar }: { vista: Vista; aoMudar: (vista: Vista) => void }) {
+  const opcoes: [Vista, string][] = [
+    ["3d", "Salão 3D"],
+    ["planta", "Planta"],
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="Como ver o salão"
+      className="inline-flex rounded-lg border border-linha bg-superficie p-0.5"
+    >
+      {opcoes.map(([valor, rotulo]) => (
+        <button
+          key={valor}
+          type="button"
+          aria-pressed={vista === valor}
+          onClick={() => aoMudar(valor)}
+          className={`min-h-9 rounded-md px-3 text-sm font-semibold ${
+            vista === valor ? "bg-tinta text-fundo" : "text-tinta-suave hover:text-tinta"
+          }`}
+        >
+          {rotulo}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MontandoSalao3D() {
+  return (
+    <div className="grid h-[min(68vh,660px)] min-h-[380px] place-items-center rounded-2xl border border-linha bg-superficie text-tinta-suave">
+      Montando o salão em 3D...
+    </div>
   );
 }
 

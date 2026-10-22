@@ -15,10 +15,12 @@ export default defineConfig({
     baseURL: PAINEL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
-    // No ambiente da nuvem do Claude o Chromium já vem instalado; na CI o Playwright baixa.
-    launchOptions: process.env.PW_CHROMIUM_PATH
-      ? { executablePath: process.env.PW_CHROMIUM_PATH }
-      : {},
+    launchOptions: {
+      // No ambiente da nuvem do Claude o Chromium já vem instalado; na CI o Playwright baixa.
+      ...(process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {}),
+      // Sem placa de vídeo (CI e nuvem), o 3D do salão roda no processador.
+      args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader"],
+    },
   },
   projects: [
     { name: "celular", use: { ...devices["Pixel 7"] } },

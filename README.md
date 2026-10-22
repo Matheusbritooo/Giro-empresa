@@ -6,11 +6,12 @@ A GIRO liga na câmera de segurança que o restaurante já tem, analisa uma foto
 
 Projeto do TCM *O Segredo do Meu Negócio* (Técnico em Administração), da equipe Almir, Gabriel, Ingrid, Matheus e Vitória.
 
-![Salão ao vivo no computador](docs/telas/salao-computador.png)
+![Salão ao vivo em 3D no computador](docs/telas/salao-3d.png)
 
 <p>
-  <img src="docs/telas/salao-celular.png" alt="Salão no celular" width="260">
+  <img src="docs/telas/salao-celular.png" alt="Salão no celular, na planta" width="260">
   <img src="docs/telas/salao-celular-escuro.png" alt="Salão no celular, tema escuro" width="260">
+  <img src="docs/telas/salao-3d-celular.png" alt="Salão em 3D no celular" width="260">
 </p>
 
 ## O que já funciona
@@ -18,6 +19,7 @@ Projeto do TCM *O Segredo do Meu Negócio* (Técnico em Administração), da equ
 **Fases 0 (fundação), 1 (salão no simulador) e 2 (visão computacional) prontas.**
 
 - Mapa de mesas ao vivo, com cronômetro em cada mesa e as cadeiras ocupadas desenhadas em volta.
+- **Salão em 3D**: a cantina inteira em maquete (piso de tábua, balcão, janelas, a câmera no canto), com os clientes sentados em cada mesa, o cardápio na mesa de quem espera, o prato servido e a louça suja na mesa para limpar. Gira com o dedo ou o mouse, e tocar na placa da mesa abre o mesmo detalhe com "Liberar mesa". O botão **Ver como a câmera** mostra o campo de visão e o contorno que a visão desenha em volta de cada pessoa. No computador abre em 3D; no celular, na planta (dá para trocar, e o aparelho lembra).
 - Alerta de cliente sem atendimento (5 min, ajustável pelo dono) e alerta de mesa vaga, com som no painel e notificação no celular.
 - Botões "Vou atender" e "Liberar mesa": quando um garçom toca, todos os aparelhos atualizam na hora.
 - Registro de cada visita à mesa (sentou, foi atendida, saiu, foi liberada), que é a base dos indicadores da Fase 3.
@@ -36,6 +38,8 @@ Visão computacional (Fase 2):
 - Ferramenta para medir o acerto da visão com vídeo real e escolher a calibração.
 
 ![Tela Câmeras: desenho das mesas sobre a foto](docs/telas/cameras-desenhando.png)
+
+![Salão em 3D no modo "Ver como a câmera"](docs/telas/salao-3d-camera.png)
 
 *Ilustração de salão vazio usada como foto da câmera. Com gente, cada pessoa aparece pixelada e com uma caixa branca (sentada) ou amarela (em pé).*
 
@@ -67,8 +71,9 @@ Prefere Postgres, como em produção? `make banco` sobe um no Docker. Depois, an
    cd services/backend
    uv run python -m giro.simulador ao-vivo --cenario sexta-lotada --inicio-em 4:30
    ```
-3. Mostre o alerta da mesa 4 sem atendimento, toque em "Vou atender" no celular e veja o computador atualizar.
+3. Mostre o alerta da mesa 4 sem atendimento, toque em "Vou atender" no celular e veja o computador atualizar. No computador, o salão em 3D mostra a mesa 4 pulsando em vermelho.
 4. Quando a mesa 1 vagar, toque em "Liberar mesa". Toque na mesa 7 para mostrar a linha do tempo: quando sentaram, quanto esperaram e há quanto tempo está parada.
+5. Feche com **Ver como a câmera** no 3D: a câmera do salão, o que ela enxerga e a frase de privacidade (conta pessoas, não reconhece ninguém).
 
 Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 

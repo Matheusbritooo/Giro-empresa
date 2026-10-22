@@ -41,6 +41,7 @@ services/backend/   Python 3.12+, FastAPI, SQLAlchemy, Alembic (uv)
   giro/conector.py  pega a imagem do DVR (RTSP ou foto HTTP) e manda para a visão
   migrations/       Alembic
 apps/web/           Next.js 16 (App Router, Cache Components), Tailwind 4, PWA (pnpm)
+  src/components/salao-3d/  salão em 3D (three.js + react-three-fiber), só baixado quando abre
 infra/              docker-compose e Dockerfiles; infra/render: demonstração online (render.yaml na raiz)
 scripts/            trava de commit
 .claude/            hooks, skills e agentes deste projeto
@@ -91,6 +92,7 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - Estado da mesa sempre por cor + padrão + palavra, nunca só cor. Cores e fontes estão em `apps/web/src/app/globals.css`; não invente cor fora dos tokens.
 - Next.js 16 tem mudanças grandes: leia `apps/web/node_modules/next/dist/docs/` antes de usar API que você não viu neste código (veja `apps/web/AGENTS.md`).
 - Dados no painel: `useDados` (`src/lib/dados.ts`) para telas comuns e `useSalaoAoVivo` (`src/lib/ao-vivo.ts`) para o salão. Não chame setState direto dentro de useEffect (o lint barra).
+- Salão 3D: as contas de posição ficam em `salao-3d/planta.ts` (testadas sem 3D). As placas das mesas são botões comuns da página que o `Projetor` move; não use o `Html` do drei (perdia a placa da primeira mesa). Cores do 3D vêm dos tokens (`salao-3d/cores.ts`).
 - Dependência nova só com motivo; explique no commit.
 
 ## Skills e agentes do projeto
