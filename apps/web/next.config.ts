@@ -33,6 +33,13 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
         ],
       },
+      {
+        // Pessoas e decoração do salão 3D (~2 MB): só mudam quando infra/modelos-3d gera de novo.
+        source: "/modelos/:caminho*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" },
+        ],
+      },
     ];
   },
 };

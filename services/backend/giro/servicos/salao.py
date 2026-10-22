@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import functools
+import threading
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Concatenate
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from giro.dominio.mesa import Estado, Evento, MaquinaMesa, Observacao, Regras, TipoEvento
-from giro.esquemas import AlertaSaida, MesaSalao, ObservacaoMesa
+from giro.esquemas import AlertaSaida, CameraSaida, MesaSalao, ObservacaoMesa
 from giro.modelos import (
     Alerta,
     Camera,
@@ -55,6 +59,8 @@ def mesa_salao(mesa: Mesa, ocupacao: Ocupacao | None) -> MesaSalao:
         ativa=mesa.ativa,
         estado=mesa.estado,
         estado_desde=mesa.estado_desde,
+        camera_id=mesa.camera_id,
+        poligono=[tuple(p) for p in mesa.poligono] if mesa.poligono else None,
     )
     if ocupacao is not None and mesa.estado != Estado.LIVRE:
         dados.sentou_em = ocupacao.sentou_em
@@ -85,11 +91,31 @@ class _Mudancas:
     alertas_resolvidos: list[Alerta] = field(default_factory=list)
 
 
+def _uma_por_vez[**P, R](
+    metodo: Callable[Concatenate[ServicoSalao, P], R],
+) -> Callable[Concatenate[ServicoSalao, P], R]:
+    """
+    A câmera, o botão "Liberar mesa" e o relógio mexem na mesma mesa em threads diferentes.
+    No Postgres o `FOR UPDATE` faz um esperar o outro; no SQLite (desenvolvimento e testes)
+    ele não trava nada, e a câmera e o relógio liam a mesa ao mesmo tempo e criavam o mesmo
+    alerta duas vezes. Esta trava faz um esperar o outro dentro do processo.
+    """
+
+    @functools.wraps(metodo)
+    def envolvido(self: ServicoSalao, *args: P.args, **kwargs: P.kwargs) -> R:
+        with self._trava:
+            return metodo(self, *args, **kwargs)
+
+    return envolvido
+
+
 class ServicoSalao:
     def __init__(self, central: CentralTempoReal, push: EnviadorPush) -> None:
         self.central = central
         self.push = push
+        self._trava = threading.RLock()
 
+    @_uma_por_vez
     def processar_observacoes(
         self, db: Session, camera: Camera, em: datetime, itens: list[ObservacaoMesa]
     ) -> list[int]:
@@ -122,8 +148,17 @@ class ServicoSalao:
         camera.ultima_observacao_em = em
         db.commit()
         self._avisar(db, restaurante.id, mudancas)
+        # O painel mostra "câmera sem imagem" quando esta mensagem para de chegar.
+        self.central.publicar(
+            restaurante.id,
+            {
+                "tipo": "camera",
+                "camera": CameraSaida.model_validate(camera).model_dump(mode="json"),
+            },
+        )
         return sorted(numeros - mesas.keys())
 
+    @_uma_por_vez
     def liberar_mesa(self, db: Session, mesa: Mesa, agora: datetime) -> None:
         """Equipe tocou em "liberada". Pode lançar TransicaoInvalida."""
         restaurante = db.get_one(Restaurante, mesa.restaurante_id)
@@ -134,6 +169,7 @@ class ServicoSalao:
         db.commit()
         self._avisar(db, restaurante.id, mudancas)
 
+    @_uma_por_vez
     def verificar_tempos(self, db: Session, agora: datetime) -> None:
         """Alertas que dependem só do relógio (ex.: câmera parou de mandar foto)."""
         mesas = db.scalars(

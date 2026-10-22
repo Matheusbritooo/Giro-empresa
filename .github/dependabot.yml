@@ -15,6 +15,29 @@ updates:
     groups:
       painel-menores:
         update-types: [minor, patch]
+    ignore:
+      # O postprocessing 6.39.5 (efeitos do salão 3D) exige three abaixo de 0.187. Subir o
+      # three antes de sair um postprocessing compatível quebra a instalação do painel.
+      # Quando sair, tire estas duas linhas e suba os três juntos, testando o 3D.
+      - dependency-name: three
+        versions: [">=0.187.0"]
+      - dependency-name: "@types/three"
+        versions: [">=0.187.0"]
+      # O @react-three/fiber 9.8 aceita React só até 19.3. Mesma regra: sobe quando o fiber
+      # aceitar, os três juntos.
+      - dependency-name: react
+        versions: [">=19.4.0"]
+      - dependency-name: react-dom
+        versions: [">=19.4.0"]
+      # TypeScript e tipos do Node mudam de versão grande junto com o resto da cadeia (eslint,
+      # vitest, Node do Docker e da CI). Decisão do grupo, não PR automático.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+      # Os plugins do eslint-config-next (react, import, jsx-a11y) aceitam ESLint só até o 9.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /

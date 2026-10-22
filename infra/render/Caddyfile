@@ -1,0 +1,23 @@
+# Demonstração no Render: o Render cuida do HTTPS e entrega tudo na porta $PORT.
+# /api vai para o backend (inclusive o WebSocket do painel ao vivo); o resto, para o painel.
+{
+	admin off
+	auto_https off
+	persist_config off
+	servers {
+		# Só o proxy do Render chega a este contêiner: pode confiar no X-Forwarded-*.
+		trusted_proxies static 0.0.0.0/0 ::/0
+	}
+}
+
+:{$PORT:10000} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

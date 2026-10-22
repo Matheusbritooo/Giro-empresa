@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { aplicarMensagem, contarPorTom, SALAO_VAZIO, situacao, tempoDecorrido } from "./salao";
-import type { Alerta, Mesa, Salao } from "./tipos";
+import {
+  aplicarMensagem,
+  camerasSemSinal,
+  contarPorTom,
+  SALAO_VAZIO,
+  situacao,
+  tempoDecorrido,
+} from "./salao";
+import type { Alerta, Camera, Mesa, Salao } from "./tipos";
 
 const AGORA = Date.parse("2026-10-23T23:41:00Z");
 const minutosAtras = (m: number) => new Date(AGORA - m * 60_000).toISOString();
@@ -16,6 +23,8 @@ function mesa(dados: Partial<Mesa>): Mesa {
     ativa: true,
     estado: "livre",
     estado_desde: null,
+    camera_id: null,
+    poligono: null,
     sentou_em: null,
     atendida_em: null,
     saiu_em: null,
@@ -37,11 +46,22 @@ function alerta(dados: Partial<Alerta>): Alerta {
   };
 }
 
+function camera(dados: Partial<Camera>): Camera {
+  return {
+    id: 1,
+    nome: "Salão",
+    ativa: true,
+    ultima_observacao_em: minutosAtras(0),
+    ajustes_visao: null,
+    ...dados,
+  };
+}
+
 const salao: Salao = {
   restaurante: { id: 1, nome: "Cantina", cidade: null, alerta_atendimento_seg: 300 },
   mesas: [mesa({ id: 1, numero: 1 }), mesa({ id: 2, numero: 2 })],
   alertas: [],
-  cameras: [],
+  cameras: [camera({ ultima_observacao_em: minutosAtras(10) })],
   agora: new Date(AGORA).toISOString(),
 };
 
@@ -148,5 +168,27 @@ describe("mensagens ao vivo", () => {
 
   it("mensagem antes do salão carregar é ignorada", () => {
     expect(aplicarMensagem(SALAO_VAZIO, { tipo: "mesa", mesa: mesa({}) })).toBe(SALAO_VAZIO);
+  });
+});
+
+describe("câmeras", () => {
+  it("câmera que parou de mandar foto há mais de 90 s aparece como sem sinal", () => {
+    const cameras = [
+      camera({ id: 1, ultima_observacao_em: minutosAtras(0.5) }),
+      camera({ id: 2, ultima_observacao_em: minutosAtras(3) }),
+      camera({ id: 3, ultima_observacao_em: null }), // nunca conectou: aviso fica em Câmeras
+      camera({ id: 4, ultima_observacao_em: minutosAtras(30), ativa: false }),
+    ];
+    expect(camerasSemSinal(cameras, AGORA).map((c) => c.id)).toEqual([2]);
+  });
+
+  it("foto nova da câmera atualiza o status ao vivo", () => {
+    const inicial = aplicarMensagem(SALAO_VAZIO, { tipo: "salao", salao }, AGORA);
+    expect(camerasSemSinal(inicial.salao?.cameras ?? [], AGORA)).toHaveLength(1);
+    const viva = aplicarMensagem(inicial, {
+      tipo: "camera",
+      camera: camera({ ultima_observacao_em: minutosAtras(0) }),
+    });
+    expect(camerasSemSinal(viva.salao?.cameras ?? [], AGORA)).toHaveLength(0);
   });
 });

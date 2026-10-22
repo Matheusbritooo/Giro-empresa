@@ -1,36 +1,8 @@
-import { expect, type APIRequestContext, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
-const API = "http://localhost:8100";
-const TOKEN_CAMERA = "cam_demo_cantina_do_marcos"; // criado pelo seed
+import { camera, entrar, preferirPlanta } from "./apoio";
 
-/** Faz o papel da câmera: manda uma foto analisada a cada 10s entre dois instantes. */
-async function camera(
-  request: APIRequestContext,
-  mesa: number,
-  deMin: number,
-  ateMin: number,
-  sentados: number,
-  emPe = 0,
-) {
-  const agora = Date.now();
-  for (let t = deMin; t <= ateMin + 1e-9; t += 10 / 60) {
-    const resposta = await request.post(`${API}/api/ingest/observacoes`, {
-      headers: { authorization: `Bearer ${TOKEN_CAMERA}` },
-      data: {
-        em: new Date(agora + t * 60_000).toISOString(),
-        mesas: [{ mesa, sentados, em_pe: emPe }],
-      },
-    });
-    expect(resposta.ok()).toBeTruthy();
-  }
-}
-
-async function entrar(page: Page, email: string) {
-  await page.goto("/entrar");
-  await page.getByLabel("E-mail").fill(email);
-  await page.getByLabel("Senha").fill("giro1234");
-  await page.getByRole("button", { name: "Entrar" }).click();
-}
+test.beforeEach(async ({ page }) => preferirPlanta(page));
 
 // Cada projeto (celular e computador) usa mesas diferentes, já que o banco é o mesmo.
 const MESAS = { celular: { esquecida: 3, suja: 5 }, computador: { esquecida: 9, suja: 12 } };
@@ -91,7 +63,13 @@ test("garçom só vê o salão; dono vê mesas, equipe e ajustes", async ({ page
 
   await entrar(page, "marcos@cantina.demo");
   await expect(page.getByTestId("mesa-1")).toBeVisible();
-  await expect(navegacao.getByRole("link")).toHaveText(["Salão", "Mesas", "Equipe", "Ajustes"]);
+  await expect(navegacao.getByRole("link")).toHaveText([
+    "Salão",
+    "Mesas",
+    "Câmeras",
+    "Equipe",
+    "Ajustes",
+  ]);
 });
 
 test("senha errada mostra o motivo", async ({ page }) => {

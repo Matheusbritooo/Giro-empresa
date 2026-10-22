@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState } from "react";
 
 import { Aviso, Botao, Campo, Secao } from "@/components/ui";
@@ -114,7 +115,12 @@ export default function PaginaAjustes() {
         <ul className="flex flex-col divide-y divide-linha">
           {cameras.map((camera) => (
             <li key={camera.id} className="flex items-center justify-between gap-3 py-3">
-              <span className="font-semibold">{camera.nome}</span>
+              <Link
+                href={`/cameras?camera=${camera.id}`}
+                className="font-semibold underline decoration-linha underline-offset-4"
+              >
+                {camera.nome}
+              </Link>
               <span className="text-sm text-tinta-suave">
                 {camera.ultima_observacao_em
                   ? `Última imagem analisada às ${horaCurta(camera.ultima_observacao_em)}`

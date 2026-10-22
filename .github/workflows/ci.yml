@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   backend:
-    name: Backend (API, regras da mesa, simulador)
+    name: Backend (API, regras da mesa, visão, simulador)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -38,7 +38,13 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: services/backend/uv.lock
-      - run: uv sync --frozen
+      - run: uv sync --frozen --all-extras
+      - name: Modelo de detecção de pessoas (cache entre execuções)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/giro/modelos
+          key: modelos-${{ hashFiles('services/backend/giro/visao/modelo.py') }}
+      - run: uv run python -m giro.visao.modelo yolox_s
       - name: Lint e formatação
         run: |
           uv run ruff check giro tests migrations
@@ -97,8 +103,12 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: services/backend/uv.lock
-      - run: uv sync --frozen
+      - run: uv sync --frozen --all-extras
         working-directory: services/backend
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/giro/modelos
+          key: modelos-${{ hashFiles('services/backend/giro/visao/modelo.py') }}
       - uses: pnpm/action-setup@v6
         with:
           package_json_file: apps/web/package.json
@@ -129,3 +139,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: scripts/verificar-commit.sh --todos
+
+  demonstracao:
+    name: Imagem da demonstração online (Render)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # O Render monta esta mesma imagem a cada push na main. Quebrar aqui avisa antes.
+      - run: docker build -f infra/render/Dockerfile -t giro-demo .

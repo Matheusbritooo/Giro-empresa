@@ -7,6 +7,8 @@
 #   - arquivos .env com segredos (só .env.example e .env.development podem entrar);
 #   - imagens e vídeos fora das pastas de ícones e telas do sistema: foto de salão de
 #     cliente nunca entra no repositório;
+#   - modelo 3D (.glb/.gltf, que pode levar imagem dentro) fora de apps/web/public/modelos/
+#     ou sem estar no manifesto.json, que é gerado por infra/modelos-3d;
 #   - chaves privadas coladas no código;
 #   - arquivos acima de 5 MB.
 set -uo pipefail
@@ -28,10 +30,20 @@ while IFS= read -r arquivo; do
   esac
 
   case "${nome,,}" in
-    *.jpg|*.jpeg|*.png|*.webp|*.gif|*.bmp|*.tif|*.tiff|*.heic|*.mp4|*.avi|*.mkv|*.mov|*.h264|*.h265|*.dav)
+    *.jpg|*.jpeg|*.png|*.webp|*.gif|*.bmp|*.tif|*.tiff|*.heic|*.avif|*.jxl|*.svgz|*.ktx2|*.basis|*.exr|*.hdr|*.mp4|*.avi|*.mkv|*.mov|*.h264|*.h265|*.dav)
       case "$arquivo" in
         apps/web/public/icone*|apps/web/src/app/icon*|apps/web/src/app/apple-icon*|docs/telas/*) ;;
         *) problemas+=("$arquivo: imagem ou vídeo fora de apps/web/public/icone* ou docs/telas/. Foto de câmera de cliente nunca entra no repositório (LGPD).") ;;
+      esac
+      ;;
+    *.glb|*.gltf)
+      case "$arquivo" in
+        apps/web/public/modelos/*)
+          if ! grep -qF "\"${arquivo#apps/web/public/modelos/}\"" apps/web/public/modelos/manifesto.json 2>/dev/null; then
+            problemas+=("$arquivo: modelo 3D fora do manifesto.json. Gere com infra/modelos-3d/gerar.sh.")
+          fi
+          ;;
+        *) problemas+=("$arquivo: modelo 3D fora de apps/web/public/modelos/. Pode levar imagem dentro (LGPD).") ;;
       esac
       ;;
   esac

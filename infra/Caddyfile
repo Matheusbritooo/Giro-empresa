@@ -1,10 +1,19 @@
 # Um domínio só: /api vai para o backend (inclusive o WebSocket do painel ao vivo),
-# o resto vai para o painel. O Caddy emite e renova o certificado HTTPS sozinho.
+# /visao recebe as fotos do conector, o resto vai para o painel.
+# As rotas /interno do serviço de visão nunca são expostas: só a API fala com elas.
+# O Caddy emite e renova o certificado HTTPS sozinho.
 {$DOMINIO:localhost} {
 	encode zstd gzip
 
 	handle /api/* {
 		reverse_proxy api:8000
+	}
+
+	handle /visao/* {
+		request_body {
+			max_size 5MB
+		}
+		reverse_proxy visao:8001
 	}
 
 	handle {

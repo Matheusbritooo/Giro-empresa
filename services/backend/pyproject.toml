@@ -19,6 +19,16 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
 ]
 
+[project.optional-dependencies]
+visao = [
+    "numpy>=2.5.4",
+    "onnxruntime>=1.31.0",
+    "pillow>=13.0.0",
+]
+conector = [
+    "opencv-python-headless>=5.0.0.93",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

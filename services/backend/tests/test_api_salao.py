@@ -147,8 +147,10 @@ def test_painel_recebe_o_salao_e_as_mudancas_ao_vivo(cliente, camera, inicio):
         assert len(inicial["salao"]["mesas"]) == 4
 
         mandar(camera, inicio, 0, 0.5, [{"mesa": 1, "sentados": 2}])
-        mensagem = ws.receive_json()
-        assert mensagem["tipo"] == "mesa"
+        # Cada foto também avisa que a câmera está viva.
+        assert ws.receive_json()["tipo"] == "camera"
+        while (mensagem := ws.receive_json())["tipo"] != "mesa":
+            pass
         assert mensagem["mesa"]["numero"] == 1
         assert mensagem["mesa"]["estado"] == "aguardando"
 
