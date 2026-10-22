@@ -32,6 +32,16 @@ class Config(BaseSettings):
     # 0 desliga (usado nos testes).
     verificador_intervalo_seg: float = 10
 
+    @field_validator("database_url")
+    @classmethod
+    def _driver_do_postgres(cls, valor: str) -> str:
+        # Render e outras plataformas entregam postgres:// ou postgresql://; o SQLAlchemy
+        # precisa saber que o driver é o psycopg 3.
+        for prefixo in ("postgres://", "postgresql://"):
+            if valor.startswith(prefixo):
+                return "postgresql+psycopg://" + valor.removeprefix(prefixo)
+        return valor
+
     @field_validator("segredo_jwt")
     @classmethod
     def _segredo_longo(cls, valor: str) -> str:

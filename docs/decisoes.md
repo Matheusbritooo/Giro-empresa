@@ -89,3 +89,11 @@ Cada decisão tem o contexto, o que foi decidido e o que isso custa. Quando uma 
 **Decisão.** Sem vídeo real ainda, a regra usa a proporção da caixa da pessoa (em pé = mais de 2,2 vezes mais alta que larga) e a posição do ponto de apoio em relação ao desenho da mesa. Cada câmera pode ser calibrada pelo painel.
 
 **Consequência.** É o ponto de maior risco técnico do produto: câmera muito alta deixa gente em pé "baixa" na imagem. A ferramenta `giro/visao/avaliar.py` e a skill `validar-visao` medem o acerto contra uma contagem feita à mão e sugerem a calibração. A meta antes do primeiro cliente pagante é acertar 95% das vezes se a mesa está ocupada e 85% das vezes se o garçom está na mesa.
+
+## 13. Demonstração online no Render, num contêiner só
+
+**Contexto.** A equipe precisa de um link com HTTPS para mostrar o painel na banca e para clientes, sem pagar servidor nem comprar domínio agora.
+
+**Decisão.** Render no plano grátis, configurado pelo `render.yaml` (Blueprint). Painel, API e simulador rodam num contêiner só (`infra/render/`), atrás de um Caddy sem HTTPS próprio: o Render entrega o certificado no endereço `onrender.com`. A visão fica de fora: medimos uns 190 MB para painel, API e simulador e uns 450 MB com a visão, perto demais do limite de 512 MB. Em produção pública, os dados de demonstração só são criados com `GIRO_DEMO=1`, a senha vem de `GIRO_SENHA_DEMO` (a `giro1234` do README é recusada) e o token da câmera do simulador sai do segredo do servidor.
+
+**Consequência.** Custo zero e link pronto em minutos. Em troca: o serviço dorme após 15 minutos sem visita (acorda em cerca de 1 minuto, com o salão zerado), o banco grátis expira em 30 dias e o servidor fica fora do Brasil. Por isso essa demonstração só recebe dados simulados. O primeiro cliente real vai para o servidor próprio com `infra/docker-compose.yml`.

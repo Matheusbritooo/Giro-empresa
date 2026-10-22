@@ -45,6 +45,8 @@ export function DesenhoDeMesas({
   );
   const leitura = useDados(buscarLeitura);
   const temImagem = leitura.dados !== null && leitura.erro === null;
+  // Demonstração online: a API responde que não há serviço de visão neste servidor.
+  const semVisao = leitura.erro?.includes("não configurado") ?? false;
 
   const desenhadas = mesas.filter((m) => m.camera_id === camera.id && m.poligono);
   const contagem = new Map(leitura.dados?.mesas.map((m) => [m.mesa, m]));
@@ -162,13 +164,25 @@ export function DesenhoDeMesas({
           </div>
         ) : (
           <div className="rounded-xl border-2 border-dashed border-linha p-6">
-            <p className="font-semibold">Ainda não chegou imagem desta câmera.</p>
-            <p className="text-tinta-suave">
-              Ligue o conector GIRO num computador na mesma rede do gravador, com a chave desta
-              câmera. A primeira foto aparece aqui em até 10 segundos.
-            </p>
-            {leitura.erro && !leitura.erro.includes("conector") && (
-              <p className="mt-2 text-sm text-tinta-suave">Detalhe: {leitura.erro}</p>
+            {semVisao ? (
+              <>
+                <p className="font-semibold">Este servidor está sem a visão ligada.</p>
+                <p className="text-tinta-suave">
+                  Aqui o salão é alimentado pelo simulador, que faz o papel da câmera. Para desenhar
+                  as mesas sobre a foto de verdade, use o servidor completo, com a visão.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold">Ainda não chegou imagem desta câmera.</p>
+                <p className="text-tinta-suave">
+                  Ligue o conector GIRO num computador na mesma rede do gravador, com a chave desta
+                  câmera. A primeira foto aparece aqui em até 10 segundos.
+                </p>
+                {leitura.erro && !leitura.erro.includes("conector") && (
+                  <p className="mt-2 text-sm text-tinta-suave">Detalhe: {leitura.erro}</p>
+                )}
+              </>
             )}
           </div>
         )}

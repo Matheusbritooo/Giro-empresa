@@ -41,7 +41,7 @@ services/backend/   Python 3.12+, FastAPI, SQLAlchemy, Alembic (uv)
   giro/conector.py  pega a imagem do DVR (RTSP ou foto HTTP) e manda para a visão
   migrations/       Alembic
 apps/web/           Next.js 16 (App Router, Cache Components), Tailwind 4, PWA (pnpm)
-infra/              docker-compose e Dockerfiles
+infra/              docker-compose e Dockerfiles; infra/render: demonstração online (render.yaml na raiz)
 scripts/            trava de commit
 .claude/            hooks, skills e agentes deste projeto
 ```

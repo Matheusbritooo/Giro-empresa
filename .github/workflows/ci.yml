@@ -139,3 +139,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: scripts/verificar-commit.sh --todos
+
+  demonstracao:
+    name: Imagem da demonstração online (Render)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      # O Render monta esta mesma imagem a cada push na main. Quebrar aqui avisa antes.
+      - run: docker build -f infra/render/Dockerfile -t giro-demo .

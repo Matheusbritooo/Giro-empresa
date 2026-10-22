@@ -1,0 +1,36 @@
+# Demonstração do GIRO no Render (plano grátis), com HTTPS em https://giro-demo.onrender.com
+# (ou parecido). Passo a passo no README, seção "Demonstração online".
+# Grátis tem limites: o serviço dorme após 15 min sem visitas (acorda em ~1 min) e o banco
+# grátis expira em 30 dias. Só dados simulados: nada de câmera ou cliente real aqui.
+services:
+  - type: web
+    name: giro-demo
+    runtime: docker
+    plan: free
+    region: virginia # o mais perto do Brasil entre os do Render
+    dockerfilePath: ./infra/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/saude
+    envVars:
+      - key: GIRO_DATABASE_URL
+        fromDatabase:
+          name: giro-demo-banco
+          property: connectionString
+      - key: GIRO_SEGREDO_JWT
+        generateValue: true
+      - key: GIRO_SENHA_DEMO # senha de todos os acessos de demonstração (mínimo 10 letras)
+        sync: false
+      - key: GIRO_AMBIENTE
+        value: producao
+      - key: GIRO_COOKIE_SEGURO
+        value: "true"
+      - key: GIRO_DEMO
+        value: "1"
+
+databases:
+  - name: giro-demo-banco
+    plan: free
+    region: virginia
+    databaseName: giro
+    user: giro
+    ipAllowList: [] # só o serviço acima acessa o banco
