@@ -1,0 +1,14 @@
+{
+  "name": "giro-modelos-3d",
+  "private": true,
+  "description": "Ferramentas que otimizam e conferem os modelos 3D do salão (não vai para o painel).",
+  "type": "module",
+  "dependencies": {
+    "@gltf-transform/cli": "4.5.1",
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "meshoptimizer": "1.2.0",
+    "sharp": "0.35.5"
+  }
+}
