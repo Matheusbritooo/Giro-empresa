@@ -90,6 +90,8 @@ export default function Salao3D({
   const area = useRef<HTMLDivElement>(null);
   const tamanhoArea = useRef({ largura: 0, altura: 0 });
   const aoFalharRef = useRef(aoFalhar);
+  const esperaContexto = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const desligado = useRef(false);
   const planta = useMemo(() => montarPlanta(mesas), [mesas]);
   // A câmera do Canvas só usa a posição inicial; depois quem manda é quem arrasta.
   const [posicaoInicial] = useState(() => vistaInicial(planta.largura, planta.profundidade));
@@ -98,13 +100,16 @@ export default function Salao3D({
     aoFalharRef.current = aoFalhar;
   }, [aoFalhar]);
 
-  // Se o 3D sair da tela com o mouse em cima de uma mesa, o cursor volta ao normal.
-  useEffect(
-    () => () => {
+  // Ao sair da tela: o cursor volta ao normal (se o mouse estava numa mesa) e a perda do
+  // contexto que o próprio desligar do 3D provoca não conta como falha.
+  useEffect(() => {
+    desligado.current = false;
+    return () => {
+      desligado.current = true;
+      clearTimeout(esperaContexto.current);
       document.body.style.cursor = "";
-    },
-    [],
-  );
+    };
+  }, []);
 
   // Tamanho da área do 3D, para as placas não saírem cortadas pela borda.
   useEffect(() => {
@@ -178,7 +183,11 @@ export default function Salao3D({
       data-testid="salao-3d"
       data-qualidade={nivel}
     >
-      <div ref={area} className="relative isolate h-[min(64vh,620px)] min-h-[360px]">
+      <div
+        ref={area}
+        data-testid="salao-3d-area"
+        className="relative isolate h-[min(64vh,620px)] min-h-[360px]"
+      >
         <Canvas
           shadows={ajustes.sombras === "nenhuma" ? false : "percentage"}
           dpr={ajustes.dpr}
@@ -194,11 +203,17 @@ export default function Salao3D({
             gl.shadowMap.autoUpdate = ajustes.sombras === "dinamicas";
             // Placa de vídeo perdida (driver reiniciou, aba em segundo plano no celular): se não
             // voltar logo, a página mostra a planta em vez de um quadro em branco.
-            let espera: ReturnType<typeof setTimeout> | undefined;
             gl.domElement.addEventListener("webglcontextlost", () => {
-              espera = setTimeout(() => aoFalharRef.current?.(), ESPERA_CONTEXTO_MS);
+              if (desligado.current) return;
+              clearTimeout(esperaContexto.current);
+              esperaContexto.current = setTimeout(
+                () => aoFalharRef.current?.(),
+                ESPERA_CONTEXTO_MS,
+              );
             });
-            gl.domElement.addEventListener("webglcontextrestored", () => clearTimeout(espera));
+            gl.domElement.addEventListener("webglcontextrestored", () =>
+              clearTimeout(esperaContexto.current),
+            );
           }}
           aria-label="Salão em 3D. Arraste para girar e use a roda do mouse ou dois dedos para aproximar."
         >

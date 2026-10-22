@@ -5,13 +5,14 @@
 #
 # Requisitos (veja o README): Python 3.13 com bpy==5.2.2 (BPY_PYTHON), node 20+ e npm,
 # acesso a raw.githubusercontent.com e ao registry do npm. Não roda na CI.
-# Variáveis: TRABALHO (pasta de rascunho, padrão $TMPDIR/giro-modelos-3d),
+# Variáveis: TRABALHO (pasta de rascunho, padrão uma pasta nova do mktemp; passe uma fixa
+#            para reaproveitar os downloads),
 #            DESTINO (padrão apps/web/public/modelos).
 set -euo pipefail
 
 aqui=$(cd "$(dirname "$0")" && pwd)
 raiz=$(cd "$aqui/../.." && pwd)
-TRABALHO=${TRABALHO:-${TMPDIR:-/tmp}/giro-modelos-3d}
+TRABALHO=${TRABALHO:-$(mktemp -d -t giro-modelos-3d.XXXXXX)}
 DESTINO=${DESTINO:-$raiz/apps/web/public/modelos}
 
 : "${BPY_PYTHON:?Diga onde está o Python com bpy 5.2.2: BPY_PYTHON=/caminho/venv/bin/python}"
@@ -23,7 +24,7 @@ mkdir -p "$TRABALHO/dl" "$TRABALHO/bruto" "$TRABALHO/node"
 echo "== 1. Ferramentas do node (versões fixas em node/package-lock.json)"
 cp "$aqui/node/package.json" "$aqui/node/package-lock.json" "$TRABALHO/node/"
 cp "$aqui"/node/*.mjs "$TRABALHO/node/"
-(cd "$TRABALHO/node" && npm ci --no-audit --no-fund --loglevel=error)
+(cd "$TRABALHO/node" && npm ci --ignore-scripts --no-audit --no-fund --loglevel=error)
 
 echo "== 2. Downloads (lista fixa com sha256 em fontes.txt)"
 while read -r soma destino url; do

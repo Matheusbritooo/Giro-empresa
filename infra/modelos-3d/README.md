@@ -48,7 +48,7 @@ Requisitos:
   ```
 - Node 20+ com npm. As ferramentas (`@gltf-transform/cli` 4.5.1, `meshoptimizer` 1.2.0 e
   `sharp` 0.35.5) têm versão fixa em `node/package-lock.json`, e o `gerar.sh` instala numa pasta
-  de rascunho com `npm ci`.
+  de rascunho com `npm ci --ignore-scripts` (nenhum pacote roda script ao instalar).
 - Acesso a `raw.githubusercontent.com` (Rocketbox e Khronos) e ao registry do npm.
 
 ```bash
@@ -57,8 +57,8 @@ BPY_PYTHON=/caminho/venv-bpy/bin/python infra/modelos-3d/gerar.sh
 
 Leva uns 2 minutos (baixa cerca de 300 MB na primeira vez) e, com as mesmas versões, sai byte a
 byte igual ao que está no repositório. Variáveis opcionais: `TRABALHO` (rascunho, padrão
-`$TMPDIR/giro-modelos-3d`) e `DESTINO` (padrão `apps/web/public/modelos`). Os downloads ficam no
-rascunho e nunca entram no repositório.
+uma pasta nova do `mktemp`; passe uma pasta fixa para não baixar tudo de novo) e `DESTINO` (padrão
+`apps/web/public/modelos`). Os downloads ficam no rascunho e nunca entram no repositório.
 
 ## O que o `gerar.sh` faz
 

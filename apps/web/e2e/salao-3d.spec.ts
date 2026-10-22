@@ -31,7 +31,10 @@ test("dono vê o salão em 3D ao vivo, abre a mesa pela placa e pode voltar para
 
   await page.getByRole("button", { name: "Ver como a câmera" }).click();
   await expect(page.getByText("A câmera enxerga formas, não rostos.")).toBeVisible();
-  await expect(page.getByText("Câmera do salão: 1 foto a cada 10 s")).toBeVisible();
+  // A placa da câmera só aparece depois que o projetor a põe no lugar (quadro novo no SwiftShader).
+  await expect(page.getByText("Câmera do salão: 1 foto a cada 10 s")).toBeVisible({
+    timeout: 15_000,
+  });
 
   // A escolha de ver na planta fica guardada no aparelho.
   await page.getByRole("button", { name: "Planta" }).click();

@@ -1,5 +1,5 @@
 /**
- * Os modelos 3D de gente (clientes sentados e garçom) que ficam em `public/modelos`, gerados
+ * Os modelos 3D (clientes sentados, garçom e decoração) que ficam em `public/modelos`, gerados
  * por `infra/modelos-3d`. O manifesto entra no pacote (é pequeno); os .glb são baixados
  * do próprio painel quando o 3D abre, nunca de CDN.
  */
@@ -25,10 +25,17 @@ export interface GarcomDoManifesto {
   altura: number;
 }
 
+export interface DecoracaoDoManifesto {
+  id: string;
+  arquivo: string;
+  licenca: string;
+}
+
 export interface Manifesto {
   versao: number;
   clientes: ClienteDoManifesto[];
   garcom: GarcomDoManifesto;
+  decoracao: DecoracaoDoManifesto[];
 }
 
 export const MANIFESTO = manifestoJson as unknown as Manifesto;

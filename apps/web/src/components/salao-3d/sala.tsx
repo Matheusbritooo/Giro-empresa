@@ -6,6 +6,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 import { aparencia } from "./aparencia";
 import { useQualidade, useRefazerSombra } from "./contexto-qualidade";
+import { Decoracao } from "./decoracao";
 import { REPETICAO, uvEmMetros } from "./geometrias";
 
 export const ALTURA_PAREDE = 3;
@@ -31,6 +32,8 @@ export const Sala = memo(function Sala({
   const fundo = -profundidade / 2;
   const esquerda = -largura / 2;
   const janelas = posicoesJanelas(largura);
+  // No nível baixo a decoração fica só a desenhada no código: nada de baixar modelo a mais.
+  const realista = useQualidade().nivel !== "baixo";
   useRefazerSombra(`${largura}:${profundidade}`);
 
   // Paredes com a textura em metros: o reboco e o lambri não esticam numa parede comprida.
@@ -110,9 +113,31 @@ export const Sala = memo(function Sala({
         ))}
 
       <Letreiro nome={nome} posicao={[0, 2.05, fundo + 0.06]} />
-      <Balcao x={esquerda} z={fundo + 1.1} comprimento={Math.min(3.4, profundidade * 0.4)} />
-      <Planta posicao={[largura / 2 - 0.65, 0, fundo + 0.65]} semente={1} />
-      <Planta posicao={[esquerda + 0.65, 0, profundidade / 2 - 0.7]} semente={2} />
+      <Balcao
+        x={esquerda}
+        z={fundo + 1.1}
+        comprimento={Math.min(3.4, profundidade * 0.4)}
+        realista={realista}
+      />
+      {realista && (
+        // Geladeira de bebidas no canto, entre a parede do fundo e o começo do balcão.
+        <Decoracao
+          id="geladeira"
+          altura={1.95}
+          posicao={[esquerda + 0.5, 0, fundo + 0.55]}
+          giro={Math.PI / 2}
+        />
+      )}
+      <VasoDePlanta
+        posicao={[largura / 2 - 0.65, 0, fundo + 0.65]}
+        semente={1}
+        realista={realista}
+      />
+      <VasoDePlanta
+        posicao={[esquerda + 0.65, 0, profundidade / 2 - 0.7]}
+        semente={2}
+        realista={realista}
+      />
     </group>
   );
 });
@@ -212,7 +237,17 @@ function geometriaGarrafa(): THREE.BufferGeometry {
   return junta;
 }
 
-function Balcao({ x, z, comprimento }: { x: number; z: number; comprimento: number }) {
+function Balcao({
+  x,
+  z,
+  comprimento,
+  realista,
+}: {
+  x: number;
+  z: number;
+  comprimento: number;
+  realista: boolean;
+}) {
   const a = aparencia();
   const garrafa = useMemo(() => geometriaGarrafa(), []);
   useEffect(() => () => garrafa.dispose(), [garrafa]);
@@ -268,7 +303,31 @@ function Balcao({ x, z, comprimento }: { x: number; z: number; comprimento: numb
           ))}
         </group>
       ))}
+      {realista && (
+        <Decoracao
+          id="vaso-flores"
+          altura={0.34}
+          posicao={[x + fundo / 2 + 0.07, 1.09, z + comprimento * 0.7]}
+        />
+      )}
     </group>
+  );
+}
+
+/** Planta de verdade (modelo) nos níveis com acabamento; a desenhada no código enquanto baixa. */
+function VasoDePlanta({
+  posicao,
+  semente,
+  realista,
+}: {
+  posicao: [number, number, number];
+  semente: number;
+  realista: boolean;
+}) {
+  const desenhada = <Planta posicao={posicao} semente={semente} />;
+  if (!realista) return desenhada;
+  return (
+    <Decoracao id="planta" altura={1.3} posicao={posicao} giro={semente} reserva={desenhada} />
   );
 }
 

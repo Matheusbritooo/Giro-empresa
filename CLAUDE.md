@@ -98,7 +98,8 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - Modelos 3D (pessoas e decoração) ficam em `apps/web/public/modelos/` e são gerados por `infra/modelos-3d/gerar.sh` (Blender + gltf-transform), nunca editados à mão. Clientes têm pose assada (sem esqueleto) e só o garçom tem esqueleto. Carregue com `useGLTF(url, false, true)` (meshopt, sem Draco, sem CDN) e reaproveite geometria e material (InstancedMesh). Crédito e licença de cada modelo em `public/modelos/CREDITOS.md`.
 - Salão 3D tem 3 níveis de acabamento (`salao-3d/qualidade.ts`): alto (oclusão, brilho, sombra a cada quadro, respiração e garçom andando), médio e baixo (CI e aparelho fraco: sem efeitos, desenha sob demanda, garçom vai direto ao destino). Force com `?qualidade=alto|medio|baixo`. Sombra não se refaz sozinha fora do alto: quem muda o salão chama `useRefazerSombra`.
 - Luz de ambiente do 3D: só a foto 360° local (`@pmndrs/assets`, import dinâmico) e os `Lightformer`. Nunca use `preset=` no `Environment` do drei (baixa de CDN).
-- O selo "Pessoas ilustrativas: a câmera só conta, não filma ninguém." fica sempre visível no 3D (LGPD: o desenho não é imagem de câmera).
+- O selo "Pessoas ilustrativas: a câmera só conta, não filma ninguém." fica sempre visível na faixa logo abaixo do 3D, onde placa nenhuma o cobre (LGPD: o desenho não é imagem de câmera).
+- Um modelo 3D que não baixa nunca derruba o salão: cada cliente fica num `LimiteDeErro` próprio e vira boneco simples. Modelo novo (.glb/.gltf) só em `public/modelos/` e listado no `manifesto.json` (a trava confere).
 - Dependência nova só com motivo; explique no commit.
 
 ## Skills e agentes do projeto

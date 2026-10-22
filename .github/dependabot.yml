@@ -23,6 +23,18 @@ updates:
         versions: [">=0.187.0"]
       - dependency-name: "@types/three"
         versions: [">=0.187.0"]
+      # O @react-three/fiber 9.8 aceita React só até 19.3. Mesma regra: sobe quando o fiber
+      # aceitar, os três juntos.
+      - dependency-name: react
+        versions: [">=19.4.0"]
+      - dependency-name: react-dom
+        versions: [">=19.4.0"]
+      # TypeScript e tipos do Node mudam de versão grande junto com o resto da cadeia (eslint,
+      # vitest, Node do Docker e da CI). Decisão do grupo, não PR automático.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
