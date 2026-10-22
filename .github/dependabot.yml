@@ -35,6 +35,9 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: "@types/node"
         update-types: [version-update:semver-major]
+      # Os plugins do eslint-config-next (react, import, jsx-a11y) aceitam ESLint só até o 9.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
