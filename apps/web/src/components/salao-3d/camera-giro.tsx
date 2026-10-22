@@ -5,10 +5,12 @@ import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 
 import { aparencia } from "./aparencia";
+import { useQualidade } from "./contexto-qualidade";
 
 /**
  * A câmera de segurança que o restaurante já tem, no canto do fundo, com o campo de visão
  * desenhado até o chão. No modo "como a câmera vê", o campo acende e uma linha varre o salão.
+ * Parada (movimento reduzido ou aparelho fraco), o LED fica aceso e a varredura não aparece.
  */
 export const CameraDoSalao = memo(function CameraDoSalao({
   posicao,
@@ -20,11 +22,13 @@ export const CameraDoSalao = memo(function CameraDoSalao({
   posicao: [number, number, number];
   /** Metade do retângulo do chão que a câmera enxerga, centrado na origem. */
   area: { x: number; z: number };
-  cor: string;
+  cor: THREE.Color;
   verComoCamera: boolean;
   movimentoReduzido: boolean;
 }) {
   const a = aparencia();
+  const { animar } = useQualidade();
+  const parada = movimentoReduzido || !animar;
   const corpo = useRef<THREE.Group>(null);
   const led = useRef<THREE.MeshBasicMaterial>(null);
   const varredura = useRef<THREE.Mesh>(null);
@@ -65,7 +69,8 @@ export const CameraDoSalao = memo(function CameraDoSalao({
 
   useFrame(({ clock }) => {
     const t = clock.elapsedTime;
-    if (led.current) led.current.opacity = movimentoReduzido || t % 1.2 < 0.75 ? 1 : 0.15;
+    if (led.current) led.current.opacity = parada || t % 1.2 < 0.75 ? 1 : 0.15;
+    if (parada) return;
     if (varredura.current) {
       const fase = (t % 3.2) / 3.2;
       varredura.current.position.z = -area.z + fase * area.z * 2;
@@ -88,7 +93,13 @@ export const CameraDoSalao = memo(function CameraDoSalao({
           </mesh>
           <mesh position={[0.045, 0.045, 0.165]}>
             <sphereGeometry args={[0.012, 10, 8]} />
-            <meshBasicMaterial ref={led} color="#ff3b30" transparent toneMapped={false} />
+            <meshBasicMaterial
+              ref={led}
+              color="#ff3b30"
+              transparent
+              opacity={1}
+              toneMapped={false}
+            />
           </mesh>
         </group>
       </group>
@@ -112,7 +123,7 @@ export const CameraDoSalao = memo(function CameraDoSalao({
         />
       </lineSegments>
 
-      {verComoCamera && !movimentoReduzido && (
+      {verComoCamera && !parada && (
         <mesh ref={varredura} rotation-x={-Math.PI / 2} position-y={0.03} renderOrder={5}>
           <planeGeometry args={[area.x * 2, 0.08]} />
           <meshBasicMaterial

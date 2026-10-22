@@ -1,20 +1,25 @@
 "use client";
 
+import { OrbitControls, type OrbitControlsChangeEvent } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
-  Environment,
-  Lightformer,
-  OrbitControls,
-  type OrbitControlsChangeEvent,
-} from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
-import { type ComponentRef, type RefObject, useMemo, useRef } from "react";
+  type ComponentRef,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import * as THREE from "three";
 
 import { situacao } from "@/lib/salao";
 import type { Mesa } from "@/lib/tipos";
 
+import { Ambiente } from "./ambiente";
+import { vestirSalao } from "./aparencia";
 import { CameraDoSalao } from "./camera-giro";
-import { useCoresDoSalao } from "./cores";
+import { useQualidade } from "./contexto-qualidade";
+import { useCoresDoSalao, useCoresNaCena } from "./cores";
 import { MesaNoSalao3D } from "./mesa-3d";
 import { MARGEM, type PlantaSalao } from "./planta";
 import { ALTURA_PAREDE, Sala } from "./sala";
@@ -72,6 +77,8 @@ export function Cena({
   aoProjetar,
 }: PropsCena) {
   const cores = useCoresDoSalao();
+  const qualidade = useQualidade();
+  const coresTela = useCoresNaCena(cores, qualidade.efeitos);
   const { largura, profundidade } = planta;
   const maior = Math.max(largura, profundidade);
   const posicaoCamera = useMemo<[number, number, number]>(
@@ -104,16 +111,23 @@ export function Cena({
     alvo.y = Math.max(0, Math.min(1.5, alvo.y));
   }
 
+  const comSombra = qualidade.sombras !== "nenhuma";
+
   return (
     <>
-      <hemisphereLight args={["#ffe7c9", "#2b1e15", 0.55]} />
-      <ambientLight intensity={0.12} />
+      <ControleDoDesenho planta={planta} agoraMs={agoraMs} texturas={qualidade.texturas} />
+
+      {/* Interior quente à noite: o céu do hemisfério é o teto iluminado, o chão é madeira. */}
+      <hemisphereLight args={["#ffdfb8", "#2a1b12", 0.5]} />
+      <ambientLight intensity={0.08} color="#ffd9b0" />
+      {/* A única luz com sombra: o lustre do teto, um pouco à direita e à frente. */}
       <directionalLight
+        key={qualidade.mapaSombra}
         position={[largura * 0.22, 9, profundidade * 0.32]}
-        intensity={1.55}
-        color="#ffe3c2"
-        castShadow
-        shadow-mapSize={[2048, 2048]}
+        intensity={1.45}
+        color="#ffd7ad"
+        castShadow={comSombra}
+        shadow-mapSize={[qualidade.mapaSombra || 512, qualidade.mapaSombra || 512]}
         shadow-camera-left={-maior / 2 - 1}
         shadow-camera-right={maior / 2 + 1}
         shadow-camera-top={maior / 2 + 1}
@@ -122,26 +136,9 @@ export function Cena({
         shadow-camera-far={30}
         shadow-bias={-0.0004}
         shadow-normalBias={0.03}
-        shadow-radius={4}
+        shadow-radius={qualidade.sombras === "dinamicas" ? 5 : 3}
       />
-      {/* Reflexo nos copos e no verniz: luz de teto quente e o azul da rua pelas janelas. */}
-      <Environment resolution={128} environmentIntensity={0.6}>
-        <Lightformer
-          form="rect"
-          intensity={2.2}
-          color="#ffdcae"
-          scale={[14, 14, 1]}
-          position={[0, 7, 0]}
-          rotation-x={Math.PI / 2}
-        />
-        <Lightformer
-          form="rect"
-          intensity={0.7}
-          color="#8fa8d0"
-          scale={[10, 3, 1]}
-          position={[0, 2, -9]}
-        />
-      </Environment>
+      <Ambiente />
 
       <Sala largura={largura} profundidade={profundidade} nome={nome} />
 
@@ -155,6 +152,7 @@ export function Cena({
           verComoCamera={verComoCamera}
           movimentoReduzido={movimentoReduzido}
           cores={cores}
+          coresTela={coresTela}
           aoAbrir={aoAbrir}
         />
       ))}
@@ -162,7 +160,7 @@ export function Cena({
       <CameraDoSalao
         posicao={posicaoCamera}
         area={area}
-        cor={cores.foco}
+        cor={coresTela.foco}
         verComoCamera={verComoCamera}
         movimentoReduzido={movimentoReduzido}
       />
@@ -190,6 +188,52 @@ export function Cena({
       />
     </>
   );
+}
+
+/**
+ * Liga o desenho ao nível de acabamento:
+ * - sombra: refeita a cada quadro só no nível alto ("dinamicas"); nos outros, só quando
+ *   alguém chama `useRefazerSombra` (as mesas e a sala chamam quando mudam);
+ * - Canvas sob demanda (nível baixo): pede um quadro novo quando os dados ou o relógio mudam;
+ * - texturas PBR: geradas aos poucos e vestidas nos materiais quando ficam prontas.
+ */
+function ControleDoDesenho({
+  planta,
+  agoraMs,
+  texturas,
+}: {
+  planta: PlantaSalao;
+  agoraMs: number;
+  texturas: number;
+}) {
+  const { sombras } = useQualidade();
+  const get = useThree((s) => s.get);
+  const invalidate = useThree((s) => s.invalidate);
+
+  useLayoutEffect(() => {
+    const { gl } = get();
+    gl.shadowMap.autoUpdate = sombras === "dinamicas";
+    gl.shadowMap.needsUpdate = true;
+    invalidate();
+  }, [get, sombras, invalidate]);
+
+  useEffect(() => {
+    invalidate();
+  }, [planta, agoraMs, invalidate]);
+
+  useEffect(() => {
+    let vivo = true;
+    vestirSalao(texturas)
+      .then((mudou) => {
+        if (vivo && mudou) invalidate();
+      })
+      .catch(() => {}); // sem textura, o salão fica com as cores lisas
+    return () => {
+      vivo = false;
+    };
+  }, [texturas, invalidate]);
+
+  return null;
 }
 
 const PONTO = new THREE.Vector3();
@@ -222,7 +266,7 @@ function Projetor({ ancoras, aoProjetar }: { ancoras: Ancora[]; aoProjetar: AoPr
  */
 function Enquadrar({ planta }: { planta: PlantaSalao }) {
   const feito = useRef(false);
-  useFrame(({ camera, size, controls }) => {
+  useFrame(({ camera, size, controls, invalidate }) => {
     if (feito.current || size.width === 0 || !controls) return; // espera os controles
     feito.current = true;
     const pontos = cantosParaCaber(planta);
@@ -264,6 +308,7 @@ function Enquadrar({ planta }: { planta: PlantaSalao }) {
     orbita?.target.copy(alvo);
     orbita?.update();
     orbita?.saveState();
+    invalidate(); // no Canvas sob demanda, o próximo quadro já sai enquadrado
   });
   return null;
 }
