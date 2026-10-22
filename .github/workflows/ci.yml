@@ -40,7 +40,7 @@ jobs:
           cache-dependency-glob: services/backend/uv.lock
       - run: uv sync --frozen --all-extras
       - name: Modelo de detecção de pessoas (cache entre execuções)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/giro/modelos
           key: modelos-${{ hashFiles('services/backend/giro/visao/modelo.py') }}
@@ -105,7 +105,7 @@ jobs:
           cache-dependency-glob: services/backend/uv.lock
       - run: uv sync --frozen --all-extras
         working-directory: services/backend
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/giro/modelos
           key: modelos-${{ hashFiles('services/backend/giro/visao/modelo.py') }}
