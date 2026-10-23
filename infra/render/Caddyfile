@@ -20,4 +20,27 @@
 	handle {
 		reverse_proxy 127.0.0.1:3000
 	}
+
+	# Enquanto a API e o painel sobem (no plano grátis, 1 a 3 minutos), quem chega vê esta
+	# página, que se recarrega sozinha. A /api/saude responde 503 até a API atender.
+	handle_errors 502 503 504 {
+		header Content-Type "text/html; charset=utf-8"
+		header Cache-Control "no-store"
+		header Retry-After 10
+		respond `<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="10">
+<title>GIRO: abrindo o salão</title>
+</head>
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f1f3ef;color:#1c2321;font-family:system-ui,sans-serif">
+<main style="max-width:28rem;padding:1.5rem;text-align:center">
+<h1 style="font-size:1.6rem;margin:0 0 .75rem">Abrindo o salão</h1>
+<p style="margin:0;color:#5d6863;line-height:1.5">O GIRO estava dormindo e leva cerca de 1 minuto para acordar. Esta página atualiza sozinha.</p>
+</main>
+</body>
+</html>` 503
+	}
 }
