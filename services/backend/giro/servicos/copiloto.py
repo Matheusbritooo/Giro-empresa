@@ -107,6 +107,15 @@ def _reais(centavos: int) -> str:
     return f"R$ {centavos / 100:,.0f}".replace(",", ".")
 
 
+def _mesas(n: float) -> str:
+    """ "1 mesa", "3 mesas"."""
+    return f"{n:.0f} {'mesa' if round(n) == 1 else 'mesas'}"
+
+
+def _foram(n: float) -> str:
+    return "foi" if round(n) == 1 else "foram"
+
+
 def _hora(hora: int | None) -> str:
     return f"{hora}h" if hora is not None else "sem pico"
 
@@ -232,7 +241,9 @@ def briefing(ctx: Contexto) -> Briefing:
         )
         dicas.append(f"Combine quem cuida da mesa {pior.numero} quando o salão encher.")
     if embora >= 1:
-        frases.append(f"Em média, {embora:.0f} mesa(s) por {dia} foram embora sem ninguém atender.")
+        frases.append(
+            f"Em média, {_mesas(embora)} por {dia} {_foram(embora)} embora sem ninguém atender."
+        )
         if pico is not None:
             dicas.append(f"Entre {pico}h e {pico + 1}h, atenda primeiro quem acabou de sentar.")
     elif espera > limite * 0.6:
@@ -266,15 +277,15 @@ def responder_com_regras(pergunta: str, ctx: Contexto) -> str:
         return (
             f"A mesa {pior.numero} foi a que mais custou nas últimas 4 semanas: cerca de "
             f"{_reais(pior.perdido_centavos)}. Ela fica em média {_minutos(pior.parada_media_seg)} "
-            "parada depois "
-            "que o cliente sai. Combine quem libera essa mesa quando o salão encher."
+            "parada depois que o cliente sai. Combine quem libera essa mesa quando o salão encher."
         )
     if any(t in p for t in ("perdi", "perde", "dinheiro", "prejuizo", "custou", "quanto")):
         return (
             f"Nas últimas 4 semanas, cerca de {_reais(q.perdido_total_centavos)} ficaram na mesa: "
             f"{_reais(q.perdido_mesa_parada_centavos)} de mesa parada com o salão cheio e "
-            f"{_reais(q.perdido_desistencias_centavos)} de {q.desistencias} mesa(s) que foram "
-            'embora sem atendimento. Use o "E se?" para ver quanto volta limpando mais rápido.'
+            f"{_reais(q.perdido_desistencias_centavos)} de {_mesas(q.desistencias)} que "
+            f"{_foram(q.desistencias)} embora sem atendimento. "
+            'Use o "E se?" para ver quanto volta limpando mais rápido.'
         )
     if any(t in p for t in ("pico", "horario", "hora", "cheio", "lota")):
         cheias = [h for h in q.por_hora if h.ocupacao >= 0.75]
@@ -290,7 +301,8 @@ def responder_com_regras(pergunta: str, ctx: Contexto) -> str:
     if any(t in p for t in ("garcom", "garcons", "equipe", "funcionario", "contratar")):
         return (
             f"A espera média até o primeiro atendimento foi {_minutos(q.espera_media_seg)} e "
-            f"{q.desistencias} mesa(s) foram embora sem atendimento em 4 semanas. Abra o "
+            f"{_mesas(q.desistencias)} {_foram(q.desistencias)} embora sem atendimento em 4 "
+            "semanas. Abra o "
             '"E se?" em Resultados e mude o número de garçons: ele mostra quanto isso rende.'
         )
     if any(t in p for t in ("semana passada", "ontem", "compar", "pior que", "melhor que")):

@@ -218,7 +218,11 @@ def calcular(
             chegadas=chegadas_hora[h] / dividir,
             ocupacao=sum(ocupacao_hora[h]) / dividir,
         )
-        for h in sorted(set(chegadas_hora) | {h for h, f in ocupacao_hora.items() if sum(f) > 0})
+        # Na ordem da noite: depois das 23h vem 0h, 1h...
+        for h in sorted(
+            set(chegadas_hora) | {h for h, f in ocupacao_hora.items() if sum(f) > 0},
+            key=lambda h: (h - VIRADA.hour) % 24,
+        )
     ]
 
     por_mesa = []

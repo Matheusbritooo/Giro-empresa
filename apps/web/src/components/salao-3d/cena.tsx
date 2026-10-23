@@ -18,6 +18,7 @@ import { situacao } from "@/lib/salao";
 import type { Alerta } from "@/lib/tipos";
 
 import { Ambiente } from "./ambiente";
+import { ManchasDeCalor } from "./calor-3d";
 import { vestirSalao } from "./aparencia";
 import { CameraDoSalao } from "./camera-giro";
 import { useQualidade } from "./contexto-qualidade";
@@ -74,6 +75,8 @@ export interface PropsCena {
   aoChegarNaMesa: (numero: number) => void;
   /** O garçom mudou de destino ("mesa-7" ou "balcao"). */
   aoMudarDestinoGarcom: (destino: string) => void;
+  /** Mapa de calor do replay (mesa → 0 a 1); null = sem manchas. */
+  calor?: ReadonlyMap<number, number> | null;
 }
 
 export function Cena({
@@ -91,6 +94,7 @@ export function Cena({
   aoProjetar,
   aoChegarNaMesa,
   aoMudarDestinoGarcom,
+  calor = null,
 }: PropsCena) {
   const cores = useCoresDoSalao();
   const qualidade = useQualidade();
@@ -140,6 +144,7 @@ export function Cena({
         tons={planta.mesas.map((m) => situacao(m.mesa, agoraMs, limiteSeg).tom).join()}
         verComoCamera={verComoCamera}
         texturas={qualidade.texturas}
+        calor={calor}
       />
 
       {/* Interior quente à noite: o céu do hemisfério é o teto iluminado, o chão é madeira. */}
@@ -178,6 +183,8 @@ export function Cena({
           aoAbrir={aoAbrir}
         />
       ))}
+
+      {calor && <ManchasDeCalor planta={planta} calor={calor} cor={coresTela.atrasada} />}
 
       <PessoasNoSalao
         planta={planta}
@@ -255,12 +262,14 @@ function ControleDoDesenho({
   tons,
   verComoCamera,
   texturas,
+  calor,
 }: {
   planta: PlantaSalao;
   /** Estado de cada mesa: só redesenha quando algum muda, não a cada segundo do relógio. */
   tons: string;
   verComoCamera: boolean;
   texturas: number;
+  calor: ReadonlyMap<number, number> | null;
 }) {
   const { sombras } = useQualidade();
   const get = useThree((s) => s.get);
@@ -275,7 +284,7 @@ function ControleDoDesenho({
 
   useEffect(() => {
     invalidate();
-  }, [planta, tons, verComoCamera, invalidate]);
+  }, [planta, tons, verComoCamera, calor, invalidate]);
 
   useEffect(() => {
     let vivo = true;

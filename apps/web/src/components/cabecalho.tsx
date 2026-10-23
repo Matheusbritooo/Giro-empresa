@@ -26,6 +26,7 @@ export function Cabecalho({
   const links = [
     papel === "admin_giro" && { href: "/restaurantes", texto: "Restaurantes", sufixo: "" },
     restaurante && { href: "/salao", texto: "Salão", sufixo },
+    restaurante && podeGerirMesas(papel) && { href: "/resultados", texto: "Resultados", sufixo },
     restaurante && podeGerirMesas(papel) && { href: "/mesas", texto: "Mesas", sufixo },
     restaurante && podeGerirMesas(papel) && { href: "/cameras", texto: "Câmeras", sufixo },
     restaurante && podeGerirEquipe(papel) && { href: "/equipe", texto: "Equipe", sufixo },
@@ -46,7 +47,7 @@ export function Cabecalho({
           className="order-3 -mx-1 flex w-full gap-1 overflow-x-auto sm:order-none sm:w-auto"
         >
           {links.map((link) => {
-            const ativo = caminho === link.href;
+            const ativo = caminho === link.href || caminho.startsWith(`${link.href}/`);
             return (
               <Link
                 key={link.href}

@@ -86,6 +86,11 @@ def test_ocupacao_e_chegadas_por_hora():
     assert horas[20].ocupacao == pytest.approx(6300 / 7200)
 
 
+def test_horas_na_ordem_da_noite():
+    madrugada = Visita(1, h(23, 30), h(23, 33), h(23, 30) + timedelta(hours=2), None, pessoas=2)
+    assert [p.hora for p in calcular_noite([*VISITAS, madrugada]).por_hora] == [20, 21, 23, 0, 1]
+
+
 def test_por_mesa():
     mesa1, mesa2 = calcular_noite().por_mesa
     assert (mesa1.visitas, mesa1.desistencias, mesa1.parada_total_seg) == (1, 0, 900)

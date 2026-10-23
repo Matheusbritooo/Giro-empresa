@@ -59,6 +59,7 @@ export default function Salao3D({
   limiteSeg,
   nome,
   foco = null,
+  calor = null,
   aoAbrir,
   aoFalhar,
 }: {
@@ -69,6 +70,8 @@ export default function Salao3D({
   nome: string;
   /** Leva a câmera até esta mesa ("Ver no salão" nos alertas). */
   foco?: PedidoDeFoco | null;
+  /** Mapa de calor do replay da noite (mesa → 0 a 1). */
+  calor?: ReadonlyMap<number, number> | null;
   aoAbrir: (mesaId: number) => void;
   /** O 3D não tem como continuar (a placa de vídeo sumiu e não voltou). */
   aoFalhar?: () => void;
@@ -235,6 +238,7 @@ export default function Salao3D({
                 aoProjetar={projetar}
                 aoChegarNaMesa={aoChegarNaMesa}
                 aoMudarDestinoGarcom={aoMudarDestinoGarcom}
+                calor={calor}
               />
               {/* Sem os efeitos (se o pedaço não carregar), o salão segue com a imagem simples. */}
               {ajustes.efeitos && (
