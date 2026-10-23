@@ -22,8 +22,14 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY services/backend/ ./
 RUN uv sync --frozen --no-dev
 
+# O Caddy oficial vem marcado para abrir porta abaixo de 1024 (setcap). O Render não deixa
+# executar binário com essa marca ("Operation not permitted", saída 126), e aqui a porta é a
+# 10000: tira a marca.
+FROM caddy:2 AS caddy
+RUN setcap -r /usr/bin/caddy
+
 FROM python:3.13-slim
-COPY --from=caddy:2 /usr/bin/caddy /usr/local/bin/caddy
+COPY --from=caddy /usr/bin/caddy /usr/local/bin/caddy
 COPY --from=web /usr/local/bin/node /usr/local/bin/node
 COPY --from=api /app /app
 COPY --from=web /web/.next/standalone /web
