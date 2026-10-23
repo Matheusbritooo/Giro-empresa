@@ -16,7 +16,7 @@ Projeto do TCM *O Segredo do Meu Negócio* (Técnico em Administração), da equ
 
 ## O que já funciona
 
-**Fases 0 (fundação), 1 (salão no simulador) e 2 (visão computacional) prontas.**
+**Fases 0 (fundação), 1 (salão no simulador) e 2 (visão computacional) prontas. Fase 3 (inteligência) com resultados, replay, "E se?" e Copiloto.**
 
 - Mapa de mesas ao vivo, com cronômetro em cada mesa e as cadeiras ocupadas desenhadas em volta.
 - **Salão em 3D realista**: a cantina inteira à noite (piso de tábua, lambri, toalha xadrez, balcão com flores, geladeira de bebidas, plantas, arandelas, a câmera no canto), com clientes de verdade sentados em cada mesa ocupada, o cardápio na mesa de quem espera, o prato servido e a louça suja na mesa para limpar. Um garçom anda pelos corredores até a mesa de quem tocou "Vou atender", anota o pedido e volta ao balcão. Nos alertas, **Ver no salão** leva a câmera do 3D até a mesa. Gira com o dedo ou o mouse, e tocar na placa da mesa abre o mesmo detalhe com "Liberar mesa". O botão **Ver como a câmera** mostra o campo de visão e o contorno que a visão desenha em volta de cada pessoa. As pessoas são ilustrativas (o selo logo abaixo do 3D diz isso): a câmera só conta, não filma ninguém. O acabamento se ajusta ao aparelho (alto, médio ou baixo; dá para forçar com `?qualidade=alto` na URL). No computador abre em 3D; no celular, na planta (dá para trocar, e o aparelho lembra).
@@ -36,6 +36,20 @@ Visão computacional (Fase 2):
 - Tela **Câmeras**: o técnico desenha cada mesa tocando nos cantos sobre a foto, vê a contagem ao vivo e calibra a câmera. As pessoas aparecem pixeladas e a foto não é guardada.
 - Aviso no salão quando uma câmera para de mandar imagem.
 - Ferramenta para medir o acerto da visão com vídeo real e escolher a calibração.
+
+Resultados e Copiloto (Fase 3, para dono e gerente):
+
+- **Dinheiro que ficou na mesa**: quanto deixou de entrar na noite, na semana ou nas 4 semanas, em forma de comanda: quem foi embora sem atendimento (pessoas × ticket médio) e mesa suja com o salão cheio (minutos parada além de 3 min, nas horas com 75% das mesas ocupadas, convertidos em clientes que caberiam ali). Compara com o mesmo dia da semana anterior.
+- Números da noite (mesas atendidas, giro, espera até o garçom, mesa parada, quem foi embora), ocupação por hora com o pico, perda noite a noite e as mesas que mais custaram.
+- **Replay da noite**: o salão (3D ou planta) refeito minuto a minuto só com os horários de cada mesa, com play, velocidade, os momentos que valem rever e a noite de cada mesa. O **mapa de calor** pinta em volta das mesas onde o salão travou.
+- **E se?**: o dono mexe no tempo de limpeza e no número de garçons e vê quanto entraria a mais por mês, com base nas últimas 4 semanas do próprio salão.
+- **Copiloto GIRO**: o recado do dia antes do turno ("hoje é sexta, o salão enche às 20h, a mesa 7 é a que mais fica parada") e uma caixa para perguntar em português. Funciona sem IA, com respostas prontas; com a chave da Anthropic, responde com IA (veja [Copiloto com IA](#copiloto-com-ia-opcional)).
+- No celular, aviso "Antes do turno" na hora de abrir e "Resumo da noite" na hora de fechar (com o aviso no celular ligado).
+- Em **Ajustes**, o dono informa quanto cada pessoa gasta em média e o horário de abrir e fechar.
+
+![Resultados: dinheiro que ficou na mesa, Copiloto e números da semana](docs/telas/resultados.png)
+
+![Replay da noite com o mapa de calor](docs/telas/replay-calor.png)
 
 ![Tela Câmeras: desenho das mesas sobre a foto](docs/telas/cameras-desenhando.png)
 
@@ -76,7 +90,10 @@ Prefere Postgres, como em produção? `make banco` sobe um no Docker. Depois, an
 3. Mostre o alerta da mesa 4 sem atendimento, toque em "Vou atender" no celular e veja o computador atualizar. No computador, o salão em 3D mostra a mesa 4 pulsando em vermelho.
 4. Quando a mesa 1 vagar, toque em "Liberar mesa". Toque na mesa 7 para mostrar a linha do tempo: quando sentaram, quanto esperaram e há quanto tempo está parada.
 5. No alerta da mesa 4, toque em **Ver no salão**: a câmera do 3D vai até a mesa e o garçom aparece indo atender.
-6. Feche com **Ver como a câmera** no 3D: a câmera do salão, o que ela enxerga e a frase de privacidade (conta pessoas, não reconhece ninguém).
+6. Mostre **Ver como a câmera** no 3D: a câmera do salão, o que ela enxerga e a frase de privacidade (conta pessoas, não reconhece ninguém).
+7. Entre como dono (`marcos@cantina.demo`) e abra **Resultados** em "7 dias": o dinheiro que ficou na mesa, a comanda e a mesa que mais custou. O seed já traz 4 semanas de noites de demonstração.
+8. Toque em **Rever a pior noite**, depois em **Assistir** e ligue o **Mapa de calor**. Toque num momento da noite para a câmera ir até a mesa.
+9. Feche com o **E se?**: arraste "Mesa limpa em até" para 3 min e mostre quanto entraria por mês. Pergunte ao Copiloto "Qual mesa mais me dá prejuízo?".
 
 Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 
@@ -154,6 +171,12 @@ make e2e      # navegador de verdade, no celular e no computador
 
 A CI do GitHub roda tudo isso em cada PR, inclusive contra Postgres, e confere se as migrações do banco batem com o código.
 
+## Copiloto com IA (opcional)
+
+Sem configurar nada, o Copiloto responde com regras prontas a partir dos números do salão. Para respostas com IA (Claude, da Anthropic), crie uma chave em [console.anthropic.com](https://console.anthropic.com) e coloque na API como `GIRO_ANTHROPIC_API_KEY` (no Render: **giro-demo > Environment > Add Environment Variable**). Se a IA estiver fora do ar, sem crédito ou recusar, o Copiloto volta para as respostas prontas sozinho.
+
+O que vai para a Anthropic, e só isso: o nome do restaurante, o horário de funcionamento, o ticket médio, números somados por noite, por mesa e por hora das últimas 4 semanas (mesas atendidas, giro, espera média, mesa parada, quem foi embora, ocupação, valor estimado) e a pergunta digitada pelo dono ou gerente. Nunca vai imagem, nome de pessoa, e-mail ou dado de cliente. Cada restaurante pode fazer até 60 perguntas por hora.
+
 ## Demonstração online (grátis, com HTTPS)
 
 Para mostrar o painel para a banca ou para um cliente sem instalar nada, o repositório já vem pronto para o [Render](https://render.com), no plano grátis. Sobe o painel, a API e o simulador numa noite aleatória que não para, num endereço `https://...onrender.com`.
@@ -198,6 +221,6 @@ O repositório já vem preparado para o grupo usar o Claude Code:
 | Fase | Entrega |
 |---|---|
 | 2b. Calibração em campo | Medir a visão com vídeo de um restaurante parceiro; receber a foto do gravador por FTPS para dispensar o conector |
-| 3. Inteligência | Painel de desempenho (giro, tempo de atendimento, mesa parada, horário de pico), previsão da próxima mesa a vagar, relatório semanal "quanto a GIRO te devolveu" |
+| 3. Inteligência (resto) | Previsão da próxima mesa a vagar, relatório semanal por e-mail "quanto a GIRO te devolveu" |
 | 4. Gestão GIRO | Leads com as perguntas de qualificação, assinatura e cobrança (Asaas), painel financeiro |
 | 5. Site | Página de vendas e calculadora de retorno |
