@@ -1,13 +1,15 @@
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SEGREDO_DEV = "dev-inseguro-troque-este-segredo-em-producao"
 
 
 class Config(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="GIRO_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="GIRO_", env_file=".env", extra="ignore", populate_by_name=True
+    )
 
     ambiente: str = "dev"  # dev | teste | producao
     database_url: str = "sqlite:///./giro-dev.db"
@@ -27,6 +29,13 @@ class Config(BaseSettings):
     # O segredo é o mesmo configurado no serviço de visão (GIRO_VISAO_SEGREDO).
     visao_url: str | None = None
     visao_segredo: str | None = None
+
+    # Copiloto GIRO com IA (Claude). Sem chave, o Copiloto responde com regras fixas.
+    # Aceita GIRO_ANTHROPIC_API_KEY ou o nome padrão do SDK, ANTHROPIC_API_KEY.
+    anthropic_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GIRO_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"),
+    )
 
     # De quanto em quanto tempo o servidor confere alertas que dependem só do relógio.
     # 0 desliga (usado nos testes).
