@@ -16,10 +16,10 @@ if [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
   export GIRO_ORIGENS_CORS="[\"${RENDER_EXTERNAL_URL}\"]"
 fi
 
-esperar() {  # esperar PORTA: até alguém atender nela (no máximo 90 s)
+esperar() {  # esperar PORTA: até alguém atender nela (no máximo 10 min; no plano grátis demora)
   python - "$1" <<'PY'
 import socket, sys, time
-for _ in range(180):
+for _ in range(1200):
     try:
         socket.create_connection(("127.0.0.1", int(sys.argv[1])), timeout=1).close()
         sys.exit(0)
@@ -30,6 +30,11 @@ PY
 }
 
 cd /app
+# A porta pública abre primeiro: o Render só dá o serviço como no ar quando acha uma porta
+# aberta, e com 0,1 de CPU o resto leva minutos. Enquanto isso, o Caddy mostra "Abrindo o
+# salão" e responde 503 na /api/saude (veja o Caddyfile).
+caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
+
 # O painel não depende do banco: sobe enquanto o banco é preparado.
 (cd /web && HOSTNAME=127.0.0.1 PORT=3000 exec node server.js) &
 
@@ -50,9 +55,6 @@ uvicorn --factory giro.api.app:criar_app --host 127.0.0.1 --port 8000 \
   --proxy-headers --forwarded-allow-ips 127.0.0.1 &
 esperar 8000
 esperar 3000
-
-# A porta pública abre por último: quem acorda o serviço não vê erro enquanto ele sobe.
-caddy run --config /etc/caddy/Caddyfile --adapter caddyfile &
 
 # Começa com 20 minutos de noite andando: salão com mesas esperando, ocupadas e para limpar.
 python -m giro.simulador ao-vivo --aleatorio --ritmo demo --mesas 1-14 --minutos 120 \
