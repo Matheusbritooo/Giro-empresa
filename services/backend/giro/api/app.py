@@ -11,7 +11,17 @@ from sqlalchemy.orm import sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from giro.api.cliente_visao import ClienteVisao
-from giro.api.rotas import ao_vivo, auth, cameras, equipe, ingest, mesas, push, salao
+from giro.api.rotas import (
+    ao_vivo,
+    auth,
+    cameras,
+    equipe,
+    ingest,
+    mesas,
+    push,
+    resultados,
+    salao,
+)
 from giro.api.rotas.auth import LimiteTentativas
 from giro.banco import agora, criar_engine, criar_sessoes
 from giro.config import Config, obter_config
@@ -71,7 +81,7 @@ def criar_app(config: Config | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["content-type", "authorization"],
     )
-    for modulo in (auth, salao, mesas, equipe, cameras, ingest, push, ao_vivo):
+    for modulo in (auth, salao, mesas, equipe, cameras, ingest, push, ao_vivo, resultados):
         app.include_router(modulo.router)
 
     @app.get("/api/saude", tags=["saúde"])

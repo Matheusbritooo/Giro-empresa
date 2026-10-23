@@ -35,6 +35,14 @@ class Restaurante(Base):
     nome: Mapped[str] = mapped_column(String(120))
     cidade: Mapped[str | None] = mapped_column(String(80))
     alerta_atendimento_seg: Mapped[int] = mapped_column(default=300)
+    # Gasto médio por pessoa, em centavos: transforma tempo perdido em dinheiro nos resultados.
+    ticket_medio_centavos: Mapped[int] = mapped_column(default=8500, server_default="8500")
+    # Horário do serviço, "HH:MM" em São Paulo: briefing na abertura, resumo no fechamento.
+    abre_as: Mapped[str] = mapped_column(String(5), default="18:00", server_default="18:00")
+    fecha_as: Mapped[str] = mapped_column(String(5), default="23:30", server_default="23:30")
+    # Última noite (AAAA-MM-DD) que já recebeu o briefing e o resumo, para não mandar duas vezes.
+    ultimo_briefing_noite: Mapped[str | None] = mapped_column(String(10))
+    ultimo_resumo_noite: Mapped[str | None] = mapped_column(String(10))
     criado_em: Mapped[datetime] = mapped_column(default=agora)
 
 
