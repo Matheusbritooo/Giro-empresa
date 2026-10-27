@@ -65,6 +65,7 @@ test("garçom só vê o salão; dono vê mesas, equipe e ajustes", async ({ page
   await expect(page.getByTestId("mesa-1")).toBeVisible();
   await expect(navegacao.getByRole("link")).toHaveText([
     "Salão",
+    "Resultados",
     "Mesas",
     "Câmeras",
     "Equipe",

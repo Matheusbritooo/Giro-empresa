@@ -17,11 +17,14 @@ export function MesaNaPlanta({
   agoraMs,
   limiteSeg,
   aoAbrir,
+  calor,
 }: {
   mesa: Mesa;
   agoraMs: number;
   limiteSeg: number;
   aoAbrir: (mesa: Mesa) => void;
+  /** Mapa de calor do replay (0 a 1): um halo vermelho em volta, mais forte onde travou. */
+  calor?: number;
 }) {
   const s = situacao(mesa, agoraMs, limiteSeg);
   const cronometro = s.desde ? tempoDecorrido(s.desde, agoraMs) : null;
@@ -35,7 +38,13 @@ export function MesaNaPlanta({
       data-estado={s.tom}
       data-testid={`mesa-${mesa.numero}`}
       className="group flex min-w-[76px] flex-col items-stretch gap-1 rounded-xl p-1 text-left"
-      style={{ gridColumn: mesa.pos_x + 1, gridRow: mesa.pos_y + 1 }}
+      style={{
+        gridColumn: mesa.pos_x + 1,
+        gridRow: mesa.pos_y + 1,
+        boxShadow: calor
+          ? `0 0 0 ${2 + Math.round(6 * calor)}px color-mix(in srgb, var(--atrasada) ${Math.round(25 + 55 * calor)}%, transparent)`
+          : undefined,
+      }}
     >
       <Cadeiras quantas={Math.ceil(mesa.lugares / 2)} ocupadas={Math.ceil(sentados / 2)} />
       <span

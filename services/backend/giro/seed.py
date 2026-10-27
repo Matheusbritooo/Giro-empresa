@@ -4,6 +4,7 @@ Uso: uv run python -m giro.seed [--zerar-salao]
 Pode rodar de novo sem duplicar nada. Em produção só roda no servidor de demonstração
 (GIRO_DEMO=1), com a senha de GIRO_SENHA_DEMO e o token de GIRO_TOKEN_CAMERA_DEMO.
 --zerar-salao deixa todas as mesas livres, para a demonstração começar do zero ao subir.
+Também cria 4 semanas de histórico (giro/demo_historico.py) para os resultados e o Copiloto.
 """
 
 import argparse
@@ -15,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from giro.banco import agora, criar_engine, criar_sessoes
 from giro.config import Config, obter_config
+from giro.demo_historico import gerar_historico
+from giro.dominio.indicadores import noite_de
 from giro.dominio.mesa import Estado
 from giro.modelos import Alerta, Camera, Mesa, Ocupacao, Papel, Restaurante, Usuario
 from giro.seguranca import gerar_hash_senha, hash_token, verificar_senha
@@ -96,12 +99,17 @@ def semear(config: Config | None = None, zerar: bool = False) -> None:
         if db.scalar(select(Usuario).where(Usuario.email == USUARIOS[0][1])):
             if publica:
                 _atualizar_acesso(db, senha, token)
-            if zerar:
-                cantina = db.scalar(select(Restaurante).where(Restaurante.nome == NOME_RESTAURANTE))
-                if cantina:
-                    zerar_salao(db, cantina.id)
+            cantina = db.scalar(select(Restaurante).where(Restaurante.nome == NOME_RESTAURANTE))
+            if cantina and zerar:
+                zerar_salao(db, cantina.id)
+            # Quem criou a demonstração antes dos resultados ganha o histórico agora.
+            historico = gerar_historico(db, cantina.id, noite_de(agora())) if cantina else 0
             db.commit()
-            print("Dados de demonstração já existem." + (" Salão zerado." if zerar else ""))
+            print(
+                "Dados de demonstração já existem."
+                + (" Salão zerado." if zerar else "")
+                + (f" Histórico: {historico} visitas." if historico else "")
+            )
             return
 
         cantina = Restaurante(nome=NOME_RESTAURANTE, cidade="Cotia")
@@ -133,6 +141,8 @@ def semear(config: Config | None = None, zerar: bool = False) -> None:
                     pos_y=y,
                 )
             )
+        db.flush()
+        historico = gerar_historico(db, cantina.id, noite_de(agora()))
         db.commit()
 
     if publica:  # endereço público: senha e token não vão para o log
@@ -141,6 +151,7 @@ def semear(config: Config | None = None, zerar: bool = False) -> None:
         print("Dados de demonstração criados. Senha de todos: " + senha)
     for nome, email, papel in USUARIOS:
         print(f"  {papel.value:<11} {email:<24} {nome}")
+    print(f"Histórico de 4 semanas para os resultados: {historico} visitas.")
     if not publica:
         print(f"Token da câmera do simulador: {token}")
 

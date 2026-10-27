@@ -1,6 +1,6 @@
 """Formato dos dados que entram e saem da API (e das mensagens ao vivo)."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated
 from urllib.parse import urlparse
 
@@ -26,6 +26,9 @@ class RestauranteSaida(Saida):
     nome: str
     cidade: str | None
     alerta_atendimento_seg: int
+    ticket_medio_centavos: int
+    abre_as: str
+    fecha_as: str
 
 
 class UsuarioSaida(Saida):
@@ -78,10 +81,18 @@ class RestauranteEntrada(BaseModel):
     dono: DonoEntrada
 
 
+# Horário do serviço em São Paulo, "HH:MM" de 00:00 a 23:59.
+Horario = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+
+
 class RestauranteAtualizacao(BaseModel):
     nome: str | None = Field(default=None, min_length=2, max_length=120)
     cidade: str | None = Field(default=None, max_length=80)
     alerta_atendimento_seg: int | None = Field(default=None, ge=60, le=1800)
+    # De R$ 5 a R$ 1.000 por pessoa.
+    ticket_medio_centavos: int | None = Field(default=None, ge=500, le=100_000)
+    abre_as: Horario | None = None
+    fecha_as: Horario | None = None
 
 
 # Mesas e salão
@@ -267,3 +278,103 @@ class LeituraCamera(BaseModel):
     em: datetime
     pessoas: list[PessoaLidaSaida]
     mesas: list[ObservacaoMesa]
+
+
+# Resultados, replay e "E se?" (Fase 3)
+
+
+class PorHoraSaida(Saida):
+    hora: int
+    chegadas: float
+    ocupacao: float
+
+
+class PorMesaSaida(Saida):
+    numero: int
+    lugares: int
+    visitas: int
+    desistencias: int
+    espera_media_seg: float | None
+    parada_media_seg: float | None
+    parada_total_seg: float
+    perdido_centavos: int
+
+
+class IndicadoresSaida(Saida):
+    inicio: datetime
+    fim: datetime
+    noites: int
+    mesas_atendidas: int
+    pessoas_atendidas: int
+    desistencias: int
+    pessoas_desistiram: int
+    giro_medio: float
+    espera_media_seg: float | None
+    esperas_acima_do_limite: int
+    permanencia_media_seg: float | None
+    parada_media_seg: float | None
+    parada_total_seg: float
+    hora_pico: int | None
+    ticket_medio_centavos: int
+    perdido_desistencias_centavos: int
+    perdido_mesa_parada_centavos: int
+    perdido_total_centavos: int
+    por_hora: list[PorHoraSaida]
+    por_mesa: list[PorMesaSaida]
+
+
+class ResumoNoiteSaida(Saida):
+    dia: date
+    mesas_atendidas: int
+    giro_medio: float
+    desistencias: int
+    perdido_total_centavos: int
+
+
+class ResultadosSaida(Saida):
+    periodo: str
+    dia: date
+    atual: IndicadoresSaida
+    anterior: IndicadoresSaida
+    noites: list[ResumoNoiteSaida]
+
+
+class MesaReplay(Saida):
+    id: int
+    numero: int
+    lugares: int
+    pos_x: int
+    pos_y: int
+
+
+class VisitaReplay(Saida):
+    mesa_id: int
+    sentou_em: datetime
+    atendida_em: datetime | None
+    saiu_em: datetime | None
+    liberada_em: datetime | None
+    pessoas: int
+    sem_atendimento: bool
+
+
+class ReplaySaida(BaseModel):
+    """Tudo o que o painel precisa para refazer a noite no 3D. Só horários, nunca imagem."""
+
+    dia: date
+    inicio: datetime
+    fim: datetime
+    limite_alerta_seg: int
+    mesas: list[MesaReplay]
+    visitas: list[VisitaReplay]
+
+
+class CenarioSaida(Saida):
+    turmas_a_mais: float
+    desistencias_evitadas: int
+    desistencias_novas: int
+    espera_media_atual_seg: float | None
+    espera_media_nova_seg: float | None
+    parada_media_atual_seg: float | None
+    parada_media_nova_seg: float | None
+    ganho_centavos: int
+    ganho_mes_centavos: int

@@ -58,7 +58,15 @@ function camera(dados: Partial<Camera>): Camera {
 }
 
 const salao: Salao = {
-  restaurante: { id: 1, nome: "Cantina", cidade: null, alerta_atendimento_seg: 300 },
+  restaurante: {
+    id: 1,
+    nome: "Cantina",
+    cidade: null,
+    alerta_atendimento_seg: 300,
+    ticket_medio_centavos: 8500,
+    abre_as: "18:00",
+    fecha_as: "23:30",
+  },
   mesas: [mesa({ id: 1, numero: 1 }), mesa({ id: 2, numero: 2 })],
   alertas: [],
   cameras: [camera({ ultima_observacao_em: minutosAtras(10) })],

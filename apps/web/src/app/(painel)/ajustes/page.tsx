@@ -36,9 +36,12 @@ export default function PaginaAjustes() {
           nome: form.get("nome"),
           cidade: form.get("cidade") || null,
           alerta_atendimento_seg: Math.round(Number(form.get("alerta_min")) * 60),
+          ticket_medio_centavos: Math.round(Number(form.get("ticket")) * 100),
+          abre_as: form.get("abre_as"),
+          fecha_as: form.get("fecha_as"),
         },
       });
-      setRecado({ tipo: "ok", texto: "Ajustes salvos. O painel já usa o novo tempo de alerta." });
+      setRecado({ tipo: "ok", texto: "Ajustes salvos. O painel já usa os novos valores." });
       recarregar();
     } catch (e) {
       setRecado({ tipo: "erro", texto: (e as Error).message });
@@ -73,7 +76,11 @@ export default function PaginaAjustes() {
 
       <Secao titulo="Restaurante">
         {dados ? (
-          <form onSubmit={salvar} className="grid gap-3 sm:grid-cols-3 sm:items-end" key={dados.id}>
+          <form
+            onSubmit={salvar}
+            className="grid gap-3 sm:grid-cols-3 sm:items-start"
+            key={dados.id}
+          >
             <Campo rotulo="Nome" name="nome" defaultValue={dados.nome} required minLength={2} />
             <Campo rotulo="Cidade" name="cidade" defaultValue={dados.cidade ?? ""} />
             <Campo
@@ -84,6 +91,33 @@ export default function PaginaAjustes() {
               max={30}
               step={0.5}
               defaultValue={dados.alerta_atendimento_seg / 60}
+              required
+            />
+            <Campo
+              rotulo="Quanto cada pessoa gasta, em média (R$)"
+              name="ticket"
+              type="number"
+              min={5}
+              max={1000}
+              step={1}
+              defaultValue={dados.ticket_medio_centavos / 100}
+              ajuda="Usado para mostrar o dinheiro que ficou na mesa em Resultados."
+              required
+            />
+            <Campo
+              rotulo="O salão abre às"
+              name="abre_as"
+              type="time"
+              defaultValue={dados.abre_as}
+              ajuda="Na abertura, o GIRO manda o recado do dia."
+              required
+            />
+            <Campo
+              rotulo="E fecha às"
+              name="fecha_as"
+              type="time"
+              defaultValue={dados.fecha_as}
+              ajuda="No fechamento, chega o resumo da noite."
               required
             />
             <Botao type="submit" className="sm:col-span-3 sm:justify-self-start">

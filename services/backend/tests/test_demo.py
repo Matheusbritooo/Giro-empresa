@@ -105,3 +105,14 @@ def test_salao_zerado_ao_subir(config_producao, demo):
         ocupacao = db.scalar(select(Ocupacao))
         assert ocupacao.liberada_em is not None and ocupacao.saiu_em is not None
         assert db.scalar(select(Alerta)).resolvido_em is not None
+
+
+def test_demonstracao_ganha_4_semanas_de_historico_uma_vez_so(config_producao, demo):
+    semear(config_producao)
+    with sessao(config_producao) as db:
+        visitas = len(db.scalars(select(Ocupacao)).all())
+        assert visitas > 300  # 4 semanas de jantar, fechado às segundas
+        assert db.scalar(select(Ocupacao).where(Ocupacao.sentou_em > agora())) is None
+    semear(config_producao, zerar=True)
+    with sessao(config_producao) as db:
+        assert len(db.scalars(select(Ocupacao)).all()) == visitas  # não duplicou

@@ -15,6 +15,11 @@ Cliente: restaurante de bairro com 6 a 20 mesas, na região oeste da Grande São
 | Sentada na mesa | caixa da pessoa até 2,2x mais alta que larga, com o meio da base dentro do desenho da mesa | `giro/visao/leitura.py` (`Ajustes`) |
 | Em pé junto à mesa (garçom) | caixa mais alta que isso, até 5% da foto de distância do desenho | `giro/visao/leitura.py` |
 | Detector de pessoas | YOLOX (Apache 2.0) em ONNX, só CPU: ~220 ms por foto no `yolox_s` | `giro/visao/detector.py`, `modelo.py` |
+| Noite | das 6h às 6h do dia seguinte, horário de São Paulo (UTC-3) | `giro/dominio/indicadores.py`, `apps/web/src/lib/resultados.ts` |
+| Dinheiro que ficou na mesa | quem foi embora × ticket médio + mesa parada além de 3 min nas horas com 75% das mesas ocupadas | `giro/dominio/indicadores.py` |
+| Ticket médio e horário do salão | R$ 85 por pessoa, 18:00 às 23:30 (o dono muda em Ajustes) | `Restaurante.ticket_medio_centavos`, `abre_as`, `fecha_as` |
+| "E se?" | limpeza mais rápida e garçons a mais ou a menos, sobre as últimas 4 semanas | `giro/dominio/cenarios.py` |
+| Copiloto | sem chave: respostas prontas; com `GIRO_ANTHROPIC_API_KEY`: IA, só com números somados; 60 perguntas/hora por restaurante | `giro/servicos/copiloto.py` |
 | Assinatura e ativação | R$ 299/mês e R$ 290 (Fase 4) | ainda não está no código |
 | Custo de nuvem orçado | R$ 100 por cliente/mês (visão R$ 65) | anexo A.1 do TCM |
 
@@ -26,6 +31,7 @@ Estados da mesa: `livre` → `aguardando` → `ocupada` → `para_limpar` → `l
 - A prévia da câmera, usada para desenhar as mesas, tem as pessoas pixeladas e vive só na memória do serviço de visão por 3 minutos.
 - Vídeo de restaurante para calibrar a visão fica fora do repositório e só com autorização do dono (skill `validar-visao`).
 - Nada de reconhecimento facial ou de identificar quem é a pessoa. O sistema só conta pessoas por mesa.
+- Para a IA do Copiloto vão só números somados e a pergunta do dono (lista exata no README). Nunca imagem, nome de pessoa, e-mail ou horário de uma visita isolada.
 - Toda tabela de cliente tem `restaurante_id` e toda rota filtra por ele. Um restaurante nunca vê o outro.
 - A trava `scripts/verificar-commit.sh` bloqueia `.env`, chaves e imagens no repositório. Rode a skill `checagem-lgpd` antes de juntar mudanças em câmera, banco, API ou logs.
 
@@ -34,7 +40,7 @@ Estados da mesa: `livre` → `aguardando` → `ocupada` → `para_limpar` → `l
 ```
 services/backend/   Python 3.12+, FastAPI, SQLAlchemy, Alembic (uv)
   giro/dominio/     regras puras (máquina de estados da mesa), sem banco nem API
-  giro/servicos/    liga o domínio ao banco, ao painel ao vivo e ao push
+  giro/servicos/    liga o domínio ao banco, ao painel ao vivo e ao push; resultados, Copiloto e avisos do turno
   giro/api/         rotas; dependências de login e restaurante em deps.py
   giro/simulador/   faz o papel da câmera; cenários em cenarios/*.yaml
   giro/visao/       serviço de visão: detector, regra de mesa, prévia pixelada, avaliação
@@ -94,6 +100,7 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - Estado da mesa sempre por cor + padrão + palavra, nunca só cor. Cores e fontes estão em `apps/web/src/app/globals.css`; não invente cor fora dos tokens.
 - Next.js 16 tem mudanças grandes: leia `apps/web/node_modules/next/dist/docs/` antes de usar API que você não viu neste código (veja `apps/web/AGENTS.md`).
 - Dados no painel: `useDados` (`src/lib/dados.ts`) para telas comuns e `useSalaoAoVivo` (`src/lib/ao-vivo.ts`) para o salão. Não chame setState direto dentro de useEffect (o lint barra).
+- Resultados: contas e textos de data e dinheiro em `src/lib/resultados.ts` (horário de São Paulo, seja qual for o fuso do aparelho). O replay refaz o salão a partir dos horários das visitas em `src/lib/replay.ts`, no mesmo formato do ao vivo, e reaproveita o 3D e a planta (`components/planta.tsx`). Gráficos em `components/resultados/grafico-barras.tsx`: barras de uma série, destaque numa só, dica no mouse e nas setas, tabela escondida para leitor de tela.
 - Salão 3D: as contas de posição ficam em `salao-3d/planta.ts` (testadas sem 3D), as do garçom em `garcom.ts`, as da câmera em `camera-mesa.ts` e a escolha de quem senta em `escolha-pessoas.ts`. As placas das mesas são botões comuns da página que o `Projetor` move; não use o `Html` do drei (perdia a placa da primeira mesa). Cores do 3D vêm dos tokens (`salao-3d/cores.ts`).
 - Modelos 3D (pessoas e decoração) ficam em `apps/web/public/modelos/` e são gerados por `infra/modelos-3d/gerar.sh` (Blender + gltf-transform), nunca editados à mão. Clientes têm pose assada (sem esqueleto) e só o garçom tem esqueleto. Carregue com `useGLTF(url, false, true)` (meshopt, sem Draco, sem CDN) e reaproveite geometria e material (InstancedMesh). Crédito e licença de cada modelo em `public/modelos/CREDITOS.md`.
 - Salão 3D tem 3 níveis de acabamento (`salao-3d/qualidade.ts`): alto (oclusão, brilho, sombra a cada quadro, respiração e garçom andando), médio e baixo (CI e aparelho fraco: sem efeitos, desenha sob demanda, garçom vai direto ao destino). Force com `?qualidade=alto|medio|baixo`. Sombra não se refaz sozinha fora do alto: quem muda o salão chama `useRefazerSombra`.

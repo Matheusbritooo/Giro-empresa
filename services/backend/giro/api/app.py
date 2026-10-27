@@ -11,12 +11,26 @@ from sqlalchemy.orm import sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from giro.api.cliente_visao import ClienteVisao
-from giro.api.rotas import ao_vivo, auth, cameras, equipe, ingest, mesas, push, salao
+from giro.api.rotas import (
+    ao_vivo,
+    auth,
+    cameras,
+    copiloto,
+    equipe,
+    ingest,
+    mesas,
+    push,
+    resultados,
+    salao,
+)
 from giro.api.rotas.auth import LimiteTentativas
+from giro.api.rotas.copiloto import LimitePerguntas
 from giro.banco import agora, criar_engine, criar_sessoes
 from giro.config import Config, obter_config
 from giro.push import EnviadorPush
+from giro.servicos.copiloto import Copiloto
 from giro.servicos.salao import ServicoSalao
+from giro.servicos.turno import verificar_avisos
 from giro.tempo_real import CentralTempoReal
 
 log = logging.getLogger("giro")
@@ -37,7 +51,9 @@ def criar_app(config: Config | None = None) -> FastAPI:
         verificador = None
         if config.verificador_intervalo_seg > 0:
             verificador = asyncio.create_task(
-                _verificar_periodicamente(sessoes, servico, config.verificador_intervalo_seg)
+                _verificar_periodicamente(
+                    sessoes, servico, enviador_push, config.verificador_intervalo_seg
+                )
             )
         yield
         if verificador:
@@ -62,6 +78,8 @@ def criar_app(config: Config | None = None) -> FastAPI:
     app.state.central = central
     app.state.servico = servico
     app.state.limite_login = LimiteTentativas()
+    app.state.copiloto = Copiloto(config)
+    app.state.limite_copiloto = LimitePerguntas()
     app.state.visao = ClienteVisao(config)
 
     app.add_middleware(
@@ -71,7 +89,18 @@ def criar_app(config: Config | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["content-type", "authorization"],
     )
-    for modulo in (auth, salao, mesas, equipe, cameras, ingest, push, ao_vivo):
+    for modulo in (
+        auth,
+        salao,
+        mesas,
+        equipe,
+        cameras,
+        ingest,
+        push,
+        ao_vivo,
+        resultados,
+        copiloto,
+    ):
         app.include_router(modulo.router)
 
     @app.get("/api/saude", tags=["saúde"])
@@ -82,11 +111,15 @@ def criar_app(config: Config | None = None) -> FastAPI:
 
 
 async def _verificar_periodicamente(
-    sessoes: sessionmaker, servico: ServicoSalao, intervalo: float
+    sessoes: sessionmaker, servico: ServicoSalao, push: EnviadorPush, intervalo: float
 ) -> None:
     def verificar() -> None:
         with sessoes() as db:
             servico.verificar_tempos(db, agora())
+
+    def avisar_turno() -> None:
+        with sessoes() as db:
+            verificar_avisos(db, push, agora())
 
     while True:
         await asyncio.sleep(intervalo)
@@ -94,3 +127,7 @@ async def _verificar_periodicamente(
             await run_in_threadpool(verificar)
         except Exception:
             log.exception("falha ao verificar alertas por tempo")
+        try:
+            await run_in_threadpool(avisar_turno)
+        except Exception:
+            log.exception("falha ao mandar o briefing ou o resumo da noite")
