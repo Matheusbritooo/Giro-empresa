@@ -116,3 +116,41 @@ def test_demonstracao_ganha_4_semanas_de_historico_uma_vez_so(config_producao, d
     semear(config_producao, zerar=True)
     with sessao(config_producao) as db:
         assert len(db.scalars(select(Ocupacao)).all()) == visitas  # não duplicou
+
+
+def test_ao_acordar_as_noites_passadas_viram_historico_e_hoje_fica(config_producao, demo):
+    semear(config_producao)
+    with sessao(config_producao) as db:
+        mesa = db.scalar(select(Mesa).where(Mesa.numero == 4))
+        historico = len(db.scalars(select(Ocupacao)).all())
+        # O simulador rodou dois dias atrás, à tarde (fora de hora), e agora há pouco.
+        solta = Ocupacao(
+            restaurante_id=mesa.restaurante_id,
+            mesa_id=mesa.id,
+            sentou_em=agora().replace(hour=18) - timedelta(days=2, hours=3),
+        )
+        de_hoje = Ocupacao(
+            restaurante_id=mesa.restaurante_id,
+            mesa_id=mesa.id,
+            sentou_em=agora() - timedelta(minutes=1),
+        )
+        db.add_all([solta, de_hoje])
+        db.flush()
+        db.add(
+            Alerta(
+                restaurante_id=mesa.restaurante_id,
+                mesa_id=mesa.id,
+                ocupacao_id=solta.id,
+                tipo="sem_atendimento",
+                criado_em=solta.sentou_em,
+            )
+        )
+        db.commit()
+        ids = (solta.id, de_hoje.id)
+
+    semear(config_producao, zerar=True, refazer=True)
+    with sessao(config_producao) as db:
+        assert db.get(Ocupacao, ids[0]) is None
+        assert db.get(Ocupacao, ids[1]) is not None
+        assert db.scalar(select(Alerta).where(Alerta.ocupacao_id == ids[0])) is None
+        assert len(db.scalars(select(Ocupacao)).all()) == historico + 1

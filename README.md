@@ -192,6 +192,7 @@ Para trocar a senha depois: **giro-demo > Environment > GIRO_SENHA_DEMO**, salve
 O que saber do plano grátis:
 
 - **Dorme depois de 15 minutos sem visita.** A primeira visita depois disso leva cerca de 1 minuto e o salão recomeça do zero. Antes da apresentação, abra o link uns 2 minutos antes.
+- **Resultados de demonstração.** Cada vez que acorda, as noites passadas viram as 4 semanas de demonstração (as mesmas de `giro/demo_historico.py`); a noite de hoje é a do simulador ao vivo.
 - **O banco grátis expira em 30 dias.** O Render avisa por e-mail. Dá para apagar o banco e rodar o Blueprint de novo, ou passar o banco para um plano pago.
 - **Servidor fora do Brasil e só dados simulados.** Câmera e cliente de verdade vão para um servidor próprio (próxima seção). A visão e o aviso no celular ficam desligados nessa demonstração: não cabem nos 512 MB do plano grátis.
 
