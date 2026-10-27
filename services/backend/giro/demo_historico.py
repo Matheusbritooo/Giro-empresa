@@ -14,11 +14,11 @@ import random
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from giro.dominio.indicadores import FUSO, intervalo_da_noite
-from giro.modelos import Mesa, Ocupacao
+from giro.modelos import Alerta, EventoMesa, Mesa, Ocupacao
 
 # Turmas por noite em cada dia da semana (segunda = 0, fechado).
 TURMAS = {1: 20, 2: 22, 3: 30, 4: 52, 5: 56, 6: 32}
@@ -132,3 +132,29 @@ def gerar_historico(
         db.add_all(visitas)
         total += len(visitas)
     return total
+
+
+def refazer_historico(db: Session, restaurante_id: int, hoje: date, semanas: int = 4) -> int:
+    """Troca as noites passadas pelo histórico de demonstração. A noite de hoje fica.
+
+    Só para o servidor de demonstração (Render): lá o simulador roda sempre que alguém abre
+    o site, a qualquer hora do dia, e essas visitas não parecem noites de restaurante. Sem
+    isso, os resultados das semanas anteriores mostrariam só esses pedaços soltos.
+    """
+    inicio_de_hoje, _ = intervalo_da_noite(hoje)
+    antigas = select(Ocupacao.id).where(
+        Ocupacao.restaurante_id == restaurante_id, Ocupacao.sentou_em < inicio_de_hoje
+    )
+    # Alertas e eventos apontam para a visita: saem junto com ela.
+    for tabela in (Alerta, EventoMesa):
+        db.execute(
+            delete(tabela).where(
+                tabela.restaurante_id == restaurante_id, tabela.ocupacao_id.in_(antigas)
+            )
+        )
+    db.execute(
+        delete(Ocupacao).where(
+            Ocupacao.restaurante_id == restaurante_id, Ocupacao.sentou_em < inicio_de_hoje
+        )
+    )
+    return gerar_historico(db, restaurante_id, hoje, semanas)

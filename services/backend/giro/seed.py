@@ -5,6 +5,8 @@ Pode rodar de novo sem duplicar nada. Em produção só roda no servidor de demo
 (GIRO_DEMO=1), com a senha de GIRO_SENHA_DEMO e o token de GIRO_TOKEN_CAMERA_DEMO.
 --zerar-salao deixa todas as mesas livres, para a demonstração começar do zero ao subir.
 Também cria 4 semanas de histórico (giro/demo_historico.py) para os resultados e o Copiloto.
+--refazer-historico troca as noites passadas por esse histórico (servidor de demonstração,
+onde o simulador roda a qualquer hora e as visitas dele não parecem noites de restaurante).
 """
 
 import argparse
@@ -16,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from giro.banco import agora, criar_engine, criar_sessoes
 from giro.config import Config, obter_config
-from giro.demo_historico import gerar_historico
+from giro.demo_historico import gerar_historico, refazer_historico
 from giro.dominio.indicadores import noite_de
 from giro.dominio.mesa import Estado
 from giro.modelos import Alerta, Camera, Mesa, Ocupacao, Papel, Restaurante, Usuario
@@ -89,7 +91,7 @@ def _atualizar_acesso(db: Session, senha: str, token: str) -> None:
         camera.token_hash = hash_token(token)
 
 
-def semear(config: Config | None = None, zerar: bool = False) -> None:
+def semear(config: Config | None = None, zerar: bool = False, refazer: bool = False) -> None:
     config = config or obter_config()
     senha, token = _acesso(config)
     publica = config.ambiente == "producao"
@@ -103,7 +105,10 @@ def semear(config: Config | None = None, zerar: bool = False) -> None:
             if cantina and zerar:
                 zerar_salao(db, cantina.id)
             # Quem criou a demonstração antes dos resultados ganha o histórico agora.
-            historico = gerar_historico(db, cantina.id, noite_de(agora())) if cantina else 0
+            historico = 0
+            if cantina:
+                criar = refazer_historico if refazer else gerar_historico
+                historico = criar(db, cantina.id, noite_de(agora()))
             db.commit()
             print(
                 "Dados de demonstração já existem."
@@ -159,4 +164,8 @@ def semear(config: Config | None = None, zerar: bool = False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="giro.seed", description=__doc__)
     parser.add_argument("--zerar-salao", action="store_true", help="todas as mesas livres")
-    semear(zerar=parser.parse_args().zerar_salao)
+    parser.add_argument(
+        "--refazer-historico", action="store_true", help="noites passadas viram o histórico"
+    )
+    argumentos = parser.parse_args()
+    semear(zerar=argumentos.zerar_salao, refazer=argumentos.refazer_historico)

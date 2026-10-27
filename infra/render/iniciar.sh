@@ -48,7 +48,8 @@ command.upgrade(Config("alembic.ini"), "head")
 
 from giro.seed import semear
 
-semear(zerar=True)
+# O simulador roda a qualquer hora do dia: as noites passadas viram o histórico de demonstração.
+semear(zerar=True, refazer=True)
 PY
 
 uvicorn --factory giro.api.app:criar_app --host 127.0.0.1 --port 8000 \
