@@ -96,7 +96,9 @@ Cada decisão tem o contexto, o que foi decidido e o que isso custa. Quando uma 
 
 **Decisão.** Render no plano grátis, configurado pelo `render.yaml` (Blueprint). Painel, API e simulador rodam num contêiner só (`infra/render/`), atrás de um Caddy sem HTTPS próprio: o Render entrega o certificado no endereço `onrender.com`. A visão fica de fora: medimos uns 190 MB para painel, API e simulador e uns 450 MB com a visão, perto demais do limite de 512 MB. Em produção pública, os dados de demonstração só são criados com `GIRO_DEMO=1`, a senha vem de `GIRO_SENHA_DEMO` (a `giro1234` do README é recusada) e o token da câmera do simulador sai do segredo do servidor.
 
-**Consequência.** Custo zero e link pronto em minutos. Em troca: o serviço dorme após 15 minutos sem visita (acorda em cerca de 1 minuto, com o salão zerado), o banco grátis expira em 30 dias e o servidor fica fora do Brasil. Por isso essa demonstração só recebe dados simulados. O primeiro cliente real vai para o servidor próprio com `infra/docker-compose.yml`.
+**Consequência.** Custo zero e link pronto em minutos. Em troca: o serviço dorme após 15 minutos sem visita (acorda em cerca de 1 minuto, com o salão zerado) e o servidor fica fora do Brasil. Por isso essa demonstração só recebe dados simulados. O primeiro cliente real vai para o servidor próprio com `infra/docker-compose.yml`.
+
+**Atualização (novembro de 2026): banco em arquivo.** O Postgres grátis do Render vence 30 dias depois de criado e é apagado 14 dias depois. Como os dados da demonstração são simulados e refeitos a cada vez que o serviço acorda, a demonstração passou a usar um arquivo SQLite dentro do contêiner (`infra/render/iniciar.sh`): custo zero, nada para renovar todo mês. O Postgres continua testado na CI em todo PR e é o banco do servidor próprio. O primeiro cliente real precisa de um banco que guarda os dados: Postgres pago ou no servidor próprio.
 
 ## 14. Salão em 3D com three.js, sem trocar a planta
 
