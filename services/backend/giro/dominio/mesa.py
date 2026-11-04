@@ -9,6 +9,9 @@ quem alimenta pode ser o simulador ou a visão computacional.
       │                            │ esvaziou sem atendimento ─► LIVRE    (vazia por 1 min)
       │                                                                        ▼
       └───(equipe libera, ou nova turma senta)──────────────────────────── PARA_LIMPAR
+
+O garçom lançar um pedido também conta: mesa esperando vira atendida, e mesa livre ou suja
+começa uma visita já atendida (a câmera ainda não confirmou quem sentou).
 """
 
 from __future__ import annotations
@@ -107,6 +110,26 @@ class MaquinaMesa:
             raise TransicaoInvalida(f"mesa está {self.estado.value}, não precisa ser liberada")
         self._encerrar(agora)
         return [Evento(TipoEvento.LIBERADA, agora)]
+
+    def registrar_pedido(self, agora: datetime) -> list[Evento]:
+        """O garçom lançou um pedido na mesa: alguém da equipe esteve lá."""
+        if self.estado == Estado.OCUPADA:
+            return []
+        eventos = []
+        if self.estado in (Estado.LIVRE, Estado.PARA_LIMPAR):
+            # Se a câmera já via gente sentando, a visita começa ali; senão, no pedido.
+            sentou_em = min(self.candidato_desde or agora, agora)
+            if self.estado == Estado.PARA_LIMPAR:
+                eventos.append(Evento(TipoEvento.LIBERADA, sentou_em))
+            self.sentou_em = sentou_em
+            self.pessoas_max = 0
+            self.alertou_sem_atendimento = False
+            self.candidato_desde = None
+            self.vazia_desde = None
+            eventos.append(Evento(TipoEvento.SENTOU, sentou_em, pessoas=0))
+        self._mudar(Estado.OCUPADA, agora)
+        eventos.append(Evento(TipoEvento.ATENDIDA, agora))
+        return eventos
 
     def _observar_sem_clientes(self, obs: Observacao) -> list[Evento]:
         if obs.sentados == 0:

@@ -13,7 +13,7 @@ from giro.api.deps import (
 from giro.dominio.mesa import Estado
 from giro.esquemas import MesaAtualizacao, MesaEntrada, MesaSalao
 from giro.modelos import Camera, Mesa
-from giro.servicos.salao import mesa_salao, ocupacoes_abertas
+from giro.servicos.salao import mesa_salao, mesas_salao, ocupacoes_abertas
 
 router = APIRouter(prefix="/api/mesas", tags=["mesas"], dependencies=[exigir_papel(*GESTAO)])
 
@@ -23,8 +23,7 @@ def listar(db: Db, restaurante_id: RestauranteAlvo) -> list[MesaSalao]:
     mesas = db.scalars(
         select(Mesa).where(Mesa.restaurante_id == restaurante_id).order_by(Mesa.numero)
     ).all()
-    ocupacoes = ocupacoes_abertas(db, [m.id for m in mesas])
-    return [mesa_salao(m, ocupacoes.get(m.id)) for m in mesas]
+    return mesas_salao(db, list(mesas))
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

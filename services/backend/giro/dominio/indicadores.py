@@ -103,6 +103,8 @@ class Indicadores:
     perdido_mesa_parada_centavos: int
     por_hora: list[PorHora] = field(default_factory=list)
     por_mesa: list[PorMesa] = field(default_factory=list)
+    # O ticket veio do que as mesas pediram de verdade (e não do valor de Ajustes).
+    ticket_real: bool = False
 
     @property
     def perdido_total_centavos(self) -> int:

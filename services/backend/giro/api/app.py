@@ -15,10 +15,12 @@ from giro.api.rotas import (
     ao_vivo,
     auth,
     cameras,
+    cardapio,
     copiloto,
     equipe,
     ingest,
     mesas,
+    pedidos,
     push,
     resultados,
     salao,
@@ -100,6 +102,8 @@ def criar_app(config: Config | None = None) -> FastAPI:
         ao_vivo,
         resultados,
         copiloto,
+        cardapio,
+        pedidos,
     ):
         app.include_router(modulo.router)
 

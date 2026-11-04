@@ -13,11 +13,13 @@ from giro.esquemas import (
     CenarioSaida,
     MesaReplay,
     ReplaySaida,
+    ResultadosCardapioSaida,
     ResultadosSaida,
     VisitaReplay,
 )
 from giro.modelos import Restaurante
 from giro.servicos import resultados as servico
+from giro.servicos.cardapio import resultados_cardapio
 from giro.servicos.resultados import Periodo
 
 router = APIRouter(
@@ -97,3 +99,18 @@ def simular_cenario(
         ticket_medio_centavos=restaurante.ticket_medio_centavos,
     )
     return CenarioSaida.model_validate(resultado)
+
+
+@router.get("/cardapio")
+def ver_resultados_cardapio(
+    db: Db,
+    restaurante_id: RestauranteAlvo,
+    periodo: Periodo = Periodo.NOITE,
+    dia: DiaConsulta = None,
+) -> ResultadosCardapioSaida:
+    """Prato da noite, o que mais saiu, o que cada mesa pediu e o ticket real."""
+    momento = agora()
+    resultado = resultados_cardapio(
+        db, _restaurante(db, restaurante_id), periodo, dia or noite_de(momento), momento
+    )
+    return ResultadosCardapioSaida.model_validate(resultado)

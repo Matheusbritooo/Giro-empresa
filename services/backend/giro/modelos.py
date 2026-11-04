@@ -157,3 +157,63 @@ class InscricaoPush(Base):
     p256dh: Mapped[str] = mapped_column(String(255))
     auth: Mapped[str] = mapped_column(String(255))
     criado_em: Mapped[datetime] = mapped_column(default=agora)
+
+
+class CategoriaCardapio(Base):
+    """Grupo do cardápio: Entradas, Massas, Bebidas..."""
+
+    __tablename__ = "categorias_cardapio"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"), index=True)
+    nome: Mapped[str] = mapped_column(String(60))
+    ordem: Mapped[int] = mapped_column(default=0)
+    # Bebida fica separada da comida nos resultados (prato da noite x bebida da noite).
+    bebida: Mapped[bool] = mapped_column(default=False)
+    ativa: Mapped[bool] = mapped_column(default=True)
+
+
+class ItemCardapio(Base):
+    """Um prato ou bebida. Nunca é apagado: sai do cardápio com `ativo=False`, para os
+    relatórios antigos continuarem certos."""
+
+    __tablename__ = "itens_cardapio"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"), index=True)
+    categoria_id: Mapped[int] = mapped_column(ForeignKey("categorias_cardapio.id"))
+    nome: Mapped[str] = mapped_column(String(80))
+    descricao: Mapped[str | None] = mapped_column(String(200))
+    preco_centavos: Mapped[int]
+    # Quanto custa fazer o prato (opcional). Só o dono vê.
+    custo_centavos: Mapped[int | None]
+    ativo: Mapped[bool] = mapped_column(default=True)
+    # "Tem hoje": a cozinha marca que acabou e o garçom vê na hora.
+    disponivel: Mapped[bool] = mapped_column(default=True)
+    criado_em: Mapped[datetime] = mapped_column(default=agora)
+
+
+class ItemPedido(Base):
+    """Um item lançado numa mesa, preso à visita. Nome e preço são copiados na hora: mudar o
+    cardápio depois não muda o que já foi pedido. Não guarda nada do cliente, só da mesa."""
+
+    __tablename__ = "itens_pedido"
+    __table_args__ = (Index("ix_itens_pedido_restaurante_lancado", "restaurante_id", "lancado_em"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"))
+    ocupacao_id: Mapped[int] = mapped_column(ForeignKey("ocupacoes.id"), index=True)
+    mesa_id: Mapped[int] = mapped_column(ForeignKey("mesas.id"))
+    item_id: Mapped[int] = mapped_column(ForeignKey("itens_cardapio.id"))
+    nome: Mapped[str] = mapped_column(String(80))
+    preco_unit_centavos: Mapped[int]
+    quantidade: Mapped[int]
+    observacao: Mapped[str | None] = mapped_column(String(80))  # "sem cebola"
+    lancado_em: Mapped[datetime]
+    lancado_por_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    pronto_em: Mapped[datetime | None]
+    cancelado_em: Mapped[datetime | None]
+    cancelado_por_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    motivo_cancelamento: Mapped[str | None] = mapped_column(String(60))
+
+    mesa: Mapped[Mesa] = relationship()

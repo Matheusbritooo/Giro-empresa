@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Concatenate
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from giro.dominio.mesa import Estado, Evento, MaquinaMesa, Observacao, Regras, TipoEvento
@@ -19,6 +19,8 @@ from giro.modelos import (
     Alerta,
     Camera,
     EventoMesa,
+    ItemCardapio,
+    ItemPedido,
     Mesa,
     Ocupacao,
     Papel,
@@ -49,7 +51,33 @@ def ocupacoes_abertas(db: Session, mesa_ids: list[int]) -> dict[int, Ocupacao]:
     return {o.mesa_id: o for o in linhas}  # a mais recente vence
 
 
-def mesa_salao(mesa: Mesa, ocupacao: Ocupacao | None) -> MesaSalao:
+def totais_dos_pedidos(db: Session, ocupacao_ids: list[int]) -> dict[int, tuple[int, int]]:
+    """Para cada visita: quanto já gastou e quantos itens ainda estão na cozinha."""
+    if not ocupacao_ids:
+        return {}
+    na_cozinha = case((ItemPedido.pronto_em.is_(None), ItemPedido.quantidade), else_=0)
+    linhas = db.execute(
+        select(
+            ItemPedido.ocupacao_id,
+            func.sum(ItemPedido.quantidade * ItemPedido.preco_unit_centavos),
+            func.sum(na_cozinha),
+        )
+        .where(ItemPedido.ocupacao_id.in_(ocupacao_ids), ItemPedido.cancelado_em.is_(None))
+        .group_by(ItemPedido.ocupacao_id)
+    )
+    return {ocupacao: (int(total), int(cozinha)) for ocupacao, total, cozinha in linhas}
+
+
+def mesas_salao(db: Session, mesas: list[Mesa]) -> list[MesaSalao]:
+    """As mesas como aparecem no mapa, já com o pedido da visita em curso."""
+    ocupacoes = ocupacoes_abertas(db, [m.id for m in mesas])
+    totais = totais_dos_pedidos(db, [o.id for o in ocupacoes.values()])
+    return [mesa_salao(m, ocupacoes.get(m.id), totais) for m in mesas]
+
+
+def mesa_salao(
+    mesa: Mesa, ocupacao: Ocupacao | None, totais: dict[int, tuple[int, int]] | None = None
+) -> MesaSalao:
     dados = MesaSalao(
         id=mesa.id,
         numero=mesa.numero,
@@ -67,6 +95,8 @@ def mesa_salao(mesa: Mesa, ocupacao: Ocupacao | None) -> MesaSalao:
         dados.atendida_em = ocupacao.atendida_em
         dados.saiu_em = ocupacao.saiu_em
         dados.pessoas = ocupacao.pessoas
+        total, cozinha = (totais or {}).get(ocupacao.id, (0, 0))
+        dados.total_pedido_centavos, dados.itens_na_cozinha = total, cozinha
     return dados
 
 
@@ -168,6 +198,48 @@ class ServicoSalao:
         self._aplicar(db, mesa, maquina, eventos, mudancas)
         db.commit()
         self._avisar(db, restaurante.id, mudancas)
+
+    @_uma_por_vez
+    def registrar_pedido(
+        self,
+        db: Session,
+        mesa: Mesa,
+        linhas: list[tuple[ItemCardapio, int, str | None]],
+        usuario_id: int | None,
+        agora: datetime,
+    ) -> Ocupacao:
+        """Garçom lançou itens na mesa. Conta como atendimento e, se a câmera ainda não
+        confirmou ninguém, a visita começa aqui. Nome e preço vão copiados para o pedido."""
+        restaurante = db.get_one(Restaurante, mesa.restaurante_id)
+        maquina = MaquinaMesa.de_dict(regras_do_restaurante(restaurante), mesa.estado_maquina)
+        mudancas = _Mudancas()
+        self._aplicar(db, mesa, maquina, maquina.registrar_pedido(agora), mudancas)
+        ocupacao = ocupacoes_abertas(db, [mesa.id])[mesa.id]
+        db.add_all(
+            ItemPedido(
+                restaurante_id=mesa.restaurante_id,
+                ocupacao_id=ocupacao.id,
+                mesa_id=mesa.id,
+                item_id=item.id,
+                nome=item.nome,
+                preco_unit_centavos=item.preco_centavos,
+                quantidade=quantidade,
+                observacao=observacao,
+                lancado_em=agora,
+                lancado_por_id=usuario_id,
+            )
+            for item, quantidade, observacao in linhas
+        )
+        mudancas.mesas[mesa.id] = mesa
+        db.commit()
+        self._avisar(db, restaurante.id, mudancas)
+        self.central.publicar(restaurante.id, {"tipo": "pedido", "mesa_id": mesa.id})
+        return ocupacao
+
+    def avisar_pedido(self, db: Session, mesa: Mesa) -> None:
+        """Um item ficou pronto ou foi cancelado: atualiza a mesa e a tela da cozinha."""
+        self._avisar(db, mesa.restaurante_id, _Mudancas(mesas={mesa.id: mesa}))
+        self.central.publicar(mesa.restaurante_id, {"tipo": "pedido", "mesa_id": mesa.id})
 
     @_uma_por_vez
     def verificar_tempos(self, db: Session, agora: datetime) -> None:
@@ -284,14 +356,9 @@ class ServicoSalao:
 
     def _avisar(self, db: Session, restaurante_id: int, mudancas: _Mudancas) -> None:
         if mudancas.mesas:
-            ocupacoes = ocupacoes_abertas(db, list(mudancas.mesas))
-            for mesa in mudancas.mesas.values():
+            for mesa in mesas_salao(db, list(mudancas.mesas.values())):
                 self.central.publicar(
-                    restaurante_id,
-                    {
-                        "tipo": "mesa",
-                        "mesa": mesa_salao(mesa, ocupacoes.get(mesa.id)).model_dump(mode="json"),
-                    },
+                    restaurante_id, {"tipo": "mesa", "mesa": mesa.model_dump(mode="json")}
                 )
         resolvidos_agora = {a.id for a in mudancas.alertas_resolvidos}
         for alerta in mudancas.alertas_novos:

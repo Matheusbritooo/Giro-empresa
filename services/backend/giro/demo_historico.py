@@ -14,11 +14,12 @@ import random
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import Session
 
+from giro.demo_cardapio import criar_cardapio, pedidos_da_visita
 from giro.dominio.indicadores import FUSO, intervalo_da_noite
-from giro.modelos import Alerta, EventoMesa, Mesa, Ocupacao
+from giro.modelos import Alerta, EventoMesa, ItemPedido, Mesa, Ocupacao
 
 # Turmas por noite em cada dia da semana (segunda = 0, fechado).
 TURMAS = {1: 20, 2: 22, 3: 30, 4: 52, 5: 56, 6: 32}
@@ -123,15 +124,23 @@ def gerar_historico(
         return 0
 
     sorteio = random.Random(semente)  # noqa: S311 (dado de demonstração, não é segredo)
-    total = 0
+    todas: list[Ocupacao] = []
     for dias_atras in range(semanas * 7, 0, -1):
         dia = hoje - timedelta(days=dias_atras)
         comeco = datetime.combine(dia, time(18), FUSO)
         mesas = [_Mesa(m.id, m.numero, m.lugares, comeco) for m in linhas]
         visitas = _noite(dia, mesas, restaurante_id, sorteio)
         db.add_all(visitas)
-        total += len(visitas)
-    return total
+        todas += visitas
+    db.flush()  # as visitas ganham id para os pedidos apontarem para elas
+
+    # Pedidos com outro sorteio: as visitas continuam as mesmas de antes do cardápio.
+    papeis = criar_cardapio(db, restaurante_id)
+    pedidos = random.Random(semente + 1)  # noqa: S311
+    linhas_pedido = [linha for v in todas for linha in pedidos_da_visita(v, papeis, pedidos)]
+    if linhas_pedido:
+        db.execute(insert(ItemPedido), linhas_pedido)
+    return len(todas)
 
 
 def refazer_historico(db: Session, restaurante_id: int, hoje: date, semanas: int = 4) -> int:
@@ -145,8 +154,8 @@ def refazer_historico(db: Session, restaurante_id: int, hoje: date, semanas: int
     antigas = select(Ocupacao.id).where(
         Ocupacao.restaurante_id == restaurante_id, Ocupacao.sentou_em < inicio_de_hoje
     )
-    # Alertas e eventos apontam para a visita: saem junto com ela.
-    for tabela in (Alerta, EventoMesa):
+    # Pedidos, alertas e eventos apontam para a visita: saem junto com ela.
+    for tabela in (ItemPedido, Alerta, EventoMesa):
         db.execute(
             delete(tabela).where(
                 tabela.restaurante_id == restaurante_id, tabela.ocupacao_id.in_(antigas)
