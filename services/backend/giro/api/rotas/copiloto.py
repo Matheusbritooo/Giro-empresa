@@ -6,7 +6,8 @@ from collections import defaultdict, deque
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
-from giro.api.deps import GESTAO, Db, RestauranteAlvo, exigir_papel
+from giro.api.deps import GESTAO, Db, RestauranteAlvo, UsuarioAtual, exigir_papel
+from giro.api.rotas.cardapio import VEEM_CUSTO
 from giro.banco import agora
 from giro.modelos import Restaurante
 from giro.servicos import copiloto
@@ -58,7 +59,7 @@ def _restaurante(db, restaurante_id: int) -> Restaurante:
 
 @router.get("/briefing")
 def ver_briefing(request: Request, db: Db, restaurante_id: RestauranteAlvo) -> BriefingSaida:
-    ctx = copiloto.montar_contexto(db, _restaurante(db, restaurante_id), agora())
+    ctx = copiloto.montar_contexto(db, _restaurante(db, restaurante_id), agora())  # sem custo
     recado = copiloto.briefing(ctx)
     return BriefingSaida(
         dia=recado.dia.isoformat(),
@@ -71,13 +72,20 @@ def ver_briefing(request: Request, db: Db, restaurante_id: RestauranteAlvo) -> B
 
 @router.post("/perguntar")
 def perguntar(
-    dados: PerguntaEntrada, request: Request, db: Db, restaurante_id: RestauranteAlvo
+    dados: PerguntaEntrada,
+    request: Request,
+    db: Db,
+    usuario: UsuarioAtual,
+    restaurante_id: RestauranteAlvo,
 ) -> RespostaSaida:
     if not request.app.state.limite_copiloto.permitir(restaurante_id):
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "Muitas perguntas nesta hora. Tente de novo daqui a pouco.",
         )
-    ctx = copiloto.montar_contexto(db, _restaurante(db, restaurante_id), agora())
+    # A matriz de lucro (que vem do custo) só entra quando quem pergunta é o dono.
+    ctx = copiloto.montar_contexto(
+        db, _restaurante(db, restaurante_id), agora(), com_custo=usuario.papel in VEEM_CUSTO
+    )
     resposta, fonte = request.app.state.copiloto.responder(dados.pergunta.strip(), ctx)
     return RespostaSaida(resposta=resposta, fonte=fonte)

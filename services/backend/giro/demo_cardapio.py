@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from giro.dominio.indicadores import FUSO
 from giro.modelos import CategoriaCardapio, ItemCardapio, Ocupacao
 
 # categoria, é bebida?, [(nome, preço, custo, papel na noite, peso)]
@@ -137,9 +138,12 @@ def pedidos_da_visita(
         if sorteio.random() < 0.15:
             pedir(_um(papeis, "cafe", sorteio), "cafe", fim)
 
+    # Sexta e sábado o salão enche e a cozinha demora mais.
+    lotado = visita.sentou_em.astimezone(FUSO).weekday() in (4, 5)
     linhas = []
     for item, quantidade, papel, quando in contagem.values():
-        pronto = quando + timedelta(minutes=sorteio.uniform(0.6, 1.4) * PREPARO[papel])
+        minutos = sorteio.uniform(0.6, 1.4) * PREPARO[papel] * (1.35 if lotado else 1.0)
+        pronto = quando + timedelta(minutes=minutos)
         linhas.append(
             {
                 "restaurante_id": visita.restaurante_id,

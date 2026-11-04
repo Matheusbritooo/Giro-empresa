@@ -140,6 +140,9 @@ class MesaSalao(BaseModel):
     # Pedido da visita em curso: quanto a mesa já gastou e quantos itens ainda na cozinha.
     total_pedido_centavos: int = 0
     itens_na_cozinha: int = 0
+    # Pediu a conta: quando o garçom avisou e quando a mesa deve vagar.
+    conta_pedida_em: datetime | None = None
+    vaga_prevista_em: datetime | None = None
 
 
 class AlertaSaida(BaseModel):
@@ -519,6 +522,47 @@ class MesaCardapioSaida(Saida):
     bebida_quantidade: int
 
 
+class ItemMatrizSaida(Saida):
+    item_id: int
+    nome: str
+    quantidade: int
+    lucro_unidade_centavos: int
+    quadrante: str  # estrela, burro_de_carga, quebra_cabeca, cao
+
+
+class MatrizSaida(Saida):
+    itens: list[ItemMatrizSaida]
+    lucro_medio_centavos: int
+    sem_custo: list[str]
+
+
+class MatrizCategoriaSaida(Saida):
+    categoria: str
+    matriz: MatrizSaida
+
+
+class AcompanhaSaida(Saida):
+    nome: str
+    percentual: int
+
+
+class CombinacaoSaida(Saida):
+    item: str
+    acompanha: list[AcompanhaSaida]
+
+
+class TempoPreparoSaida(Saida):
+    minutos: float
+    minutos_fim_de_semana: float | None
+    minutos_semana: float | None
+    amostras: int
+
+
+class TempoDoItemSaida(Saida):
+    nome: str
+    tempo: TempoPreparoSaida
+
+
 class ResultadosCardapioSaida(Saida):
     periodo: str
     dia: date
@@ -528,3 +572,10 @@ class ResultadosCardapioSaida(Saida):
     ticket_real_centavos: int | None
     itens: list[ItemVendidoSaida]
     mesas: list[MesaCardapioSaida]
+    matrizes: list[MatrizCategoriaSaida] | None  # só para quem vê custo (o dono)
+    combinacoes: list[CombinacaoSaida]
+    tempos: list[TempoDoItemSaida]
+
+
+class ContaEntrada(BaseModel):
+    pedida: bool = True  # False desfaz (tocou sem querer)

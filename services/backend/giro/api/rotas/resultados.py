@@ -5,7 +5,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from giro.api.deps import GESTAO, Db, RestauranteAlvo, exigir_papel
+from giro.api.deps import GESTAO, Db, RestauranteAlvo, UsuarioAtual, exigir_papel
+from giro.api.rotas.cardapio import VEEM_CUSTO
 from giro.banco import agora
 from giro.dominio.cenarios import Cenario, simular
 from giro.dominio.indicadores import intervalo_da_noite, noite_de
@@ -104,13 +105,20 @@ def simular_cenario(
 @router.get("/cardapio")
 def ver_resultados_cardapio(
     db: Db,
+    usuario: UsuarioAtual,
     restaurante_id: RestauranteAlvo,
     periodo: Periodo = Periodo.NOITE,
     dia: DiaConsulta = None,
 ) -> ResultadosCardapioSaida:
-    """Prato da noite, o que mais saiu, o que cada mesa pediu e o ticket real."""
+    """Prato da noite, o que mais saiu, o que cada mesa pediu, o ticket real, o que combina
+    com o quê, o tempo de cozinha e (só para o dono, que vê custo) a matriz de lucro."""
     momento = agora()
     resultado = resultados_cardapio(
-        db, _restaurante(db, restaurante_id), periodo, dia or noite_de(momento), momento
+        db,
+        _restaurante(db, restaurante_id),
+        periodo,
+        dia or noite_de(momento),
+        momento,
+        com_custo=usuario.papel in VEEM_CUSTO,
     )
     return ResultadosCardapioSaida.model_validate(resultado)

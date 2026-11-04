@@ -6,8 +6,9 @@ e com eles:
 - responde perguntas em português. Com GIRO_ANTHROPIC_API_KEY definido, quem responde é o
   Claude; sem a chave, respostas prontas para as perguntas mais comuns.
 
-LGPD: para a IA vão só números agregados (turmas, minutos, reais, número da mesa). Nenhum
-nome, e-mail, imagem ou dado de quem sentou na mesa.
+LGPD: para a IA vão só números agregados (turmas, minutos, reais, número da mesa, quantas
+vezes cada prato saiu). Nenhum nome, e-mail, imagem ou dado de quem sentou na mesa. A matriz
+de lucro dos pratos só vai quando quem pergunta é o dono (o único que vê custo).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from giro.config import Config
 from giro.dominio.indicadores import FUSO, Indicadores, intervalo_da_noite, noite_de
 from giro.modelos import Restaurante
 from giro.servicos import resultados
+from giro.servicos.cardapio import ResultadosCardapio, resultados_cardapio
 
 log = logging.getLogger("giro.copiloto")
 
@@ -43,7 +45,18 @@ Regras:
 - Os valores em reais são estimativas da GIRO: diga "cerca de".
 - Se o JSON não tiver o dado para responder, diga isso e sugira onde olhar no painel
   (Resultados, Replay da noite ou "E se?").
-- Não fale de pessoas específicas: o sistema só conta mesas e minutos."""
+- Não fale de pessoas específicas: o sistema só conta mesas e minutos.
+- Sobre o cardápio, a matriz de lucro diz o que fazer: estrela, manter e destacar; burro de
+  carga (vende muito, lucra pouco), subir um pouco o preço ou baratear a receita;
+  quebra-cabeça (lucra bem, pouca gente pede), o garçom indicar; cão (vende pouco e lucra
+  pouco), pensar em tirar. Sem a matriz no JSON, diga que custo e lucro só o dono vê."""
+
+QUADRANTES = {
+    "estrela": "estrela",
+    "burro_de_carga": "burro de carga",
+    "quebra_cabeca": "quebra-cabeça",
+    "cao": "cão",
+}
 
 
 @dataclass
@@ -66,13 +79,18 @@ class Contexto:
     noites: list[tuple[date, Indicadores]]  # as 28 noites, da mais antiga à de ontem
     hoje_ate_agora: Indicadores
     mesmo_dia: list[Indicadores] = field(default_factory=list)  # as 4 últimas iguais a hoje
+    # O que saiu da cozinha nas 4 semanas (None sem pedidos lançados). A matriz de lucro só
+    # vem preenchida para quem vê custo.
+    cardapio: ResultadosCardapio | None = None
 
     @property
     def dia_semana(self) -> int:
         return self.hoje.weekday()
 
 
-def montar_contexto(db: Session, restaurante: Restaurante, agora: datetime) -> Contexto:
+def montar_contexto(
+    db: Session, restaurante: Restaurante, agora: datetime, com_custo: bool = False
+) -> Contexto:
     hoje = noite_de(agora)
     inicio, _ = resultados.intervalo(resultados.Periodo.MES, hoje - timedelta(days=1))
     _, fim_hoje = intervalo_da_noite(hoje)
@@ -83,6 +101,9 @@ def montar_contexto(db: Session, restaurante: Restaurante, agora: datetime) -> C
         dia = hoje - timedelta(days=i)
         de, ate = intervalo_da_noite(dia)
         noites.append((dia, dados.indicadores(de, ate)))
+    cardapio = resultados_cardapio(
+        db, restaurante, resultados.Periodo.MES, hoje - timedelta(days=1), agora, com_custo
+    )
     return Contexto(
         restaurante=restaurante,
         hoje=hoje,
@@ -91,6 +112,7 @@ def montar_contexto(db: Session, restaurante: Restaurante, agora: datetime) -> C
         noites=noites,
         hoje_ate_agora=dados.indicadores(inicio_hoje, min(fim_hoje, agora)),
         mesmo_dia=[r for d, r in noites if d.weekday() == hoje.weekday()],
+        cardapio=cardapio if cardapio.visitas_com_pedido else None,
     )
 
 
@@ -188,7 +210,50 @@ def contexto_em_json(ctx: Contexto) -> str:
         ],
         "hoje_ate_agora": _resumo(ctx.hoje_ate_agora),
     }
+    if ctx.cardapio is not None:
+        dados["cardapio_ultimas_4_semanas"] = _cardapio_em_numeros(ctx.cardapio)
     return json.dumps(dados, ensure_ascii=False)
+
+
+def _cardapio_em_numeros(c: ResultadosCardapio) -> dict:
+    """Só contagens e reais somados: o que saiu, o que combina, quanto a cozinha leva."""
+    numeros: dict = {
+        "mais_pedidos": [
+            {
+                "item": i.nome,
+                "categoria": i.categoria,
+                "bebida": i.bebida,
+                "quantidade": i.quantidade,
+                "vendido_reais": round(i.receita_centavos / 100),
+            }
+            for i in c.itens[:12]
+        ],
+        "ticket_real_por_pessoa_reais": (
+            round(c.ticket_real_centavos / 100) if c.ticket_real_centavos else None
+        ),
+        "quem_pede_tambem_pede": [
+            {"prato": cb.item, "acompanha": [f"{a.nome} ({a.percentual}%)" for a in cb.acompanha]}
+            for cb in c.combinacoes
+        ],
+        "tempo_de_cozinha_min": [
+            {
+                "item": t.nome,
+                "minutos": t.tempo.minutos,
+                "sexta_e_sabado": t.tempo.minutos_fim_de_semana,
+                "outros_dias": t.tempo.minutos_semana,
+            }
+            for t in c.tempos[:6]
+        ],
+    }
+    if c.matrizes is not None:
+        numeros["matriz_de_lucro"] = {
+            m.categoria: {
+                QUADRANTES[q]: [i.nome for i in m.matriz.itens if i.quadrante == q]
+                for q in QUADRANTES
+            }
+            for m in c.matrizes
+        }
+    return numeros
 
 
 def _media(valores: list[float]) -> float | None:
@@ -255,6 +320,10 @@ def briefing(ctx: Contexto) -> Briefing:
         )
     if not dicas:
         dicas.append("O salão tem andado bem neste dia. Mantenha o ritmo.")
+    if ctx.cardapio is not None:
+        prato = next((i for i in ctx.cardapio.itens if not i.bebida), None)
+        if prato is not None:
+            dicas.append(f"Confira o estoque para {prato.nome}: é o que mais sai da cozinha.")
 
     curto = f"Hoje é {dia}: pico às {_hora(pico)}. {dicas[0]}"
     return Briefing(ctx.hoje, dia, frases, dicas, curto)
@@ -266,9 +335,94 @@ def _sem_acento(texto: str) -> str:
     )
 
 
+def responder_sobre_cardapio(p: str, ctx: Contexto) -> str | None:
+    """Perguntas sobre pratos e cozinha. None quando a pergunta não é sobre o cardápio."""
+    sobre_pratos = any(t in p for t in ("prato", "cardapio", "comida", "bebida", "cozinha"))
+    tirar = any(
+        t in p
+        for t in ("tirar", "tiro", "tira ", "cortar", "corto", "lucra", "lucro", "prejuizo",
+                  "margem", "sair do cardapio")
+    )  # fmt: skip
+    mais = any(t in p for t in ("mais pedido", "mais sai", "mais vende", "favorit", "campe"))
+    demora = any(t in p for t in ("demora", "tempo de cozinha", "preparo", "lento"))
+    combina = any(t in p for t in ("combina", "oferecer", "sugerir", "acompanha"))
+    if not (sobre_pratos or demora or combina):
+        return None
+    c = ctx.cardapio
+    if c is None:
+        return (
+            "Ainda não tenho pedidos lançados para falar do cardápio. Quando o garçom lançar "
+            "os pedidos na mesa, eu mostro o que mais sai e o que lucra pouco."
+        )
+    if sobre_pratos and tirar:
+        if c.matrizes is None:
+            return (
+                "Custo e lucro dos pratos só o dono vê. Peça ao dono para perguntar, ou veja "
+                "os mais pedidos em Resultados."
+            )
+        caes = [(m.categoria, i.nome) for m in c.matrizes for i in m.matriz.itens
+                if i.quadrante == "cao"]  # fmt: skip
+        burros = [i.nome for m in c.matrizes for i in m.matriz.itens
+                  if i.quadrante == "burro_de_carga"]  # fmt: skip
+        partes = []
+        if caes:
+            nomes = ", ".join(f"{n} ({cat})" for cat, n in caes)
+            partes.append(
+                f"Vendem pouco e lucram pouco nas últimas 4 semanas: {nomes}. São os candidatos"
+                " a sair do cardápio; antes, peça ao garçom para oferecer por uma semana."
+            )
+        else:
+            partes.append("Nenhum prato vende pouco e lucra pouco ao mesmo tempo.")
+        if burros:
+            partes.append(
+                f"{', '.join(burros)} vendem muito mas lucram pouco: vale subir um pouco o "
+                "preço ou baratear a receita."
+            )
+        return " ".join(partes)
+    if demora:
+        if not c.tempos:
+            return "Ainda não tenho pratos marcados como prontos para medir a cozinha."
+        t = c.tempos[0]
+        extra = ""
+        if t.tempo.minutos_fim_de_semana and t.tempo.minutos_semana:
+            extra = (
+                f" Na sexta e no sábado leva {t.tempo.minutos_fim_de_semana:.0f} min; nos "
+                f"outros dias, {t.tempo.minutos_semana:.0f}."
+            )
+        return (
+            f"O prato que mais demora é {t.nome}: {t.tempo.minutos:.0f} min do pedido até "
+            f"ficar pronto.{extra} Deixe a massa adiantada antes do pico."
+        )
+    if combina:
+        if not c.combinacoes:
+            return "Ainda não tenho pedidos suficientes para dizer o que combina com o quê."
+        cb = c.combinacoes[0]
+        lista = ", ".join(f"{a.nome} ({a.percentual}%)" for a in cb.acompanha)
+        return (
+            f"Quem pede {cb.item} também costuma pedir: {lista}. Peça ao garçom para "
+            "oferecer junto."
+        )
+    if sobre_pratos and (mais or "qual" in p):
+        prato = next((i for i in c.itens if not i.bebida), None)
+        bebida = next((i for i in c.itens if i.bebida), None)
+        frases = []
+        if prato:
+            frases.append(
+                f"O prato que mais sai é {prato.nome}: {prato.quantidade} pedidos nas últimas "
+                f"4 semanas, cerca de {_reais(prato.receita_centavos)}."
+            )
+        if bebida:
+            frases.append(f"A bebida que mais sai é {bebida.nome} ({bebida.quantidade}).")
+        frases.append("Confira o estoque para ele antes do pico.")
+        return " ".join(frases)
+    return None
+
+
 def responder_com_regras(pergunta: str, ctx: Contexto) -> str:
     """Respostas prontas para as perguntas mais comuns, quando a IA não está ligada."""
     p = _sem_acento(pergunta)
+    if (sobre_cardapio := responder_sobre_cardapio(p, ctx)) is not None:
+        return sobre_cardapio
     q = ctx.quatro_semanas
     if "mesa" in p and any(t in p for t in ("pior", "prejuizo", "mais", "custa", "parada")):
         pior = max(q.por_mesa, key=lambda m: m.perdido_centavos, default=None)
