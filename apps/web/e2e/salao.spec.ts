@@ -56,7 +56,7 @@ test("garçom só vê o salão; dono vê mesas, equipe e ajustes", async ({ page
   await entrar(page, "equipe@cantina.demo");
   await expect(page.getByTestId("mesa-1")).toBeVisible();
   const navegacao = page.getByRole("navigation", { name: "Seções" });
-  await expect(navegacao.getByRole("link")).toHaveText(["Salão"]);
+  await expect(navegacao.getByRole("link")).toHaveText(["Salão", "Cozinha"]);
 
   await page.getByRole("button", { name: "Sair" }).click();
   await expect(page).toHaveURL(/\/entrar$/);
@@ -65,7 +65,9 @@ test("garçom só vê o salão; dono vê mesas, equipe e ajustes", async ({ page
   await expect(page.getByTestId("mesa-1")).toBeVisible();
   await expect(navegacao.getByRole("link")).toHaveText([
     "Salão",
+    "Cozinha",
     "Resultados",
+    "Cardápio",
     "Mesas",
     "Câmeras",
     "Equipe",

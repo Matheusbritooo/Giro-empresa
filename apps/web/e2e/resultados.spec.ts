@@ -62,16 +62,21 @@ test("dono revê a pior noite no salão com o mapa de calor", async ({ page }) =
   await expect(page.getByTestId("linha-da-mesa")).toContainText("pessoas");
 });
 
-test("dono muda o ticket médio e o resultado usa o valor novo", async ({ page }) => {
+test("dono muda o ticket médio, mas com pedidos lançados vale o gasto real", async ({ page }) => {
   await entrar(page, "marcos@cantina.demo");
   await expect(page).toHaveURL(/\/salao$/);
   await page.goto("/ajustes");
   await page.getByLabel("Quanto cada pessoa gasta, em média (R$)").fill("90");
   await page.getByRole("button", { name: "Salvar ajustes" }).click();
   await expect(page.getByText("Ajustes salvos.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Quanto cada pessoa gasta, em média (R$)")).toHaveValue("90");
 
+  // As 4 semanas de demonstração têm pedidos: o resultado usa o que as mesas gastaram.
   await page.goto("/resultados?periodo=semana");
-  await expect(page.getByText("Estimativa com R$ 90 por pessoa.")).toBeVisible();
+  await expect(
+    page.getByText(/Estimativa com R\$ \d+ por pessoa, o que as mesas gastaram de verdade/),
+  ).toBeVisible();
 });
 
 test("garçom não abre os resultados", async ({ page }) => {

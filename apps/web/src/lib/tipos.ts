@@ -45,6 +45,9 @@ export interface Mesa {
   atendida_em: string | null;
   saiu_em: string | null;
   pessoas: number;
+  // Pedido da visita em curso: quanto a mesa já gastou e quantos itens estão na cozinha.
+  total_pedido_centavos: number;
+  itens_na_cozinha: number;
 }
 
 export interface Alerta {
@@ -97,7 +100,11 @@ export type MensagemAoVivo =
   | { tipo: "salao"; salao: Salao }
   | { tipo: "mesa"; mesa: Mesa }
   | { tipo: "alerta"; alerta: Alerta }
-  | { tipo: "camera"; camera: Camera };
+  | { tipo: "camera"; camera: Camera }
+  | AvisoAoVivo;
+
+/** Avisos que não mudam o mapa: quem precisa busca de novo (pedido da mesa, cardápio). */
+export type AvisoAoVivo = { tipo: "pedido"; mesa_id: number } | { tipo: "cardapio" };
 
 // Resultados, replay, "E se?" e Copiloto (Fase 3)
 
@@ -136,6 +143,7 @@ export interface Indicadores {
   parada_total_seg: number;
   hora_pico: number | null;
   ticket_medio_centavos: number;
+  ticket_real: boolean; // o ticket veio dos pedidos lançados, não de Ajustes
   perdido_desistencias_centavos: number;
   perdido_mesa_parada_centavos: number;
   perdido_total_centavos: number;
@@ -210,4 +218,96 @@ export interface BriefingCopiloto {
 export interface RespostaCopiloto {
   resposta: string;
   fonte: "ia" | "regras";
+}
+
+// Cardápio e pedidos
+
+export interface CategoriaCardapio {
+  id: number;
+  nome: string;
+  ordem: number;
+  bebida: boolean;
+  ativa: boolean;
+}
+
+export interface ItemCardapio {
+  id: number;
+  categoria_id: number;
+  nome: string;
+  descricao: string | null;
+  preco_centavos: number;
+  custo_centavos: number | null; // só o dono recebe
+  ativo: boolean;
+  disponivel: boolean; // "tem hoje"
+}
+
+export interface Cardapio {
+  categorias: CategoriaCardapio[];
+  itens: ItemCardapio[];
+  mostra_custo: boolean;
+  mais_pedidos: number[];
+}
+
+export interface ItemPedido {
+  id: number;
+  mesa_id: number;
+  ocupacao_id: number;
+  item_id: number;
+  nome: string;
+  preco_unit_centavos: number;
+  quantidade: number;
+  observacao: string | null;
+  lancado_em: string;
+  pronto_em: string | null;
+  cancelado_em: string | null;
+  motivo_cancelamento: string | null;
+}
+
+export interface ItemCozinha extends ItemPedido {
+  mesa_numero: number;
+}
+
+export interface PedidoMesa {
+  mesa: Mesa;
+  itens: ItemPedido[];
+  total_centavos: number;
+}
+
+export const MOTIVOS_CANCELAMENTO = [
+  "Cliente desistiu",
+  "Lançado errado",
+  "Demorou demais",
+  "Prato voltou",
+  "Outro",
+] as const;
+
+export interface ItemVendido {
+  item_id: number;
+  nome: string;
+  categoria: string;
+  bebida: boolean;
+  quantidade: number;
+  receita_centavos: number;
+}
+
+export interface MesaCardapio {
+  numero: number;
+  visitas: number;
+  pessoas: number;
+  total_centavos: number;
+  prato: string | null;
+  prato_quantidade: number;
+  bebida: string | null;
+  bebida_quantidade: number;
+}
+
+export interface ResultadosCardapio {
+  periodo: Periodo;
+  dia: string;
+  faturamento_centavos: number;
+  visitas_com_pedido: number;
+  pessoas: number;
+  ticket_real_centavos: number | null;
+  itens: ItemVendido[];
+  mesas: MesaCardapio[];
 }

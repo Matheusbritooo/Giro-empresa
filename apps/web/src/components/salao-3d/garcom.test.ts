@@ -36,6 +36,8 @@ function mesa(
     atendida_em: null,
     saiu_em: null,
     pessoas: 0,
+    total_pedido_centavos: 0,
+    itens_na_cozinha: 0,
     ...extra,
   };
 }

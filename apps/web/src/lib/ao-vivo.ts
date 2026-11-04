@@ -4,7 +4,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 
 import { urlAoVivo } from "./api";
 import { aplicarMensagem, type EstadoSalao, SALAO_VAZIO } from "./salao";
-import type { Alerta, MensagemAoVivo } from "./tipos";
+import type { Alerta, AvisoAoVivo, MensagemAoVivo } from "./tipos";
 
 export type Conexao = "conectando" | "ao_vivo" | "reconectando" | "sem_acesso";
 
@@ -19,13 +19,16 @@ function redutor(estado: EstadoSalao, mensagem: MensagemAoVivo): EstadoSalao {
 export function useSalaoAoVivo(
   restaurante: number | null,
   aoChegarAlerta: (alerta: Alerta) => void,
+  aoAviso?: (aviso: AvisoAoVivo) => void,
 ) {
   const [estado, despachar] = useReducer(redutor, SALAO_VAZIO);
   const [conexao, setConexao] = useState<Conexao>("conectando");
   const avisar = useRef(aoChegarAlerta);
+  const avisarOutros = useRef(aoAviso);
   useEffect(() => {
     avisar.current = aoChegarAlerta;
-  }, [aoChegarAlerta]);
+    avisarOutros.current = aoAviso;
+  }, [aoChegarAlerta, aoAviso]);
 
   useEffect(() => {
     if (!restaurante) return; // equipe GIRO ainda não escolheu o restaurante
@@ -47,6 +50,8 @@ export function useSalaoAoVivo(
           tentativa = 0;
           setConexao("ao_vivo");
           mensagem.salao.alertas.forEach((a) => vistos.add(a.id));
+        } else if (mensagem.tipo === "pedido" || mensagem.tipo === "cardapio") {
+          avisarOutros.current?.(mensagem);
         } else if (mensagem.tipo === "alerta") {
           const { alerta } = mensagem;
           if (!alerta.resolvido_em && !vistos.has(alerta.id)) avisar.current(alerta);

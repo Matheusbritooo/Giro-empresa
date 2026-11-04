@@ -1,17 +1,21 @@
 """Cardápio do restaurante. Todos veem; gerente e dono cadastram; custo só o dono vê e muda.
 "Acabou" (disponível hoje) qualquer um da equipe marca, porque quem sabe é a cozinha."""
 
+from datetime import timedelta
+
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from giro.api.deps import (
     GESTAO,
     Db,
     RestauranteAlvo,
+    Servico,
     UsuarioAtual,
     exigir_papel,
     restaurante_permitido,
 )
+from giro.banco import agora
 from giro.esquemas import (
     CardapioSaida,
     CategoriaAtualizacao,
@@ -22,11 +26,13 @@ from giro.esquemas import (
     ItemCardapioEntrada,
     ItemCardapioSaida,
 )
-from giro.modelos import CategoriaCardapio, ItemCardapio, Papel, Usuario
+from giro.modelos import CategoriaCardapio, ItemCardapio, ItemPedido, Papel, Usuario
 
 router = APIRouter(prefix="/api/cardapio", tags=["cardápio"])
 
 VEEM_CUSTO = (Papel.DONO, Papel.ADMIN_GIRO)
+MAIS_PEDIDOS = 8
+JANELA_MAIS_PEDIDOS = timedelta(days=28)
 
 
 def _ve_custo(usuario: Usuario) -> bool:
@@ -55,6 +61,11 @@ def _item(db, item_id: int, usuario: Usuario) -> ItemCardapio:
     return item
 
 
+def _avisar_mudanca(servico, restaurante_id: int) -> None:
+    """Celulares e cozinha buscam o cardápio de novo (preço, "acabou", item novo)."""
+    servico.central.publicar(restaurante_id, {"tipo": "cardapio"})
+
+
 def _so_dono_muda_custo(usuario: Usuario, custo: int | None) -> None:
     if custo is not None and not _ve_custo(usuario):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "só o dono informa o custo dos pratos")
@@ -74,10 +85,25 @@ def ver_cardapio(db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo)
         .where(ItemCardapio.restaurante_id == restaurante_id)
         .order_by(ItemCardapio.nome)
     ).all()
+    quantidade = func.sum(ItemPedido.quantidade)
+    mais_pedidos = db.scalars(
+        select(ItemPedido.item_id)
+        .join(ItemCardapio, ItemPedido.item_id == ItemCardapio.id)
+        .where(
+            ItemPedido.restaurante_id == restaurante_id,
+            ItemPedido.cancelado_em.is_(None),
+            ItemPedido.lancado_em >= agora() - JANELA_MAIS_PEDIDOS,
+            ItemCardapio.ativo.is_(True),
+        )
+        .group_by(ItemPedido.item_id)
+        .order_by(quantidade.desc(), ItemPedido.item_id)
+        .limit(MAIS_PEDIDOS)
+    ).all()
     return CardapioSaida(
         categorias=[CategoriaSaida.model_validate(c) for c in categorias if gestao or c.ativa],
         itens=[item_saida(i, usuario) for i in itens if gestao or i.ativo],
         mostra_custo=_ve_custo(usuario),
+        mais_pedidos=list(mais_pedidos),
     )
 
 
@@ -109,19 +135,24 @@ def atualizar_categoria(
 
 @router.post("/itens", status_code=status.HTTP_201_CREATED, dependencies=[exigir_papel(*GESTAO)])
 def criar_item(
-    dados: ItemCardapioEntrada, db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo
+    dados: ItemCardapioEntrada,
+    db: Db,
+    usuario: UsuarioAtual,
+    restaurante_id: RestauranteAlvo,
+    servico: Servico,
 ) -> ItemCardapioSaida:
     _so_dono_muda_custo(usuario, dados.custo_centavos)
     _categoria_do_restaurante(db, dados.categoria_id, restaurante_id)
     item = ItemCardapio(restaurante_id=restaurante_id, **dados.model_dump())
     db.add(item)
     db.commit()
+    _avisar_mudanca(servico, restaurante_id)
     return item_saida(item, usuario)
 
 
 @router.patch("/itens/{item_id}", dependencies=[exigir_papel(*GESTAO)])
 def atualizar_item(
-    item_id: int, dados: ItemCardapioAtualizacao, db: Db, usuario: UsuarioAtual
+    item_id: int, dados: ItemCardapioAtualizacao, db: Db, usuario: UsuarioAtual, servico: Servico
 ) -> ItemCardapioSaida:
     """Preço novo vale só para os próximos pedidos: o que já foi lançado guardou o preço."""
     item = _item(db, item_id, usuario)
@@ -133,15 +164,17 @@ def atualizar_item(
     for campo, valor in mudancas.items():
         setattr(item, campo, valor)
     db.commit()
+    _avisar_mudanca(servico, item.restaurante_id)
     return item_saida(item, usuario)
 
 
 @router.post("/itens/{item_id}/disponivel")
 def marcar_disponivel(
-    item_id: int, dados: DisponivelEntrada, db: Db, usuario: UsuarioAtual
+    item_id: int, dados: DisponivelEntrada, db: Db, usuario: UsuarioAtual, servico: Servico
 ) -> ItemCardapioSaida:
     """A cozinha avisa que acabou (ou que voltou). Vale na hora para todos os garçons."""
     item = _item(db, item_id, usuario)
     item.disponivel = dados.disponivel
     db.commit()
+    _avisar_mudanca(servico, item.restaurante_id)
     return item_saida(item, usuario)

@@ -444,6 +444,8 @@ class CardapioSaida(BaseModel):
     categorias: list[CategoriaSaida]
     itens: list[ItemCardapioSaida]
     mostra_custo: bool
+    # Os itens que mais saíram nas últimas 4 semanas: ficam no topo para o garçom.
+    mais_pedidos: list[int] = []
 
 
 class DisponivelEntrada(BaseModel):

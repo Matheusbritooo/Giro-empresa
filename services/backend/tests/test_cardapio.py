@@ -218,7 +218,13 @@ def test_resultados_do_cardapio(como, cantina_com_pedidos):
     assert semana["ticket_real"] is True
     assert semana["ticket_medio_centavos"] == dados["ticket_real_centavos"]
 
-    assert como("equipe@cantina.demo").get("/api/resultados/cardapio").status_code == 403
+    # O garçom não vê os resultados, mas recebe os mais pedidos para pôr no topo.
+    equipe = como("equipe@cantina.demo")
+    assert equipe.get("/api/resultados/cardapio").status_code == 403
+    cardapio = equipe.get("/api/cardapio").json()
+    nomes = {i["id"]: i["nome"] for i in cardapio["itens"]}
+    assert len(cardapio["mais_pedidos"]) == 8
+    assert "Lasanha à bolonhesa" in [nomes[i] for i in cardapio["mais_pedidos"][:3]]
     vizinho = como("dono@vizinha.demo")
     params = {"restaurante_id": cantina_com_pedidos}
     assert vizinho.get("/api/resultados/cardapio", params=params).status_code == 404
