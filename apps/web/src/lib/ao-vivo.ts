@@ -50,7 +50,11 @@ export function useSalaoAoVivo(
           tentativa = 0;
           setConexao("ao_vivo");
           mensagem.salao.alertas.forEach((a) => vistos.add(a.id));
-        } else if (mensagem.tipo === "pedido" || mensagem.tipo === "cardapio") {
+        } else if (
+          mensagem.tipo === "pedido" ||
+          mensagem.tipo === "cardapio" ||
+          mensagem.tipo === "estoque"
+        ) {
           avisarOutros.current?.(mensagem);
         } else if (mensagem.tipo === "alerta") {
           const { alerta } = mensagem;

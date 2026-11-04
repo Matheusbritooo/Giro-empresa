@@ -30,6 +30,7 @@ const CARDAPIO: Cardapio = {
       custo_centavos: null,
       ativo: true,
       disponivel: true,
+      custo_pela_ficha: false,
     },
     {
       id: 11,
@@ -40,6 +41,7 @@ const CARDAPIO: Cardapio = {
       custo_centavos: null,
       ativo: true,
       disponivel: false,
+      custo_pela_ficha: false,
     },
     {
       id: 12,
@@ -50,6 +52,7 @@ const CARDAPIO: Cardapio = {
       custo_centavos: null,
       ativo: false,
       disponivel: true,
+      custo_pela_ficha: false,
     },
     {
       id: 20,
@@ -60,6 +63,7 @@ const CARDAPIO: Cardapio = {
       custo_centavos: null,
       ativo: true,
       disponivel: true,
+      custo_pela_ficha: false,
     },
     {
       id: 30,
@@ -70,6 +74,7 @@ const CARDAPIO: Cardapio = {
       custo_centavos: null,
       ativo: true,
       disponivel: true,
+      custo_pela_ficha: false,
     },
   ],
   mostra_custo: false,

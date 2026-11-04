@@ -32,9 +32,10 @@ export function aplicarMensagem(
     return { ...estado, salao: { ...salao, mesas: mesas.filter((m) => m.ativa) } };
   }
 
-  // Pedido ou cardápio mudou: quem precisa (cozinha, tela do pedido) busca de novo; o total
-  // da mesa chega numa mensagem "mesa" logo em seguida.
-  if (mensagem.tipo === "pedido" || mensagem.tipo === "cardapio") return estado;
+  // Pedido, cardápio ou estoque mudou: quem precisa (cozinha, pedido, estoque) busca de novo;
+  // o total da mesa chega numa mensagem "mesa" logo em seguida.
+  if (mensagem.tipo === "pedido" || mensagem.tipo === "cardapio" || mensagem.tipo === "estoque")
+    return estado;
 
   if (mensagem.tipo === "camera") {
     const cameras = salao.cameras.map((c) => (c.id === mensagem.camera.id ? mensagem.camera : c));
