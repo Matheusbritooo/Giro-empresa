@@ -197,3 +197,38 @@ def test_sem_push_configurado_nada_acontece(app, cantina_com_historico):
         verificar_avisos(db, push, momento_na_noite(noite_de(agora()), "18:00"))
         assert db.get(Restaurante, cantina_com_historico).ultimo_briefing_noite is None
     assert push.enviados == []
+
+
+def test_copiloto_fala_do_cardapio_e_so_o_dono_ouve_sobre_lucro(como, cantina_com_historico):
+    dono, gerente = como("dono@cantina.demo"), como("gerente@cantina.demo")
+    pergunta = {"pergunta": "Qual prato eu tiro do cardápio?"}
+    resposta = dono.post("/api/copiloto/perguntar", json=pergunta).json()["resposta"]
+    assert "cardápio" in resposta or "Nenhum prato" in resposta
+    resposta = gerente.post("/api/copiloto/perguntar", json=pergunta).json()["resposta"]
+    assert resposta.startswith("Custo e lucro dos pratos só o dono vê")
+
+    r = gerente.post("/api/copiloto/perguntar", json={"pergunta": "Qual prato mais sai?"})
+    assert "Lasanha à bolonhesa" in r.json()["resposta"]
+    r = gerente.post("/api/copiloto/perguntar", json={"pergunta": "Qual prato demora mais?"})
+    assert "min do pedido até ficar pronto" in r.json()["resposta"]
+
+    briefing = dono.get("/api/copiloto/briefing").json()
+    assert any("é o que mais sai da cozinha" in d for d in briefing["dicas"])
+
+
+def test_ia_recebe_o_cardapio_somado_e_a_matriz_so_do_dono(app, como, cantina_com_historico):
+    ia = IADeMentira(resposta=resposta_da_ia("Destaque a lasanha."))
+    app.state.copiloto._cliente = ia
+
+    def numeros_enviados(email):
+        como(email).post("/api/copiloto/perguntar", json={"pergunta": "Qual prato destacar?"})
+        conteudo = ia.pedidos[-1]["messages"][0]["content"]
+        return json.loads(conteudo.split("\n", 1)[1].split("\n\nPergunta do dono:")[0])
+
+    do_dono = numeros_enviados("dono@cantina.demo")["cardapio_ultimas_4_semanas"]
+    do_gerente = numeros_enviados("gerente@cantina.demo")["cardapio_ultimas_4_semanas"]
+    assert do_dono["mais_pedidos"][0]["quantidade"] > 0
+    assert "Massas" in do_dono["matriz_de_lucro"]
+    assert "matriz_de_lucro" not in do_gerente
+    texto = json.dumps(do_dono, ensure_ascii=False)
+    assert "custo" not in texto  # vai o quadrante, nunca o custo em reais

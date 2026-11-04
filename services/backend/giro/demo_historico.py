@@ -132,11 +132,14 @@ def gerar_historico(
         visitas = _noite(dia, mesas, restaurante_id, sorteio)
         db.add_all(visitas)
         todas += visitas
-    db.flush()  # as visitas ganham id para os pedidos apontarem para elas
 
-    # Pedidos com outro sorteio: as visitas continuam as mesmas de antes do cardápio.
-    papeis = criar_cardapio(db, restaurante_id)
+    # Conta e pedidos com outro sorteio: as visitas continuam as mesmas de antes do cardápio.
     pedidos = random.Random(semente + 1)  # noqa: S311
+    for v in todas:
+        if not v.sem_atendimento and v.saiu_em is not None:
+            v.conta_pedida_em = v.saiu_em - timedelta(minutes=pedidos.uniform(6, 14))
+    db.flush()  # as visitas ganham id para os pedidos apontarem para elas
+    papeis = criar_cardapio(db, restaurante_id)
     linhas_pedido = [linha for v in todas for linha in pedidos_da_visita(v, papeis, pedidos)]
     if linhas_pedido:
         db.execute(insert(ItemPedido), linhas_pedido)

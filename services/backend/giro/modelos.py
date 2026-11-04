@@ -115,6 +115,8 @@ class Ocupacao(Base):
     liberada_em: Mapped[datetime | None]
     pessoas: Mapped[int] = mapped_column(default=0)
     sem_atendimento: Mapped[bool] = mapped_column(default=False)  # foi embora sem ser atendido
+    # O garçom avisou que a mesa pediu a conta: o painel mostra quando ela deve vagar.
+    conta_pedida_em: Mapped[datetime | None]
 
 
 class EventoMesa(Base):

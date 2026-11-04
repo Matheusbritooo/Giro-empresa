@@ -1,7 +1,7 @@
 """Cardápio e pedidos: perfis, isolamento entre restaurantes, preço congelado, cozinha,
 cancelamento com motivo, pedido que conta como atendimento e as contas dos resultados."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -241,3 +241,63 @@ def test_refazer_o_historico_leva_os_pedidos_junto(app, cantina_com_pedidos):
         visitas = select(Ocupacao.id)
         orfaos = select(func.count(ItemPedido.id)).where(ItemPedido.ocupacao_id.not_in(visitas))
         assert db.scalar(orfaos) == 0
+
+
+def test_pediu_a_conta_mostra_quando_a_mesa_deve_vagar(como, cardapio):
+    equipe = como("equipe@cantina.demo")
+    mesa = id_da_mesa(equipe, 2)
+    assert equipe.post(f"/api/mesas/{mesa}/conta", json={}).status_code == 409  # mesa livre
+    lancar(equipe, mesa, (cardapio["lasanha"], 2))
+
+    r = equipe.post(f"/api/mesas/{mesa}/conta", json={})
+    assert r.status_code == 200, r.text
+    dados = r.json()
+    conta = datetime.fromisoformat(dados["conta_pedida_em"])
+    vaga = datetime.fromisoformat(dados["vaga_prevista_em"])
+    assert vaga - conta == timedelta(minutes=10)  # sem histórico: 10 min
+    salao = equipe.get("/api/salao").json()
+    assert next(m for m in salao["mesas"] if m["id"] == mesa)["conta_pedida_em"] is not None
+
+    # Tocou sem querer: desfaz.
+    dados = equipe.post(f"/api/mesas/{mesa}/conta", json={"pedida": False}).json()
+    assert dados["conta_pedida_em"] is None and dados["vaga_prevista_em"] is None
+    assert como("dono@vizinha.demo").post(f"/api/mesas/{mesa}/conta", json={}).status_code == 404
+
+
+def test_previsao_de_vaga_aprende_com_as_contas_das_ultimas_semanas(como, cantina_com_pedidos):
+    equipe = como("equipe@cantina.demo")
+    mesa = id_da_mesa(equipe, 3)
+    cardapio = equipe.get("/api/cardapio").json()
+    lasanha = next(i for i in cardapio["itens"] if i["nome"] == "Lasanha à bolonhesa")
+    lancar(equipe, mesa, (lasanha, 1))
+    dados = equipe.post(f"/api/mesas/{mesa}/conta", json={}).json()
+    minutos = (
+        datetime.fromisoformat(dados["vaga_prevista_em"])
+        - datetime.fromisoformat(dados["conta_pedida_em"])
+    ).total_seconds() / 60
+    assert 8 <= minutos <= 12  # o histórico tem contas pedidas de 6 a 14 min antes de sair
+
+
+def test_matriz_de_lucro_so_para_o_dono_e_o_resto_para_a_gestao(como, cantina_com_pedidos):
+    params = {"periodo": "mes"}
+    dono = como("dono@cantina.demo").get("/api/resultados/cardapio", params=params).json()
+    gerente = como("gerente@cantina.demo").get("/api/resultados/cardapio", params=params).json()
+
+    assert gerente["matrizes"] is None
+    categorias = [m["categoria"] for m in dono["matrizes"]]
+    assert categorias[0] == "Massas"  # a que mais fatura vem primeiro
+    massas = {i["nome"]: i["quadrante"] for i in dono["matrizes"][0]["matriz"]["itens"]}
+    assert massas["Lasanha à bolonhesa"] == "estrela"
+    assert set(massas.values()) <= {"estrela", "burro_de_carga", "quebra_cabeca", "cao"}
+
+    # Combinações e tempo de cozinha: para dono e gerente.
+    for dados in (dono, gerente):
+        [primeira, *_] = dados["combinacoes"]
+        assert primeira["item"] == "Lasanha à bolonhesa"
+        assert primeira["acompanha"] and all(
+            0 < a["percentual"] <= 100 for a in primeira["acompanha"]
+        )
+        # Acompanhamento é bebida, entrada ou sobremesa, nunca outro prato.
+        assert "Parmegiana de frango" not in [a["nome"] for a in primeira["acompanha"]]
+        lento = dados["tempos"][0]["tempo"]
+        assert lento["minutos_fim_de_semana"] > lento["minutos_semana"]  # sexta e sábado enchem

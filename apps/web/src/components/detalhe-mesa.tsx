@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { preco } from "@/lib/pedido";
-import { horaCurta, minutosEntre, situacao } from "@/lib/salao";
+import { horaCurta, minutosEntre, situacao, textoDaConta } from "@/lib/salao";
 import type { Mesa } from "@/lib/tipos";
 
 import { Botao } from "./ui";
@@ -16,6 +16,7 @@ export function DetalheMesa({
   aoFechar,
   aoLiberar,
   linkPedido,
+  aoPedirConta,
 }: {
   mesa: Mesa | null;
   agoraMs: number;
@@ -24,6 +25,8 @@ export function DetalheMesa({
   aoLiberar: (mesa: Mesa) => void;
   /** Endereço da tela de pedido desta mesa ("Lançar pedido"). */
   linkPedido?: (mesa: Mesa) => string;
+  /** O garçom avisa que a mesa pediu a conta (ou desfaz). */
+  aoPedirConta?: (mesa: Mesa, pedida: boolean) => void;
 }) {
   const dialogo = useRef<HTMLDialogElement>(null);
 
@@ -66,7 +69,10 @@ export function DetalheMesa({
 
           {mesa.sentou_em ? (
             <ol className="flex flex-col gap-2 border-l-2 border-linha pl-4">
-              <Marco hora={mesa.sentou_em} texto={`${pessoas(mesa.pessoas)} sentaram`} />
+              <Marco
+                hora={mesa.sentou_em}
+                texto={mesa.pessoas > 0 ? `${pessoas(mesa.pessoas)} sentaram` : "Mesa aberta"}
+              />
               {mesa.atendida_em ? (
                 <Marco
                   hora={mesa.atendida_em}
@@ -110,6 +116,10 @@ export function DetalheMesa({
             </p>
           )}
 
+          {aoPedirConta && mesa.estado === "ocupada" && (
+            <ContaDaMesa mesa={mesa} aoPedirConta={aoPedirConta} />
+          )}
+
           {linkPedido && mesa.estado !== "para_limpar" && (
             <Link
               href={linkPedido(mesa)}
@@ -128,6 +138,38 @@ export function DetalheMesa({
         </div>
       )}
     </dialog>
+  );
+}
+
+/** "Pediu a conta" em um toque; depois, quando a mesa deve vagar e como desfazer. */
+export function ContaDaMesa({
+  mesa,
+  aoPedirConta,
+}: {
+  mesa: Mesa;
+  aoPedirConta: (mesa: Mesa, pedida: boolean) => void;
+}) {
+  if (!mesa.conta_pedida_em) {
+    return (
+      <Botao variante="secundario" onClick={() => aoPedirConta(mesa, true)} className="w-full">
+        Pediu a conta
+      </Botao>
+    );
+  }
+  return (
+    <p
+      className="flex items-baseline justify-between gap-3 rounded-lg border-l-4 border-ocupada bg-fundo px-3 py-2"
+      data-testid="conta-pedida"
+    >
+      <span>{textoDaConta(mesa)}</span>
+      <button
+        type="button"
+        onClick={() => aoPedirConta(mesa, false)}
+        className="shrink-0 text-sm font-semibold text-tinta-suave underline underline-offset-2"
+      >
+        Desfazer
+      </button>
+    </p>
   );
 }
 

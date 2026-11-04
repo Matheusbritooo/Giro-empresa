@@ -94,6 +94,15 @@ export function situacao(mesa: Mesa, agoraMs: number, limiteSeg: number): Situac
       };
     }
     case "ocupada":
+      if (mesa.conta_pedida_em) {
+        return {
+          tom: "ocupada",
+          rotulo: "Pediu a conta",
+          curto: "Conta",
+          desde: mesa.sentou_em ?? mesa.estado_desde,
+          descricao: `Mesa ${mesa.numero}: pediu a conta${mesa.vaga_prevista_em ? `, deve vagar por volta das ${horaCurta(mesa.vaga_prevista_em)}` : ""}`,
+        };
+      }
       return {
         tom: "ocupada",
         rotulo: ROTULOS.ocupada,
@@ -118,6 +127,15 @@ export function situacao(mesa: Mesa, agoraMs: number, limiteSeg: number): Situac
         descricao: `Mesa ${mesa.numero}: livre, ${mesa.lugares} lugares`,
       };
   }
+}
+
+/** "Pediu a conta às 21:40. Deve vagar por volta das 21:50." (vazio se não pediu) */
+export function textoDaConta(mesa: Mesa): string {
+  if (!mesa.conta_pedida_em) return "";
+  const vaga = mesa.vaga_prevista_em
+    ? ` Deve vagar por volta das ${horaCurta(mesa.vaga_prevista_em)}.`
+    : "";
+  return `Pediu a conta às ${horaCurta(mesa.conta_pedida_em)}.${vaga}`;
 }
 
 function pessoas(n: number): string {

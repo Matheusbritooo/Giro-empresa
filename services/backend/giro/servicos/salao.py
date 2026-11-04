@@ -13,7 +13,16 @@ from typing import Concatenate
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from giro.dominio.mesa import Estado, Evento, MaquinaMesa, Observacao, Regras, TipoEvento
+from giro.banco import agora
+from giro.dominio.mesa import (
+    Estado,
+    Evento,
+    MaquinaMesa,
+    Observacao,
+    Regras,
+    TipoEvento,
+    TransicaoInvalida,
+)
 from giro.esquemas import AlertaSaida, CameraSaida, MesaSalao, ObservacaoMesa
 from giro.modelos import (
     Alerta,
@@ -28,6 +37,7 @@ from giro.modelos import (
     TipoAlerta,
 )
 from giro.push import EnviadorPush
+from giro.servicos.cardapio import previsao_de_vaga
 from giro.tempo_real import CentralTempoReal
 
 TIPO_ALERTA_DO_EVENTO = {
@@ -69,14 +79,20 @@ def totais_dos_pedidos(db: Session, ocupacao_ids: list[int]) -> dict[int, tuple[
 
 
 def mesas_salao(db: Session, mesas: list[Mesa]) -> list[MesaSalao]:
-    """As mesas como aparecem no mapa, já com o pedido da visita em curso."""
+    """As mesas como aparecem no mapa, já com o pedido e a conta da visita em curso."""
     ocupacoes = ocupacoes_abertas(db, [m.id for m in mesas])
     totais = totais_dos_pedidos(db, [o.id for o in ocupacoes.values()])
-    return [mesa_salao(m, ocupacoes.get(m.id), totais) for m in mesas]
+    vaga_em = None
+    if any(o.conta_pedida_em for o in ocupacoes.values()):
+        vaga_em = timedelta(minutes=previsao_de_vaga(db, mesas[0].restaurante_id, agora()))
+    return [mesa_salao(m, ocupacoes.get(m.id), totais, vaga_em) for m in mesas]
 
 
 def mesa_salao(
-    mesa: Mesa, ocupacao: Ocupacao | None, totais: dict[int, tuple[int, int]] | None = None
+    mesa: Mesa,
+    ocupacao: Ocupacao | None,
+    totais: dict[int, tuple[int, int]] | None = None,
+    vaga_em: timedelta | None = None,
 ) -> MesaSalao:
     dados = MesaSalao(
         id=mesa.id,
@@ -97,6 +113,10 @@ def mesa_salao(
         dados.pessoas = ocupacao.pessoas
         total, cozinha = (totais or {}).get(ocupacao.id, (0, 0))
         dados.total_pedido_centavos, dados.itens_na_cozinha = total, cozinha
+        if ocupacao.conta_pedida_em and mesa.estado == Estado.OCUPADA:
+            dados.conta_pedida_em = ocupacao.conta_pedida_em
+            if vaga_em is not None:
+                dados.vaga_prevista_em = ocupacao.conta_pedida_em + vaga_em
     return dados
 
 
@@ -235,6 +255,16 @@ class ServicoSalao:
         self._avisar(db, restaurante.id, mudancas)
         self.central.publicar(restaurante.id, {"tipo": "pedido", "mesa_id": mesa.id})
         return ocupacao
+
+    @_uma_por_vez
+    def pedir_conta(self, db: Session, mesa: Mesa, pedida: bool, agora: datetime) -> None:
+        """O garçom avisou que a mesa pediu a conta (ou desfez o toque sem querer)."""
+        ocupacao = ocupacoes_abertas(db, [mesa.id]).get(mesa.id)
+        if ocupacao is None or mesa.estado != Estado.OCUPADA:
+            raise TransicaoInvalida("a mesa não está ocupada")
+        ocupacao.conta_pedida_em = agora if pedida else None
+        db.commit()
+        self._avisar(db, mesa.restaurante_id, _Mudancas(mesas={mesa.id: mesa}))
 
     def avisar_pedido(self, db: Session, mesa: Mesa) -> None:
         """Um item ficou pronto ou foi cancelado: atualiza a mesa e a tela da cozinha."""

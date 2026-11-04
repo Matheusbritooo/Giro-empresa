@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import { ContaDaMesa } from "@/components/detalhe-mesa";
 import { Aviso, Botao } from "@/components/ui";
 import { api, ErroApi } from "@/lib/api";
 import { useSalaoAoVivo } from "@/lib/ao-vivo";
@@ -126,6 +127,21 @@ export default function PaginaPedido() {
       await api(`/api/pedidos/${item.id}/cancelar`, { metodo: "POST", corpo: { motivo } });
       setCancelando(null);
       setRecado({ tipo: "ok", texto: `${item.nome} cancelado.` });
+      recarregarPedido();
+    } catch (e) {
+      setRecado({ tipo: "erro", texto: (e as Error).message });
+    }
+  }
+
+  async function pedirConta(_mesa: { id: number }, pedida: boolean) {
+    try {
+      await api(`/api/mesas/${mesaId}/conta`, { metodo: "POST", corpo: { pedida } });
+      setRecado({
+        tipo: "ok",
+        texto: pedida
+          ? `Mesa ${mesa.numero} pediu a conta.`
+          : `Conta da mesa ${mesa.numero} desfeita.`,
+      });
       recarregarPedido();
     } catch (e) {
       setRecado({ tipo: "erro", texto: (e as Error).message });
@@ -271,6 +287,7 @@ export default function PaginaPedido() {
             {!gestao && jaPedidos.length > 0 && (
               <p className="text-sm text-tinta-suave">Para cancelar um item, chame o gerente.</p>
             )}
+            {mesa.estado === "ocupada" && <ContaDaMesa mesa={mesa} aoPedirConta={pedirConta} />}
           </section>
         </div>
       </div>

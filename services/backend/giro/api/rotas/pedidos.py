@@ -18,10 +18,13 @@ from giro.api.deps import (
     restaurante_permitido,
 )
 from giro.banco import agora
+from giro.dominio.mesa import TransicaoInvalida
 from giro.esquemas import (
     CancelamentoEntrada,
+    ContaEntrada,
     ItemCozinhaSaida,
     ItemPedidoSaida,
+    MesaSalao,
     PedidoEntrada,
     PedidoMesaSaida,
 )
@@ -102,6 +105,21 @@ def lancar_pedido(
         linhas.append((item, linha.quantidade, observacao))
     servico.registrar_pedido(db, mesa, linhas, usuario.id, agora())
     return pedido_da_mesa(db, mesa)
+
+
+@router.post("/mesas/{mesa_id}/conta")
+def pedir_conta(
+    mesa_id: int, dados: ContaEntrada, db: Db, usuario: UsuarioAtual, servico: Servico
+) -> MesaSalao:
+    """A mesa pediu a conta: o salão mostra quando ela deve vagar. `pedida=false` desfaz."""
+    mesa = _mesa(db, mesa_id, usuario)
+    try:
+        servico.pedir_conta(db, mesa, dados.pedida, agora())
+    except TransicaoInvalida as erro:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"a mesa {mesa.numero} não está ocupada"
+        ) from erro
+    return mesas_salao(db, [mesa])[0]
 
 
 @router.post("/pedidos/{pedido_id}/pronto")

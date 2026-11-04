@@ -5,7 +5,14 @@ import { useCallback, useState } from "react";
 import { api } from "@/lib/api";
 import { useDados } from "@/lib/dados";
 import { reais } from "@/lib/resultados";
-import type { Periodo, ResultadosCardapio } from "@/lib/tipos";
+import type {
+  Combinacao,
+  MatrizCategoria,
+  Periodo,
+  Quadrante,
+  ResultadosCardapio,
+  TempoDoItem,
+} from "@/lib/tipos";
 
 import { quando } from "./numeros";
 
@@ -210,6 +217,13 @@ export function CardapioDoPeriodo({
               </table>
             </div>
           </div>
+
+          <MatrizDeLucro matrizes={dados.matrizes} />
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <QuemPedeTambemPede combinacoes={dados.combinacoes} />
+            <TempoDeCozinha tempos={dados.tempos} />
+          </div>
         </>
       )}
     </section>
@@ -234,6 +248,175 @@ function Numero({
         {valor}
       </dd>
       <dd className="text-xs text-tinta-suave">{children}</dd>
+    </div>
+  );
+}
+
+const QUADRANTES: { chave: Quadrante; nome: string; regra: string; fazer: string }[] = [
+  {
+    chave: "estrela",
+    nome: "Estrela",
+    regra: "Vende muito e lucra bem",
+    fazer: "Manter como está e destacar no cardápio.",
+  },
+  {
+    chave: "burro_de_carga",
+    nome: "Burro de carga",
+    regra: "Vende muito, lucra pouco",
+    fazer: "Subir um pouco o preço ou baratear a receita.",
+  },
+  {
+    chave: "quebra_cabeca",
+    nome: "Quebra-cabeça",
+    regra: "Lucra bem, pouca gente pede",
+    fazer: "O garçom indicar. Mudar o nome ou a descrição.",
+  },
+  {
+    chave: "cao",
+    nome: "Cão",
+    regra: "Vende pouco e lucra pouco",
+    fazer: "Pensar em tirar do cardápio.",
+  },
+];
+
+/** Engenharia de cardápio: cada prato num dos 4 quadros, dentro da sua categoria. */
+function MatrizDeLucro({ matrizes }: { matrizes: MatrizCategoria[] | null }) {
+  const [escolhida, setEscolhida] = useState(0);
+  if (matrizes === null) {
+    return (
+      <p className="text-sm text-tinta-suave">
+        A matriz de lucro dos pratos aparece só para o dono, que é quem vê o custo.
+      </p>
+    );
+  }
+  if (matrizes.length === 0) {
+    return (
+      <p className="text-sm text-tinta-suave">
+        Informe o custo dos pratos em Cardápio para ver quais vendem muito e lucram pouco.
+      </p>
+    );
+  }
+  const atual = matrizes[Math.min(escolhida, matrizes.length - 1)];
+  return (
+    <div className="flex flex-col gap-3" data-testid="matriz-de-lucro">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-bold">Matriz de lucro dos pratos</h3>
+          <p className="text-sm text-tinta-suave">
+            Só você vê. Compara o quanto cada prato vende com o lucro de cada um, dentro da
+            categoria (lucro médio: {reais(atual.matriz.lucro_medio_centavos)} por prato).
+          </p>
+        </div>
+        {matrizes.length > 1 && (
+          <div role="group" aria-label="Categoria" className="flex flex-wrap gap-2">
+            {matrizes.map((m, i) => (
+              <button
+                key={m.categoria}
+                type="button"
+                aria-pressed={atual === m}
+                onClick={() => setEscolhida(i)}
+                className={`min-h-9 rounded-full border px-3 text-sm font-semibold ${
+                  atual === m ? "border-tinta bg-fundo text-tinta" : "border-linha text-tinta-suave"
+                }`}
+              >
+                {m.categoria}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {QUADRANTES.map((q) => {
+          const itens = atual.matriz.itens.filter((i) => i.quadrante === q.chave);
+          return (
+            <div
+              key={q.chave}
+              data-quadrante={q.chave}
+              className={`flex flex-col gap-1 rounded-xl p-4 ${
+                q.chave === "estrela"
+                  ? "border-2 border-tinta"
+                  : q.chave === "cao"
+                    ? "border border-dashed border-linha"
+                    : "border border-linha"
+              }`}
+            >
+              <h4 className="font-placa text-xl font-extrabold">{q.nome}</h4>
+              <p className="text-xs text-tinta-suave">{q.regra}</p>
+              <p className="font-semibold">
+                {itens.length ? itens.map((i) => i.nome).join(", ") : "Nenhum prato"}
+              </p>
+              {itens.length > 0 && <p className="text-sm">{q.fazer}</p>}
+            </div>
+          );
+        })}
+      </div>
+      {atual.matriz.sem_custo.length > 0 && (
+        <p className="text-sm text-tinta-suave">
+          Sem custo informado, fora da conta: {atual.matriz.sem_custo.join(", ")}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function QuemPedeTambemPede({ combinacoes }: { combinacoes: Combinacao[] }) {
+  if (combinacoes.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-lg font-bold">Quem pede também pede</h3>
+        <p className="text-sm text-tinta-suave">
+          O que essas mesas pedem mais do que as outras, e em quantas delas sai.
+        </p>
+      </div>
+      <ul className="flex flex-col gap-3">
+        {combinacoes.map((c) => (
+          <li key={c.item} className="flex flex-col gap-1">
+            <span className="font-semibold">{c.item}</span>
+            <span className="numeros text-sm text-tinta-suave">
+              {c.acompanha.map((a) => `${a.nome} (${a.percentual}%)`).join(", ")}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-tinta-suave">
+        Use para treinar o garçom: oferecer a bebida e a sobremesa certas com cada prato.
+      </p>
+    </div>
+  );
+}
+
+function minutosTexto(m: number): string {
+  return `${Math.round(m)} min`;
+}
+
+function TempoDeCozinha({ tempos }: { tempos: TempoDoItem[] }) {
+  if (tempos.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="text-lg font-bold">Tempo de cozinha</h3>
+      <ul
+        className="flex flex-col divide-y divide-linha"
+        aria-label="Pratos do mais demorado para o mais rápido"
+      >
+        {tempos.slice(0, 5).map((t) => (
+          <li key={t.nome} className="flex items-baseline justify-between gap-3 py-2">
+            <span className="flex min-w-0 flex-col">
+              <span className="font-semibold">{t.nome}</span>
+              {t.tempo.minutos_fim_de_semana !== null && t.tempo.minutos_semana !== null && (
+                <span className="text-sm text-tinta-suave">
+                  {minutosTexto(t.tempo.minutos_fim_de_semana)} na sexta e no sábado,{" "}
+                  {minutosTexto(t.tempo.minutos_semana)} nos outros dias
+                </span>
+              )}
+            </span>
+            <span className="numeros shrink-0 font-placa text-2xl font-extrabold">
+              {minutosTexto(t.tempo.minutos)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-tinta-suave">Do pedido lançado até a cozinha tocar em Pronto.</p>
     </div>
   );
 }
