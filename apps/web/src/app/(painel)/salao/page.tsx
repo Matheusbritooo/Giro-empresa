@@ -101,6 +101,20 @@ export default function PaginaSalao() {
     }
   }
 
+  async function pedirConta(alvo: { id: number; numero: number }, pedida: boolean) {
+    try {
+      await api(`/api/mesas/${alvo.id}/conta`, { metodo: "POST", corpo: { pedida } });
+      setRecado({
+        tipo: "ok",
+        texto: pedida
+          ? `Mesa ${alvo.numero} pediu a conta.`
+          : `Conta da mesa ${alvo.numero} desfeita.`,
+      });
+    } catch (e) {
+      setRecado({ tipo: "erro", texto: (e as Error).message });
+    }
+  }
+
   function mudarVista(nova: Vista) {
     setVista(nova);
     // Um "Ver no salão" antigo não pode fazer a câmera voar sozinha quando o 3D reabrir.
@@ -247,6 +261,7 @@ export default function PaginaSalao() {
         aoFechar={() => setMesaAberta(null)}
         aoLiberar={liberar}
         linkPedido={(m) => comBusca("/pedido", parametros, { mesa: String(m.id) })}
+        aoPedirConta={pedirConta}
       />
     </>
   );

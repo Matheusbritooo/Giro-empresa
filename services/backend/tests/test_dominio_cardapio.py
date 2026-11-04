@@ -48,13 +48,26 @@ def test_sem_dois_pratos_com_custo_nao_ha_matriz():
     assert matriz_de_lucro([]) is None
 
 
-def test_o_que_combina_com_o_prato():
-    # Visitas: itens pedidos. 10 = lasanha, 20 = refrigerante, 21 = vinho, 30 = tiramisù.
-    visitas = [{10, 20}, {10, 21, 30}, {10, 20, 30}, {10, 21}, {11, 20}]
+def test_o_que_combina_e_o_que_sai_mais_com_o_prato_do_que_com_os_outros():
+    # 10 = lasanha, 11 = parmegiana, 20 = refrigerante, 21 = vinho, 30 = tiramisù.
+    # Refrigerante sai em quase toda mesa; vinho e tiramisù saem mais com a lasanha.
+    visitas = [
+        {10, 20, 21, 30},
+        {10, 21, 30},
+        {10, 20, 21},
+        {10, 20},
+        {11, 20},
+        {11, 20},
+        {11, 20, 30},
+        {11, 20},
+    ]
     resultado = combinacoes(visitas, 10, candidatos={20, 21, 30})
-    assert resultado == [(20, 0.5), (21, 0.5), (30, 0.5)]
-    assert combinacoes(visitas, 10, candidatos={30}) == [(30, 0.5)]
+    # Vinho: 3/4 com lasanha, 3/8 no geral (2x). Tiramisù: 2/4 contra 3/8. Refri: 3/4 contra 7/8.
+    assert resultado == [(21, 0.75), (30, 0.5), (20, 0.75)]
+    assert combinacoes(visitas, 10, candidatos={20}, limite=1) == [(20, 0.75)]
     assert combinacoes(visitas, 99, candidatos={20}) == []
+    # Item que quase nunca sai junto (menos de 10% dessas mesas) não entra.
+    assert combinacoes([{10, 21}] + [{10}] * 10, 10, candidatos={21}) == []
 
 
 def test_tempo_de_cozinha_separa_o_fim_de_semana():

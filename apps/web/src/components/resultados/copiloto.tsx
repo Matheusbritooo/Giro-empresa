@@ -10,7 +10,8 @@ import type { BriefingCopiloto, RespostaCopiloto } from "@/lib/tipos";
 const SUGESTOES = [
   "Qual mesa mais me dá prejuízo?",
   "Que horas o salão lota?",
-  "Quanto eu perdi nas últimas semanas?",
+  "Qual prato eu tiro do cardápio?",
+  "Qual prato demora mais?",
 ];
 
 /** O Copiloto GIRO: o recado antes do turno e uma caixa para perguntar em português. */

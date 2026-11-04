@@ -53,8 +53,25 @@ CARDAPIO: list[tuple[str, bool, list[tuple[str, int, int, str, int]]]] = [
     ]),
 ]  # fmt: skip
 
-# Minutos de cozinha de cada papel (para o "pronto" do histórico).
+# Minutos de cozinha de cada papel (para o "pronto" do histórico) e dos pratos que fogem dele.
 PREPARO = {"entrada": 9, "principal": 18, "sobremesa": 6, "bebida": 3, "garrafa": 3, "cafe": 3}
+PREPARO_DO_PRATO = {
+    "Filé à parmegiana": 25,
+    "Polpettone recheado": 24,
+    "Parmegiana de frango": 22,
+    "Lasanha à bolonhesa": 19,
+    "Ravioli de ricota": 16,
+    "Fettuccine Alfredo": 15,
+    "Nhoque da casa": 14,
+    "Espaguete ao sugo": 12,
+}
+# O que cada prato puxa junto (a demonstração precisa de pares para "quem pede também pede").
+PUXA = {
+    "Lasanha à bolonhesa": ("Vinho da casa (taça)", "Tiramisù"),
+    "Parmegiana de frango": ("Chopp 300 ml", "Pudim de leite"),
+    "Espaguete ao sugo": ("Suco natural", "Petit gâteau"),
+    "Filé à parmegiana": ("Cerveja long neck", "Petit gâteau"),
+}
 
 
 def criar_cardapio(db: Session, restaurante_id: int) -> dict[str, list[tuple[ItemCardapio, int]]]:
@@ -96,11 +113,17 @@ def criar_cardapio(db: Session, restaurante_id: int) -> dict[str, list[tuple[Ite
     return papeis
 
 
-def _um(papeis: dict[str, list[tuple[ItemCardapio, int]]], papel: str, sorteio: random.Random):
+def _um(
+    papeis: dict[str, list[tuple[ItemCardapio, int]]],
+    papel: str,
+    sorteio: random.Random,
+    preferido: str | None = None,
+):
     opcoes = papeis.get(papel, [])
     if not opcoes:
         return None
-    return sorteio.choices([i for i, _ in opcoes], [p for _, p in opcoes])[0]
+    pesos = [p * (4 if i.nome == preferido else 1) for i, p in opcoes]
+    return sorteio.choices([i for i, _ in opcoes], pesos)[0]
 
 
 def pedidos_da_visita(
@@ -130,11 +153,13 @@ def pedidos_da_visita(
     if garrafa:
         pedir(_um(papeis, "garrafa", sorteio), "garrafa", primeiro)
     for pessoa in range(visita.pessoas):
-        pedir(_um(papeis, "principal", sorteio), "principal", primeiro)
+        prato = _um(papeis, "principal", sorteio)
+        pedir(prato, "principal", primeiro)
+        bebida_do_prato, sobremesa_do_prato = PUXA.get(prato.nome if prato else "", (None, None))
         if not (garrafa and pessoa < 3):
-            pedir(_um(papeis, "bebida", sorteio), "bebida", primeiro)
+            pedir(_um(papeis, "bebida", sorteio, bebida_do_prato), "bebida", primeiro)
         if sorteio.random() < 0.28:
-            pedir(_um(papeis, "sobremesa", sorteio), "sobremesa", fim)
+            pedir(_um(papeis, "sobremesa", sorteio, sobremesa_do_prato), "sobremesa", fim)
         if sorteio.random() < 0.15:
             pedir(_um(papeis, "cafe", sorteio), "cafe", fim)
 
@@ -142,7 +167,8 @@ def pedidos_da_visita(
     lotado = visita.sentou_em.astimezone(FUSO).weekday() in (4, 5)
     linhas = []
     for item, quantidade, papel, quando in contagem.values():
-        minutos = sorteio.uniform(0.6, 1.4) * PREPARO[papel] * (1.35 if lotado else 1.0)
+        base = PREPARO_DO_PRATO.get(item.nome, PREPARO[papel])
+        minutos = sorteio.uniform(0.75, 1.25) * base * (1.35 if lotado else 1.0)
         pronto = quando + timedelta(minutes=minutos)
         linhas.append(
             {

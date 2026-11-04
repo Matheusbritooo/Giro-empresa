@@ -89,15 +89,30 @@ def matriz_de_lucro(vendas: list[Venda]) -> Matriz | None:
     return Matriz(itens, lucro_medio, sorted(v.nome for v in vendidas if v.custo_centavos is None))
 
 
-def combinacoes(visitas: list[set[int]], alvo: int, candidatos: set[int], limite: int = 3):
-    """Das visitas que pediram `alvo`, quantas (de 0 a 1) também pediram cada candidato.
+def combinacoes(
+    visitas: list[set[int]],
+    alvo: int,
+    candidatos: set[int],
+    limite: int = 3,
+    minimo: float = 0.1,
+) -> list[tuple[int, float]]:
+    """O que as mesas que pediram `alvo` pedem mais do que as outras mesas.
 
-    Devolve [(item, fração)] do mais comum para o menos comum."""
+    Refrigerante sai com quase tudo; o que interessa ao garçom é o que sai *mais* com este
+    prato. Ordena pelo quanto a fração com o prato passa da fração geral (só itens que
+    aparecem em pelo menos `minimo` dessas mesas). Devolve [(item, fração com o prato)]."""
     com_alvo = [v for v in visitas if alvo in v]
     if not com_alvo:
         return []
-    conta = Counter(i for v in com_alvo for i in v if i in candidatos and i != alvo)
-    return [(item, n / len(com_alvo)) for item, n in conta.most_common(limite)]
+    geral = Counter(i for v in visitas for i in v if i in candidatos)
+    junto = Counter(i for v in com_alvo for i in v if i in candidatos and i != alvo)
+    pares = []
+    for item, n in junto.items():
+        fracao = n / len(com_alvo)
+        if fracao >= minimo:
+            pares.append((item, fracao, fracao / (geral[item] / len(visitas))))
+    pares.sort(key=lambda p: (-p[2], -p[1], p[0]))
+    return [(item, fracao) for item, fracao, _ in pares[:limite]]
 
 
 @dataclass(frozen=True)

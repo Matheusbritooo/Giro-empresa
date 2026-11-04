@@ -48,6 +48,9 @@ export interface Mesa {
   // Pedido da visita em curso: quanto a mesa já gastou e quantos itens estão na cozinha.
   total_pedido_centavos: number;
   itens_na_cozinha: number;
+  // Pediu a conta: quando o garçom avisou e quando a mesa deve vagar.
+  conta_pedida_em?: string | null;
+  vaga_prevista_em?: string | null;
 }
 
 export interface Alerta {
@@ -301,6 +304,36 @@ export interface MesaCardapio {
   bebida_quantidade: number;
 }
 
+export type Quadrante = "estrela" | "burro_de_carga" | "quebra_cabeca" | "cao";
+
+export interface ItemMatriz {
+  item_id: number;
+  nome: string;
+  quantidade: number;
+  lucro_unidade_centavos: number;
+  quadrante: Quadrante;
+}
+
+export interface MatrizCategoria {
+  categoria: string;
+  matriz: { itens: ItemMatriz[]; lucro_medio_centavos: number; sem_custo: string[] };
+}
+
+export interface Combinacao {
+  item: string;
+  acompanha: { nome: string; percentual: number }[];
+}
+
+export interface TempoDoItem {
+  nome: string;
+  tempo: {
+    minutos: number;
+    minutos_fim_de_semana: number | null;
+    minutos_semana: number | null;
+    amostras: number;
+  };
+}
+
 export interface ResultadosCardapio {
   periodo: Periodo;
   dia: string;
@@ -310,4 +343,7 @@ export interface ResultadosCardapio {
   ticket_real_centavos: number | null;
   itens: ItemVendido[];
   mesas: MesaCardapio[];
+  matrizes: MatrizCategoria[] | null; // só o dono recebe
+  combinacoes: Combinacao[];
+  tempos: TempoDoItem[];
 }

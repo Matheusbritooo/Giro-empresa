@@ -7,6 +7,7 @@ import {
   SALAO_VAZIO,
   situacao,
   tempoDecorrido,
+  textoDaConta,
 } from "./salao";
 import type { Alerta, Camera, Mesa, Salao } from "./tipos";
 
@@ -105,6 +106,28 @@ describe("situacao da mesa", () => {
       estado_desde: minutosAtras(37),
     });
     expect(situacao(ocupada, AGORA, 300).desde).toBe(minutosAtras(40));
+  });
+
+  it("mesa que pediu a conta continua ocupada e avisa quando deve vagar", () => {
+    const conta = mesa({
+      estado: "ocupada",
+      sentou_em: minutosAtras(50),
+      conta_pedida_em: minutosAtras(2),
+      vaga_prevista_em: new Date(AGORA + 8 * 60_000).toISOString(),
+    });
+    expect(situacao(conta, AGORA, 300)).toMatchObject({
+      tom: "ocupada",
+      curto: "Conta",
+      rotulo: "Pediu a conta",
+      desde: minutosAtras(50),
+    });
+    expect(situacao(conta, AGORA, 300).descricao).toMatch(
+      /pediu a conta, deve vagar por volta das \d\d:\d\d$/,
+    );
+    expect(textoDaConta(conta)).toMatch(
+      /^Pediu a conta às \d\d:\d\d\. Deve vagar por volta das \d\d:\d\d\.$/,
+    );
+    expect(textoDaConta(mesa({ estado: "ocupada" }))).toBe("");
   });
 
   it("mesa para limpar conta o tempo desde que saíram", () => {

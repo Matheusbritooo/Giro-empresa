@@ -67,6 +67,13 @@ test("garçom lança o pedido, a cozinha marca pronto e o salão mostra o total"
   const detalhe = page.getByRole("dialog");
   await expect(detalhe).toContainText(`R$ ${(antes + 131).toLocaleString("pt-BR")}`);
   await expect(detalhe).toContainText("itens na cozinha"); // as 2 lasanhas
+
+  // A mesa pede a conta: o salão mostra quando ela deve vagar. Tocou sem querer? Desfaz.
+  await detalhe.getByRole("button", { name: "Pediu a conta" }).click();
+  await expect(detalhe.getByTestId("conta-pedida")).toContainText("Deve vagar por volta das");
+  await expect(page.getByTestId(`mesa-${mesa}`)).toContainText("Conta");
+  await detalhe.getByRole("button", { name: "Desfazer" }).click();
+  await expect(detalhe.getByRole("button", { name: "Pediu a conta" })).toBeVisible();
 });
 
 test("gerente cancela item com motivo e marca o que acabou", async ({ page }, info) => {
@@ -112,6 +119,21 @@ test("dono vê o prato da semana e o que cada mesa mais pediu", async ({ page })
   const cardapio = page.getByTestId("cardapio-periodo");
   await expect(cardapio.getByTestId("prato-do-periodo")).toHaveText("Lasanha à bolonhesa");
   await expect(cardapio.getByRole("table")).toContainText("Comida favorita");
-  await cardapio.getByRole("button", { name: "Bebida" }).click();
+  await cardapio.getByRole("button", { name: "Bebida", exact: true }).click();
   await expect(cardapio.getByRole("list", { name: /Bebidas mais pedidas/ })).toBeVisible();
+
+  // Matriz de lucro (só o dono vê), o que sai junto e o tempo de cozinha.
+  const matriz = cardapio.getByTestId("matriz-de-lucro");
+  await expect(matriz.locator('[data-quadrante="estrela"]')).toContainText("Lasanha à bolonhesa");
+  await expect(cardapio).toContainText("Quem pede também pede");
+  await expect(cardapio).toContainText("na sexta e no sábado");
+});
+
+test("gerente vê o cardápio do período, mas a matriz de lucro é só do dono", async ({ page }) => {
+  await entrar(page, "gerente@cantina.demo");
+  await expect(page).toHaveURL(/\/salao$/);
+  await page.goto("/resultados?periodo=semana");
+  const cardapio = page.getByTestId("cardapio-periodo");
+  await expect(cardapio).toContainText("A matriz de lucro dos pratos aparece só para o dono");
+  await expect(cardapio.getByTestId("matriz-de-lucro")).toHaveCount(0);
 });
