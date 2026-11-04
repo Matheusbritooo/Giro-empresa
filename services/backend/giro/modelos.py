@@ -187,8 +187,11 @@ class ItemCardapio(Base):
     nome: Mapped[str] = mapped_column(String(80))
     descricao: Mapped[str | None] = mapped_column(String(200))
     preco_centavos: Mapped[int]
-    # Quanto custa fazer o prato (opcional). Só o dono vê.
+    # Quanto custa fazer o prato (opcional). Só o dono vê. Com ficha técnica, é a ficha que
+    # calcula, e acompanha o preço das compras.
     custo_centavos: Mapped[int | None]
+    # Tempero, óleo, guarnição pequena: entra no custo pela ficha, sem controle de estoque.
+    custo_outros_centavos: Mapped[int | None]
     ativo: Mapped[bool] = mapped_column(default=True)
     # "Tem hoje": a cozinha marca que acabou e o garçom vê na hora.
     disponivel: Mapped[bool] = mapped_column(default=True)
@@ -219,3 +222,63 @@ class ItemPedido(Base):
     motivo_cancelamento: Mapped[str | None] = mapped_column(String(60))
 
     mesa: Mapped[Mesa] = relationship()
+
+
+class Insumo(Base):
+    """Ingrediente controlado no estoque: carne, queijo, massa, bebida. Quantidade na unidade
+    base (grama, mililitro ou unidade) e preço por quilo, litro ou unidade. Nunca é apagado:
+    sai com `ativo=False`, para o histórico continuar certo."""
+
+    __tablename__ = "insumos"
+    __table_args__ = (UniqueConstraint("restaurante_id", "nome"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"), index=True)
+    nome: Mapped[str] = mapped_column(String(60))
+    unidade: Mapped[str] = mapped_column(String(2))  # g, ml ou un
+    # Como se compra: "pacote de 1 kg" = 1000 g. Arredonda a lista de compras.
+    embalagem_quantidade: Mapped[int] = mapped_column(default=1)
+    embalagem_nome: Mapped[str | None] = mapped_column(String(40))
+    onde_compra: Mapped[str | None] = mapped_column(String(40))  # "Açougue", "Atacado"
+    # Custo médio ponderado das compras, em centavos por kg, litro ou unidade.
+    custo_centavos: Mapped[int | None]
+    # Soma dos movimentos. Fica guardado para a tela não somar o livro todo a cada abertura.
+    saldo: Mapped[int] = mapped_column(default=0, server_default="0")
+    ativo: Mapped[bool] = mapped_column(default=True)
+    criado_em: Mapped[datetime] = mapped_column(default=agora)
+
+
+class FichaTecnica(Base):
+    """Uma linha da receita de um prato: quanto de um ingrediente vai em uma porção."""
+
+    __tablename__ = "fichas_tecnicas"
+    __table_args__ = (UniqueConstraint("item_id", "insumo_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"), index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("itens_cardapio.id"), index=True)
+    insumo_id: Mapped[int] = mapped_column(ForeignKey("insumos.id"))
+    quantidade: Mapped[int]  # por porção, na unidade base do ingrediente
+
+    insumo: Mapped[Insumo] = relationship()
+
+
+class MovimentoEstoque(Base):
+    """Uma linha do livro do estoque: compra, venda, estorno, perda ou contagem. O saldo do
+    ingrediente é a soma delas. Nada se apaga: quem errou faz outro lançamento."""
+
+    __tablename__ = "movimentos_estoque"
+    __table_args__ = (Index("ix_movimentos_estoque_restaurante_em", "restaurante_id", "em"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"))
+    insumo_id: Mapped[int] = mapped_column(ForeignKey("insumos.id"), index=True)
+    tipo: Mapped[str] = mapped_column(String(20))
+    quantidade: Mapped[int]  # com sinal: entrada positiva, saída negativa
+    saldo_depois: Mapped[int]
+    valor_centavos: Mapped[int | None]  # valor da nota, nas compras
+    # Venda e estorno de um prato apontam para o item do pedido.
+    item_pedido_id: Mapped[int | None] = mapped_column(ForeignKey("itens_pedido.id"), index=True)
+    motivo: Mapped[str | None] = mapped_column(String(30))  # perda: motivo da lista
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    em: Mapped[datetime]

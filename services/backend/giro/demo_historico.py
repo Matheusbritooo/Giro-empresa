@@ -14,12 +14,12 @@ import random
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import delete, insert, select
+from sqlalchemy import delete, insert, or_, select
 from sqlalchemy.orm import Session
 
 from giro.demo_cardapio import criar_cardapio, pedidos_da_visita
 from giro.dominio.indicadores import FUSO, intervalo_da_noite
-from giro.modelos import Alerta, EventoMesa, ItemPedido, Mesa, Ocupacao
+from giro.modelos import Alerta, EventoMesa, ItemPedido, Mesa, MovimentoEstoque, Ocupacao
 
 # Turmas por noite em cada dia da semana (segunda = 0, fechado).
 TURMAS = {1: 20, 2: 22, 3: 30, 4: 52, 5: 56, 6: 32}
@@ -156,6 +156,19 @@ def refazer_historico(db: Session, restaurante_id: int, hoje: date, semanas: int
     inicio_de_hoje, _ = intervalo_da_noite(hoje)
     antigas = select(Ocupacao.id).where(
         Ocupacao.restaurante_id == restaurante_id, Ocupacao.sentou_em < inicio_de_hoje
+    )
+    # O livro do estoque das noites passadas é refeito junto (giro/demo_estoque.py).
+    pedidos_antigos = select(ItemPedido.id).where(
+        ItemPedido.restaurante_id == restaurante_id, ItemPedido.ocupacao_id.in_(antigas)
+    )
+    db.execute(
+        delete(MovimentoEstoque).where(
+            MovimentoEstoque.restaurante_id == restaurante_id,
+            or_(
+                MovimentoEstoque.em < inicio_de_hoje,
+                MovimentoEstoque.item_pedido_id.in_(pedidos_antigos),
+            ),
+        )
     )
     # Pedidos, alertas e eventos apontam para a visita: saem junto com ela.
     for tabela in (ItemPedido, Alerta, EventoMesa):

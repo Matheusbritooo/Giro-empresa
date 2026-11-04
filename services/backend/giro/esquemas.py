@@ -441,6 +441,8 @@ class ItemCardapioSaida(Saida):
     custo_centavos: int | None  # só o dono recebe; para os outros vem vazio
     ativo: bool
     disponivel: bool
+    # Com ficha técnica, o custo é calculado pela ficha e não se digita no cardápio.
+    custo_pela_ficha: bool = False
 
 
 class CardapioSaida(BaseModel):
@@ -579,3 +581,114 @@ class ResultadosCardapioSaida(Saida):
 
 class ContaEntrada(BaseModel):
     pedida: bool = True  # False desfaz (tocou sem querer)
+
+
+# Estoque (etapa 3 do cardápio). Quantidade na unidade base do ingrediente: g, ml ou un.
+
+UnidadeInsumo = Literal["g", "ml", "un"]
+Quantidade = Annotated[int, Field(ge=1, le=10_000_000)]  # até 10 t, 10 mil litros
+# Lista fechada, como a do cancelamento: vira número no fim do mês.
+MotivoPerda = Literal["Venceu", "Estragou", "Caiu ou queimou", "Prato voltou", "Outro"]
+
+
+class InsumoEntrada(BaseModel):
+    nome: str = Field(min_length=2, max_length=60)
+    unidade: UnidadeInsumo
+    embalagem_quantidade: Quantidade = 1
+    embalagem_nome: str | None = Field(default=None, max_length=40)
+    onde_compra: str | None = Field(default=None, max_length=40)
+    custo_centavos: Centavos | None = None  # por kg, litro ou unidade
+    # "Tem agora": vira a primeira contagem do ingrediente.
+    saldo: int | None = Field(default=None, ge=0, le=10_000_000)
+
+
+class InsumoAtualizacao(BaseModel):
+    nome: str | None = Field(default=None, min_length=2, max_length=60)
+    embalagem_quantidade: Quantidade | None = None
+    embalagem_nome: str | None = Field(default=None, max_length=40)
+    onde_compra: str | None = Field(default=None, max_length=40)
+    custo_centavos: Centavos | None = None
+    ativo: bool | None = None
+
+
+class InsumoSaida(Saida):
+    id: int
+    nome: str
+    unidade: UnidadeInsumo
+    embalagem_quantidade: int
+    embalagem_nome: str | None
+    onde_compra: str | None
+    custo_centavos: int | None  # gerente e dono recebem; a equipe, vazio
+    saldo: int
+    ativo: bool
+
+
+class LinhaFicha(BaseModel):
+    insumo_id: int
+    quantidade: int = Field(ge=1, le=100_000)  # por porção
+
+
+class FichaEntrada(BaseModel):
+    linhas: list[LinhaFicha] = Field(max_length=30)  # vazia tira a ficha do prato
+    # Só o dono informa. Fora do pedido, fica como está.
+    custo_outros_centavos: Centavos | None = None
+
+
+class FichaSaida(BaseModel):
+    item_id: int
+    linhas: list[LinhaFicha]
+    custo_outros_centavos: int | None  # só o dono recebe
+    custo_centavos: int | None  # custo de uma porção pela ficha; só o dono recebe
+
+
+class EstoqueSaida(BaseModel):
+    insumos: list[InsumoSaida]
+    fichas: list[FichaSaida]
+    mostra_valores: bool  # gerente e dono: preço dos ingredientes e valor das compras
+    mostra_custo: bool  # dono: custo dos pratos
+
+
+class CompraEntrada(BaseModel):
+    insumo_id: int
+    quantidade: Quantidade
+    valor_centavos: int | None = Field(default=None, ge=0, le=100_000_000)  # valor da nota
+
+
+class PerdaEntrada(BaseModel):
+    insumo_id: int
+    quantidade: Quantidade
+    motivo: MotivoPerda
+
+
+class LinhaContagem(BaseModel):
+    insumo_id: int
+    quantidade: int = Field(ge=0, le=10_000_000)  # o que foi contado
+
+
+class ContagemEntrada(BaseModel):
+    itens: list[LinhaContagem] = Field(min_length=1, max_length=200)
+
+
+class DiferencaSaida(BaseModel):
+    insumo_id: int
+    nome: str
+    unidade: UnidadeInsumo
+    antes: int
+    contado: int
+    diferenca: int  # negativa: tinha menos do que a conta
+
+
+class ContagemSaida(BaseModel):
+    diferencas: list[DiferencaSaida]
+
+
+class MovimentoSaida(BaseModel):
+    id: int
+    tipo: Literal["compra", "venda", "estorno", "perda", "contagem"]
+    quantidade: int
+    saldo_depois: int
+    valor_centavos: int | None  # só gerente e dono recebem
+    motivo: str | None
+    prato: str | None  # venda e estorno: o prato do pedido
+    quem: str | None  # nome de quem lançou (equipe do restaurante)
+    em: datetime
