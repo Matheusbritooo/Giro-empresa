@@ -23,6 +23,9 @@ Cliente: restaurante de bairro com 6 a 20 mesas, na região oeste da Grande São
 | Pedido na mesa | o primeiro item lançado conta como atendimento (tira o alerta); em mesa livre ou suja, abre a visita já atendida | `MaquinaMesa.registrar_pedido` em `giro/dominio/mesa.py` |
 | Gestão do cardápio | item nunca é apagado (`ativo=False`); nome e preço copiados no pedido; cancelar só gerente e dono, com motivo da lista; custo só o dono vê e muda; "acabou" qualquer um da equipe marca | `giro/api/rotas/cardapio.py`, `pedidos.py` |
 | Ticket real | gasto médio por pessoa das visitas com pedido e gente contada; vale com 5 ou mais visitas, senão o de Ajustes | `giro/servicos/resultados.py` (`MINIMO_VISITAS_TICKET_REAL`) |
+| Matriz de lucro | Kasavana e Smith dentro de cada categoria: vende muito = fatia acima de 70% da fatia igual; lucra bem = lucro por unidade (preço pago menos custo) acima da média ponderada; só o dono vê, nem o Copiloto do gerente recebe | `giro/dominio/cardapio.py` |
+| Quem pede também pede | acompanhamento = bebida ou item de outra categoria com menos de 60% do preço do prato; ordem pelo quanto sai mais com o prato do que no geral, mínimo 10% das mesas | `giro/dominio/cardapio.py`, `giro/servicos/cardapio.py` |
+| Pediu a conta | a mesa segue ocupada e mostra quando deve vagar: mediana de (saiu − conta) das últimas 4 semanas, 10 min com menos de 5 contas | `ocupacoes.conta_pedida_em`, `previsao_de_vaga` |
 | Assinatura e ativação | R$ 299/mês e R$ 290 (Fase 4) | ainda não está no código |
 | Custo de nuvem orçado | R$ 100 por cliente/mês (visão R$ 65) | anexo A.1 do TCM |
 
@@ -133,3 +136,4 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - **Desistência**: cliente que sentou e foi embora sem ser atendido (`ocupacoes.sem_atendimento`).
 - **Acabou**: item que a cozinha marcou como sem estoque hoje (`itens_cardapio.disponivel = false`). O garçom vê riscado e não consegue lançar.
 - **Ticket real**: o que cada pessoa gastou de verdade, pelos pedidos lançados (o "ticket médio" de Ajustes é só a estimativa).
+- **Matriz de lucro**: estrela (vende muito e lucra bem), burro de carga (vende muito, lucra pouco), quebra-cabeça (lucra bem, pouca gente pede) e cão (vende pouco e lucra pouco).
