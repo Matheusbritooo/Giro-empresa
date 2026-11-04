@@ -212,7 +212,7 @@ Para mostrar o painel para a banca ou para um cliente sem instalar nada, o repos
 
 1. Junte o PR com a pasta `infra/render` na `main`.
 2. Crie a conta no Render com **Sign in with GitHub** e libere o acesso ao repositório `Giro-empresa`.
-3. No Render, clique em **New > Blueprint**, escolha o repositório e a branch `main`. Ele lê o `render.yaml` e mostra o serviço `giro-demo` e o banco `giro-demo-banco`.
+3. No Render, clique em **New > Blueprint**, escolha o repositório e a branch `main`. Ele lê o `render.yaml` e mostra o serviço `giro-demo` (o banco é um arquivo dentro dele, não aparece à parte).
 4. Preencha `GIRO_SENHA_DEMO` com a senha de todos os acessos de demonstração (mínimo 10 letras) e clique em **Deploy Blueprint**.
 5. Em 5 a 10 minutos o endereço aparece no topo do serviço `giro-demo`. Entre com `marcos@cantina.demo` (dono), `gerente@cantina.demo` ou `equipe@cantina.demo` e a senha do passo 4.
 
@@ -222,7 +222,7 @@ O que saber do plano grátis:
 
 - **Dorme depois de 15 minutos sem visita.** A primeira visita depois disso leva cerca de 1 minuto e o salão recomeça do zero. Antes da apresentação, abra o link uns 2 minutos antes.
 - **Resultados de demonstração.** Cada vez que acorda, as noites passadas viram as 4 semanas de demonstração (as mesmas de `giro/demo_historico.py`); a noite de hoje é a do simulador ao vivo.
-- **O banco grátis expira em 30 dias.** O Render avisa por e-mail. Dá para apagar o banco e rodar o Blueprint de novo, ou passar o banco para um plano pago.
+- **Banco em arquivo, sem prazo.** A demonstração guarda tudo num arquivo SQLite dentro do serviço, que some quando ele dorme e é refeito quando acorda. Não há banco à parte para vencer nem para pagar.
 - **Servidor fora do Brasil e só dados simulados.** Câmera e cliente de verdade vão para um servidor próprio (próxima seção). A visão e o aviso no celular ficam desligados nessa demonstração: não cabem nos 512 MB do plano grátis.
 
 ## Colocar no ar

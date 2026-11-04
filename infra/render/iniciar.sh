@@ -4,8 +4,15 @@
 set -euo pipefail
 
 : "${GIRO_SEGREDO_JWT:?defina GIRO_SEGREDO_JWT}"
-: "${GIRO_DATABASE_URL:?defina GIRO_DATABASE_URL}"
 export PORT="${PORT:-10000}"
+
+# O banco da demonstração é um arquivo dentro do contêiner (SQLite): não vence, não custa e
+# some quando o serviço dorme, o que não faz falta, porque a cada vez que acorda o salão
+# começa do zero e o histórico é refeito. Vale sempre, mesmo se o Render ainda tiver a
+# GIRO_DATABASE_URL do Postgres grátis antigo, que expira.
+BANCO=/tmp/giro-demo.db
+rm -f "$BANCO"
+export GIRO_DATABASE_URL="sqlite:///$BANCO"
 
 # Token da câmera do simulador: sai do segredo, então é igual a cada reinício e nunca público.
 GIRO_TOKEN_CAMERA_DEMO="cam_$(printf '%s:camera-demo' "$GIRO_SEGREDO_JWT" | sha256sum | cut -c1-32)"
