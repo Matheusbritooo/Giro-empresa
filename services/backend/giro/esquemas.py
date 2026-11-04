@@ -1,7 +1,7 @@
 """Formato dos dados que entram e saem da API (e das mensagens ao vivo)."""
 
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -137,6 +137,9 @@ class MesaSalao(BaseModel):
     atendida_em: datetime | None = None
     saiu_em: datetime | None = None
     pessoas: int = 0
+    # Pedido da visita em curso: quanto a mesa já gastou e quantos itens ainda na cozinha.
+    total_pedido_centavos: int = 0
+    itens_na_cozinha: int = 0
 
 
 class AlertaSaida(BaseModel):
@@ -316,6 +319,8 @@ class IndicadoresSaida(Saida):
     parada_total_seg: float
     hora_pico: int | None
     ticket_medio_centavos: int
+    # True quando o ticket veio dos pedidos lançados (e não do valor de Ajustes).
+    ticket_real: bool = False
     perdido_desistencias_centavos: int
     perdido_mesa_parada_centavos: int
     perdido_total_centavos: int
@@ -378,3 +383,148 @@ class CenarioSaida(Saida):
     parada_media_nova_seg: float | None
     ganho_centavos: int
     ganho_mes_centavos: int
+
+
+# Cardápio e pedidos
+
+Centavos = Annotated[int, Field(ge=0, le=1_000_000)]
+
+
+class CategoriaEntrada(BaseModel):
+    nome: str = Field(min_length=2, max_length=60)
+    ordem: int = Field(default=0, ge=0, le=999)
+    bebida: bool = False
+
+
+class CategoriaAtualizacao(BaseModel):
+    nome: str | None = Field(default=None, min_length=2, max_length=60)
+    ordem: int | None = Field(default=None, ge=0, le=999)
+    bebida: bool | None = None
+    ativa: bool | None = None
+
+
+class CategoriaSaida(Saida):
+    id: int
+    nome: str
+    ordem: int
+    bebida: bool
+    ativa: bool
+
+
+class ItemCardapioEntrada(BaseModel):
+    categoria_id: int
+    nome: str = Field(min_length=2, max_length=80)
+    descricao: str | None = Field(default=None, max_length=200)
+    preco_centavos: int = Field(ge=1, le=1_000_000)
+    custo_centavos: Centavos | None = None
+
+
+class ItemCardapioAtualizacao(BaseModel):
+    categoria_id: int | None = None
+    nome: str | None = Field(default=None, min_length=2, max_length=80)
+    descricao: str | None = Field(default=None, max_length=200)
+    preco_centavos: int | None = Field(default=None, ge=1, le=1_000_000)
+    custo_centavos: Centavos | None = None
+    ativo: bool | None = None
+    disponivel: bool | None = None
+
+
+class ItemCardapioSaida(Saida):
+    id: int
+    categoria_id: int
+    nome: str
+    descricao: str | None
+    preco_centavos: int
+    custo_centavos: int | None  # só o dono recebe; para os outros vem vazio
+    ativo: bool
+    disponivel: bool
+
+
+class CardapioSaida(BaseModel):
+    categorias: list[CategoriaSaida]
+    itens: list[ItemCardapioSaida]
+    mostra_custo: bool
+    # Os itens que mais saíram nas últimas 4 semanas: ficam no topo para o garçom.
+    mais_pedidos: list[int] = []
+
+
+class DisponivelEntrada(BaseModel):
+    disponivel: bool
+
+
+class LinhaPedidoEntrada(BaseModel):
+    item_id: int
+    quantidade: int = Field(ge=1, le=50)
+    observacao: str | None = Field(default=None, max_length=80)
+
+
+class PedidoEntrada(BaseModel):
+    itens: list[LinhaPedidoEntrada] = Field(min_length=1, max_length=40)
+
+
+# Lista fechada: o motivo vira número nos relatórios e não abre espaço para dado pessoal.
+MotivoCancelamento = Literal[
+    "Cliente desistiu", "Lançado errado", "Demorou demais", "Prato voltou", "Outro"
+]
+
+
+class CancelamentoEntrada(BaseModel):
+    motivo: MotivoCancelamento
+
+
+class ItemPedidoSaida(Saida):
+    id: int
+    mesa_id: int
+    ocupacao_id: int
+    item_id: int
+    nome: str
+    preco_unit_centavos: int
+    quantidade: int
+    observacao: str | None
+    lancado_em: datetime
+    pronto_em: datetime | None
+    cancelado_em: datetime | None
+    motivo_cancelamento: str | None
+
+
+class ItemCozinhaSaida(ItemPedidoSaida):
+    mesa_numero: int
+
+
+class PedidoMesaSaida(BaseModel):
+    """O pedido da visita em curso de uma mesa (vazio se a mesa está livre)."""
+
+    mesa: MesaSalao
+    itens: list[ItemPedidoSaida]
+    total_centavos: int
+
+
+class ItemVendidoSaida(Saida):
+    item_id: int
+    nome: str
+    categoria: str
+    bebida: bool
+    quantidade: int
+    receita_centavos: int
+
+
+class MesaCardapioSaida(Saida):
+    numero: int
+    visitas: int
+    pessoas: int
+    total_centavos: int
+    prato: str | None
+    prato_quantidade: int
+    bebida: str | None
+    bebida_quantidade: int
+
+
+class ResultadosCardapioSaida(Saida):
+    periodo: str
+    dia: date
+    faturamento_centavos: int
+    visitas_com_pedido: int
+    pessoas: int
+    ticket_real_centavos: int | None
+    itens: list[ItemVendidoSaida]
+    mesas: list[MesaCardapioSaida]

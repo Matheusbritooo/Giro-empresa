@@ -109,6 +109,8 @@ export function salaoNoInstante(replay: Replay, t: number): { mesas: Mesa[]; ale
         atual && atual.atendida !== null && atual.atendida <= t ? iso(atual.atendida) : null,
       saiu_em: atual && atual.saiu !== null && atual.saiu <= t ? iso(atual.saiu) : null,
       pessoas: atual && estado !== "para_limpar" ? atual.pessoas : 0,
+      total_pedido_centavos: 0,
+      itens_na_cozinha: 0,
     });
 
     if (atual && estado === "aguardando" && t - atual.sentou >= limiteMs) {

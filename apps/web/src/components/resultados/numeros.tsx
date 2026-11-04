@@ -129,8 +129,12 @@ export function FicouNaMesa({
             <span className="numeros whitespace-nowrap">{reais(atual.perdido_total_centavos)}</span>
           </div>
           <p className="text-xs text-tinta-suave">
-            Estimativa com {reais(atual.ticket_medio_centavos)} por pessoa.{" "}
-            {podeAjustar ? (
+            {atual.ticket_real
+              ? `Estimativa com ${reais(atual.ticket_medio_centavos)} por pessoa, o que as mesas gastaram de verdade no período. `
+              : `Estimativa com ${reais(atual.ticket_medio_centavos)} por pessoa. `}
+            {atual.ticket_real ? (
+              "O valor de Ajustes só entra quando há poucos pedidos lançados."
+            ) : podeAjustar ? (
               <Link href={linkAjustes} className="underline underline-offset-2">
                 Mudar o valor em Ajustes
               </Link>

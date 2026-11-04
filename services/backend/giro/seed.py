@@ -1,10 +1,11 @@
 """Cria dados de demonstração: a Cantina do Marcos (persona do TCM) com 14 mesas.
 
-Uso: uv run python -m giro.seed [--zerar-salao]
+Uso: uv run python -m giro.seed [--zerar-salao] [--refazer-historico]
 Pode rodar de novo sem duplicar nada. Em produção só roda no servidor de demonstração
 (GIRO_DEMO=1), com a senha de GIRO_SENHA_DEMO e o token de GIRO_TOKEN_CAMERA_DEMO.
 --zerar-salao deixa todas as mesas livres, para a demonstração começar do zero ao subir.
-Também cria 4 semanas de histórico (giro/demo_historico.py) para os resultados e o Copiloto.
+Também cria o cardápio da cantina (giro/demo_cardapio.py) e 4 semanas de histórico, com os
+pedidos de cada mesa (giro/demo_historico.py), para os resultados e o Copiloto.
 --refazer-historico troca as noites passadas por esse histórico (servidor de demonstração,
 onde o simulador roda a qualquer hora e as visitas dele não parecem noites de restaurante).
 """
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from giro.banco import agora, criar_engine, criar_sessoes
 from giro.config import Config, obter_config
+from giro.demo_cardapio import criar_cardapio
 from giro.demo_historico import gerar_historico, refazer_historico
 from giro.dominio.indicadores import noite_de
 from giro.dominio.mesa import Estado
@@ -107,6 +109,7 @@ def semear(config: Config | None = None, zerar: bool = False, refazer: bool = Fa
             # Quem criou a demonstração antes dos resultados ganha o histórico agora.
             historico = 0
             if cantina:
+                criar_cardapio(db, cantina.id)  # demonstração criada antes do cardápio
                 criar = refazer_historico if refazer else gerar_historico
                 historico = criar(db, cantina.id, noite_de(agora()))
             db.commit()

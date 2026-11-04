@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ListaAlertas } from "@/components/alertas";
@@ -22,6 +23,7 @@ import { api } from "@/lib/api";
 import { type Conexao, useRelogio, useSalaoAoVivo } from "@/lib/ao-vivo";
 import { prepararSom, tocarAlerta } from "@/lib/avisos";
 import { useRestauranteAlvo } from "@/lib/restaurante";
+import { comBusca } from "@/lib/resultados";
 import { camerasSemSinal, minutosEntre } from "@/lib/salao";
 import { podeGerirMesas, useSessao } from "@/lib/sessao";
 import type { Alerta } from "@/lib/tipos";
@@ -48,6 +50,7 @@ function lerPreferenciaSom(): boolean {
 export default function PaginaSalao() {
   const { sessao } = useSessao();
   const restaurante = useRestauranteAlvo();
+  const parametros = useSearchParams();
   const [somLigado, setSomLigado] = useState(lerPreferenciaSom);
   const [vista, setVista] = useState<Vista>(lerVistaInicial);
   const [com3D, setCom3D] = useState(() => typeof window !== "undefined" && temWebGL());
@@ -243,6 +246,7 @@ export default function PaginaSalao() {
         limiteSeg={limite}
         aoFechar={() => setMesaAberta(null)}
         aoLiberar={liberar}
+        linkPedido={(m) => comBusca("/pedido", parametros, { mesa: String(m.id) })}
       />
     </>
   );

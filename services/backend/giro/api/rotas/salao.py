@@ -6,7 +6,7 @@ from giro.banco import agora
 from giro.dominio.mesa import TransicaoInvalida
 from giro.esquemas import AlertaSaida, CameraSaida, MesaSalao, RestauranteSaida, SalaoSaida
 from giro.modelos import Alerta, Camera, Mesa, Restaurante
-from giro.servicos.salao import alerta_saida, mesa_salao, ocupacoes_abertas
+from giro.servicos.salao import alerta_saida, mesa_salao, mesas_salao, ocupacoes_abertas
 
 router = APIRouter(prefix="/api", tags=["salão"])
 
@@ -20,7 +20,6 @@ def montar_salao(db, restaurante_id: int) -> SalaoSaida:
         .where(Mesa.restaurante_id == restaurante_id, Mesa.ativa.is_(True))
         .order_by(Mesa.numero)
     ).all()
-    ocupacoes = ocupacoes_abertas(db, [m.id for m in mesas])
     alertas = db.scalars(
         select(Alerta)
         .where(Alerta.restaurante_id == restaurante_id, Alerta.resolvido_em.is_(None))
@@ -31,7 +30,7 @@ def montar_salao(db, restaurante_id: int) -> SalaoSaida:
     ).all()
     return SalaoSaida(
         restaurante=RestauranteSaida.model_validate(restaurante),
-        mesas=[mesa_salao(m, ocupacoes.get(m.id)) for m in mesas],
+        mesas=mesas_salao(db, list(mesas)),
         alertas=[alerta_saida(a) for a in alertas],
         cameras=[CameraSaida.model_validate(c) for c in cameras],
         agora=agora(),

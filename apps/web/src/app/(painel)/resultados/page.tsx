@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
+import { CardapioDoPeriodo } from "@/components/resultados/cardapio-noite";
 import { Copiloto } from "@/components/resultados/copiloto";
 import { ESe } from "@/components/resultados/e-se";
 import { FicouNaMesa, Graficos, MesasQueMaisCustam, Placar } from "@/components/resultados/numeros";
@@ -165,6 +166,7 @@ export default function PaginaResultados() {
             <>
               <Placar resultados={dados} />
               <Graficos resultados={dados} />
+              <CardapioDoPeriodo restaurante={restaurante} periodo={periodo} dia={dia} />
               <MesasQueMaisCustam atual={dados.atual} />
             </>
           )}

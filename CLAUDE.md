@@ -20,10 +20,15 @@ Cliente: restaurante de bairro com 6 a 20 mesas, na região oeste da Grande São
 | Ticket médio e horário do salão | R$ 85 por pessoa, 18:00 às 23:30 (o dono muda em Ajustes) | `Restaurante.ticket_medio_centavos`, `abre_as`, `fecha_as` |
 | "E se?" | limpeza mais rápida e garçons a mais ou a menos, sobre as últimas 4 semanas | `giro/dominio/cenarios.py` |
 | Copiloto | sem chave: respostas prontas; com `GIRO_ANTHROPIC_API_KEY`: IA, só com números somados; 60 perguntas/hora por restaurante | `giro/servicos/copiloto.py` |
+| Pedido na mesa | o primeiro item lançado conta como atendimento (tira o alerta); em mesa livre ou suja, abre a visita já atendida | `MaquinaMesa.registrar_pedido` em `giro/dominio/mesa.py` |
+| Gestão do cardápio | item nunca é apagado (`ativo=False`); nome e preço copiados no pedido; cancelar só gerente e dono, com motivo da lista; custo só o dono vê e muda; "acabou" qualquer um da equipe marca | `giro/api/rotas/cardapio.py`, `pedidos.py` |
+| Ticket real | gasto médio por pessoa das visitas com pedido e gente contada; vale com 5 ou mais visitas, senão o de Ajustes | `giro/servicos/resultados.py` (`MINIMO_VISITAS_TICKET_REAL`) |
 | Assinatura e ativação | R$ 299/mês e R$ 290 (Fase 4) | ainda não está no código |
 | Custo de nuvem orçado | R$ 100 por cliente/mês (visão R$ 65) | anexo A.1 do TCM |
 
 Estados da mesa: `livre` → `aguardando` → `ocupada` → `para_limpar` → `livre`. Quem vai embora sem ser atendido volta direto a `livre` e conta como desistência. O diagrama está no topo de `giro/dominio/mesa.py`.
+
+O GIRO não emite nota fiscal nem recebe pagamento: o caixa continua no sistema do restaurante. O pedido é da mesa (preso à visita em `ocupacoes`), nunca da pessoa.
 
 ## Privacidade (LGPD): inegociável
 
@@ -100,6 +105,7 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - Estado da mesa sempre por cor + padrão + palavra, nunca só cor. Cores e fontes estão em `apps/web/src/app/globals.css`; não invente cor fora dos tokens.
 - Next.js 16 tem mudanças grandes: leia `apps/web/node_modules/next/dist/docs/` antes de usar API que você não viu neste código (veja `apps/web/AGENTS.md`).
 - Dados no painel: `useDados` (`src/lib/dados.ts`) para telas comuns e `useSalaoAoVivo` (`src/lib/ao-vivo.ts`) para o salão. Não chame setState direto dentro de useEffect (o lint barra).
+- Pedido e cozinha: contas puras em `src/lib/pedido.ts` (mais pedidos, rascunho, preço com centavos só quando tem, fila da cozinha por lançamento). Telas em `app/(painel)/pedido`, `cozinha` e `cardapio`. O canal ao vivo manda `{"tipo": "pedido"}` e `{"tipo": "cardapio"}` só como aviso: quem precisa busca de novo (`useSalaoAoVivo(..., aoAviso)`). Uma `<dialog>` aberta precisa fechar ao sair da tela: o Next guarda a tela anterior escondida e a janela modal travaria a nova.
 - Resultados: contas e textos de data e dinheiro em `src/lib/resultados.ts` (horário de São Paulo, seja qual for o fuso do aparelho). O replay refaz o salão a partir dos horários das visitas em `src/lib/replay.ts`, no mesmo formato do ao vivo, e reaproveita o 3D e a planta (`components/planta.tsx`). Gráficos em `components/resultados/grafico-barras.tsx`: barras de uma série, destaque numa só, dica no mouse e nas setas, tabela escondida para leitor de tela.
 - Salão 3D: as contas de posição ficam em `salao-3d/planta.ts` (testadas sem 3D), as do garçom em `garcom.ts`, as da câmera em `camera-mesa.ts` e a escolha de quem senta em `escolha-pessoas.ts`. As placas das mesas são botões comuns da página que o `Projetor` move; não use o `Html` do drei (perdia a placa da primeira mesa). Cores do 3D vêm dos tokens (`salao-3d/cores.ts`).
 - Modelos 3D (pessoas e decoração) ficam em `apps/web/public/modelos/` e são gerados por `infra/modelos-3d/gerar.sh` (Blender + gltf-transform), nunca editados à mão. Clientes têm pose assada (sem esqueleto) e só o garçom tem esqueleto. Carregue com `useGLTF(url, false, true)` (meshopt, sem Draco, sem CDN) e reaproveite geometria e material (InstancedMesh). Crédito e licença de cada modelo em `public/modelos/CREDITOS.md`.
@@ -125,3 +131,5 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - **Ocupação**: uma visita à mesa, de sentar até liberar (tabela `ocupacoes`). Base de todos os indicadores.
 - **Mesa parada**: tempo entre os clientes saírem e a mesa ser liberada. É o que mais corrói o giro.
 - **Desistência**: cliente que sentou e foi embora sem ser atendido (`ocupacoes.sem_atendimento`).
+- **Acabou**: item que a cozinha marcou como sem estoque hoje (`itens_cardapio.disponivel = false`). O garçom vê riscado e não consegue lançar.
+- **Ticket real**: o que cada pessoa gastou de verdade, pelos pedidos lançados (o "ticket médio" de Ajustes é só a estimativa).

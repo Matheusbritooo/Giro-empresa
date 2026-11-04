@@ -20,6 +20,8 @@ function mesa(numero: number, lugares: number, pos_x: number, pos_y: number): Me
     atendida_em: null,
     saiu_em: null,
     pessoas: 0,
+    total_pedido_centavos: 0,
+    itens_na_cozinha: 0,
   };
 }
 

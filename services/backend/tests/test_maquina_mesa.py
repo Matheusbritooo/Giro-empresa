@@ -151,3 +151,42 @@ def test_estado_sobrevive_ida_e_volta_pelo_banco(maquina):
     assert copia == maquina
     # e continua de onde parou
     assert tipos(alimentar(copia, 2, 6, sentados=2)) == [TipoEvento.ALERTA_SEM_ATENDIMENTO]
+
+
+def test_pedido_lancado_conta_como_atendimento(maquina):
+    alimentar(maquina, 0, 1, sentados=2)
+    assert tipos(maquina.registrar_pedido(em(2))) == [TipoEvento.ATENDIDA]
+    assert maquina.estado == Estado.OCUPADA
+    assert maquina.estado_desde == em(2)
+    # Atendida não alerta mais, e um segundo pedido não muda nada.
+    assert tipos(alimentar(maquina, 1, 8, sentados=2)) == []
+    assert maquina.registrar_pedido(em(9)) == []
+
+
+def test_pedido_em_mesa_livre_abre_a_visita_ja_atendida(maquina):
+    eventos = maquina.registrar_pedido(em(0))
+    assert tipos(eventos) == [TipoEvento.SENTOU, TipoEvento.ATENDIDA]
+    assert maquina.estado == Estado.OCUPADA
+    # Depois a câmera vê quem está na mesa e, quando esvaziar, ela vai para limpar.
+    alimentar(maquina, 0.1, 20, sentados=3)
+    assert tipos(alimentar(maquina, 20, 22, sentados=0)) == [
+        TipoEvento.SAIU,
+        TipoEvento.ALERTA_MESA_VAGA,
+    ]
+    assert maquina.pessoas_max == 3
+
+
+def test_pedido_usa_a_hora_em_que_a_camera_comecou_a_ver_gente(maquina):
+    alimentar(maquina, 0, 0.1, sentados=2)  # 10 s: ainda não confirmou a ocupação
+    eventos = maquina.registrar_pedido(em(0.2))
+    assert eventos[0].tipo == TipoEvento.SENTOU and eventos[0].em == em(0)
+
+
+def test_pedido_em_mesa_suja_fecha_a_visita_anterior(maquina):
+    alimentar(maquina, 0, 1, sentados=2)
+    maquina.registrar_pedido(em(1))
+    alimentar(maquina, 1.1, 30, sentados=2)
+    alimentar(maquina, 30, 32, sentados=0)
+    assert maquina.estado == Estado.PARA_LIMPAR
+    eventos = maquina.registrar_pedido(em(40))
+    assert tipos(eventos) == [TipoEvento.LIBERADA, TipoEvento.SENTOU, TipoEvento.ATENDIDA]

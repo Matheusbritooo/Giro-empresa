@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 
+import { preco } from "@/lib/pedido";
 import { horaCurta, minutosEntre, situacao } from "@/lib/salao";
 import type { Mesa } from "@/lib/tipos";
 
@@ -13,12 +15,15 @@ export function DetalheMesa({
   limiteSeg,
   aoFechar,
   aoLiberar,
+  linkPedido,
 }: {
   mesa: Mesa | null;
   agoraMs: number;
   limiteSeg: number;
   aoFechar: () => void;
   aoLiberar: (mesa: Mesa) => void;
+  /** Endereço da tela de pedido desta mesa ("Lançar pedido"). */
+  linkPedido?: (mesa: Mesa) => string;
 }) {
   const dialogo = useRef<HTMLDialogElement>(null);
 
@@ -26,6 +31,13 @@ export function DetalheMesa({
     if (mesa && !dialogo.current?.open) dialogo.current?.showModal();
     if (!mesa && dialogo.current?.open) dialogo.current.close();
   }, [mesa]);
+
+  // Ao sair do salão (o Next guarda a tela anterior escondida), a janela não pode ficar
+  // aberta por baixo: ela travaria os toques na tela nova.
+  useEffect(() => {
+    const atual = dialogo.current;
+    return () => atual?.close();
+  }, []);
 
   const s = mesa ? situacao(mesa, agoraMs, limiteSeg) : null;
 
@@ -79,6 +91,33 @@ export function DetalheMesa({
             </ol>
           ) : (
             <p className="text-tinta-suave">Ninguém na mesa agora.</p>
+          )}
+
+          {mesa.estado !== "livre" && mesa.total_pedido_centavos > 0 && (
+            <p className="flex items-baseline justify-between gap-3 rounded-lg bg-fundo px-3 py-2">
+              <span>
+                Pedido
+                {mesa.itens_na_cozinha > 0 && (
+                  <span className="text-tinta-suave">
+                    , {mesa.itens_na_cozinha} {mesa.itens_na_cozinha === 1 ? "item" : "itens"} na
+                    cozinha
+                  </span>
+                )}
+              </span>
+              <span className="numeros font-placa text-2xl font-extrabold">
+                {preco(mesa.total_pedido_centavos)}
+              </span>
+            </p>
+          )}
+
+          {linkPedido && mesa.estado !== "para_limpar" && (
+            <Link
+              href={linkPedido(mesa)}
+              onClick={() => dialogo.current?.close()}
+              className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-tinta px-4 text-lg font-semibold text-fundo hover:opacity-90"
+            >
+              {mesa.total_pedido_centavos > 0 ? "Ver e lançar pedido" : "Lançar pedido"}
+            </Link>
           )}
 
           {mesa.estado === "para_limpar" && (

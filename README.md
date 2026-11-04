@@ -16,7 +16,7 @@ Projeto do TCM *O Segredo do Meu Negócio* (Técnico em Administração), da equ
 
 ## O que já funciona
 
-**Fases 0 (fundação), 1 (salão no simulador) e 2 (visão computacional) prontas. Fase 3 (inteligência) com resultados, replay, "E se?" e Copiloto.**
+**Fases 0 (fundação), 1 (salão no simulador) e 2 (visão computacional) prontas. Fase 3 (inteligência) com resultados, replay, "E se?" e Copiloto. Cardápio e pedidos na mesa (etapa 1).**
 
 - Mapa de mesas ao vivo, com cronômetro em cada mesa e as cadeiras ocupadas desenhadas em volta.
 - **Salão em 3D realista**: a cantina inteira à noite (piso de tábua, lambri, toalha xadrez, balcão com flores, geladeira de bebidas, plantas, arandelas, a câmera no canto), com clientes de verdade sentados em cada mesa ocupada, o cardápio na mesa de quem espera, o prato servido e a louça suja na mesa para limpar. Um garçom anda pelos corredores até a mesa de quem tocou "Vou atender", anota o pedido e volta ao balcão. Nos alertas, **Ver no salão** leva a câmera do 3D até a mesa. Gira com o dedo ou o mouse, e tocar na placa da mesa abre o mesmo detalhe com "Liberar mesa". O botão **Ver como a câmera** mostra o campo de visão e o contorno que a visão desenha em volta de cada pessoa. As pessoas são ilustrativas (o selo logo abaixo do 3D diz isso): a câmera só conta, não filma ninguém. O acabamento se ajusta ao aparelho (alto, médio ou baixo; dá para forçar com `?qualidade=alto` na URL). No computador abre em 3D; no celular, na planta (dá para trocar, e o aparelho lembra).
@@ -50,6 +50,22 @@ Resultados e Copiloto (Fase 3, para dono e gerente):
 ![Resultados: dinheiro que ficou na mesa, Copiloto e números da semana](docs/telas/resultados.png)
 
 ![Replay da noite com o mapa de calor](docs/telas/replay-calor.png)
+
+Cardápio e pedidos na mesa (etapa 1):
+
+- **Lançar pedido em 3 toques**: no detalhe da mesa, "Lançar pedido" abre o cardápio com os 8 itens que mais saem no topo, as categorias e a busca. Dá para pôr observação para a cozinha ("sem cebola"). O primeiro pedido já conta a mesa como atendida e tira o alerta de "mesa sem atendimento"; em mesa livre, ele abre a visita.
+- **Tela da cozinha**: a fila do que falta sair, por mesa e do mais antigo para o mais novo, com o botão "Pronto". Depois de 20 minutos o pedido fica em destaque. Atualiza sozinha.
+- **Gestão do cardápio**: categorias e itens com preço, "tem hoje" (a cozinha marca que acabou e o garçom vê riscado na hora), tirar e voltar com item. Custo e lucro de cada prato só o dono vê. Preço novo vale só para os próximos pedidos: o que já foi lançado guarda o preço da hora.
+- **Cancelar item** só gerente e dono, escolhendo o motivo. Fica registrado quem cancelou e quando.
+- No salão, o detalhe da mesa mostra quanto ela já gastou e quantos itens faltam sair da cozinha.
+- Em Resultados: prato e bebida do período, os mais pedidos, o que cada mesa mais pediu e o **ticket real**. Com 5 ou mais mesas com pedido, o "dinheiro que ficou na mesa" passa a usar o que as mesas gastaram de verdade, e não o valor de Ajustes.
+- O GIRO não emite nota fiscal nem recebe pagamento: isso continua no caixa do restaurante. O pedido é da mesa, sem nome nem documento do cliente. A observação é só para a cozinha: não escreva nome de cliente nela.
+
+![Pedido da mesa no celular do garçom](docs/telas/pedido-celular.png)
+
+![Tela da cozinha com a fila por mesa](docs/telas/cozinha.png)
+
+![O que saiu da cozinha: prato da semana e o que cada mesa mais pediu](docs/telas/resultados-cardapio.png)
 
 ![Tela Câmeras: desenho das mesas sobre a foto](docs/telas/cameras-desenhando.png)
 
@@ -93,7 +109,9 @@ Prefere Postgres, como em produção? `make banco` sobe um no Docker. Depois, an
 6. Mostre **Ver como a câmera** no 3D: a câmera do salão, o que ela enxerga e a frase de privacidade (conta pessoas, não reconhece ninguém).
 7. Entre como dono (`marcos@cantina.demo`) e abra **Resultados** em "7 dias": o dinheiro que ficou na mesa, a comanda e a mesa que mais custou. O seed já traz 4 semanas de noites de demonstração.
 8. Toque em **Rever a pior noite**, depois em **Assistir** e ligue o **Mapa de calor**. Toque num momento da noite para a câmera ir até a mesa.
-9. Feche com o **E se?**: arraste "Mesa limpa em até" para 3 min e mostre quanto entraria por mês. Pergunte ao Copiloto "Qual mesa mais me dá prejuízo?".
+9. Mostre o **E se?**: arraste "Mesa limpa em até" para 3 min e mostre quanto entraria por mês. Pergunte ao Copiloto "Qual mesa mais me dá prejuízo?".
+10. Pedido na mesa: no celular do garçom, toque numa mesa, em **Lançar pedido**, escolha 2 lasanhas e um refrigerante e lance. No computador, abra **Cozinha**: o pedido aparece na hora. Toque em **Pronto** e veja o celular atualizar.
+11. Feche com o dono em **Resultados**, "7 dias": o prato da semana e o que cada mesa mais pediu. O seed já traz o cardápio da cantina (22 itens) e os pedidos das 4 semanas.
 
 Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 
@@ -223,5 +241,7 @@ O repositório já vem preparado para o grupo usar o Claude Code:
 |---|---|
 | 2b. Calibração em campo | Medir a visão com vídeo de um restaurante parceiro; receber a foto do gravador por FTPS para dispensar o conector |
 | 3. Inteligência (resto) | Previsão da próxima mesa a vagar, relatório semanal por e-mail "quanto a GIRO te devolveu" |
+| Cardápio, etapa 2 | Custo e margem na matriz de lucro (estrela, burro de carga, quebra-cabeça, cão), o que combina com o quê, tempo de cozinha, "pediu a conta" e Copiloto falando do cardápio |
+| Cardápio, etapa 3 | Ler pedidos do sistema de caixa (PDV), estoque básico pela receita e previsão de compras |
 | 4. Gestão GIRO | Leads com as perguntas de qualificação, assinatura e cobrança (Asaas), painel financeiro |
 | 5. Site | Página de vendas e calculadora de retorno |

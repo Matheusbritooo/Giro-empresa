@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from enum import StrEnum
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from giro.dominio.indicadores import (
@@ -16,7 +16,7 @@ from giro.dominio.indicadores import (
     calcular,
     intervalo_da_noite,
 )
-from giro.modelos import Mesa, Ocupacao, Restaurante
+from giro.modelos import ItemPedido, Mesa, Ocupacao, Restaurante
 
 
 class Periodo(StrEnum):
@@ -27,6 +27,8 @@ class Periodo(StrEnum):
 
 # O "mês" tem 4 semanas: assim cada dia da semana aparece o mesmo número de vezes.
 NOITES = {Periodo.NOITE: 1, Periodo.SEMANA: 7, Periodo.MES: 28}
+# Com menos visitas com pedido que isso, o ticket de Ajustes é mais confiável que a média.
+MINIMO_VISITAS_TICKET_REAL = 5
 
 
 def intervalo(periodo: Periodo, dia: date) -> tuple[datetime, datetime]:
@@ -67,6 +69,25 @@ def carregar_ocupacoes(
     )
 
 
+def consumo_das_visitas(
+    db: Session, restaurante_id: int, inicio: datetime, fim: datetime
+) -> list[tuple[datetime, int, int]]:
+    """(sentou, pessoas, total gasto) de cada visita com pedido no intervalo."""
+    total = func.sum(ItemPedido.quantidade * ItemPedido.preco_unit_centavos)
+    linhas = db.execute(
+        select(Ocupacao.sentou_em, Ocupacao.pessoas, total)
+        .join(ItemPedido, ItemPedido.ocupacao_id == Ocupacao.id)
+        .where(
+            Ocupacao.restaurante_id == restaurante_id,
+            Ocupacao.sentou_em >= inicio,
+            Ocupacao.sentou_em < fim,
+            ItemPedido.cancelado_em.is_(None),
+        )
+        .group_by(Ocupacao.id, Ocupacao.sentou_em, Ocupacao.pessoas)
+    )
+    return [(sentou, pessoas, int(gasto)) for sentou, pessoas, gasto in linhas]
+
+
 def para_visitas(ocupacoes: list[Ocupacao], mesas: list[Mesa]) -> list[Visita]:
     numero = {m.id: m.numero for m in mesas}
     return [
@@ -93,20 +114,31 @@ class Dados:
     visitas: list[Visita]
     inicio: datetime
     fim: datetime
+    consumo: list[tuple[datetime, int, int]] = field(default_factory=list)
 
     @property
     def mesas_info(self) -> list[MesaInfo]:
         return [MesaInfo(m.numero, m.lugares) for m in self.mesas]
 
+    def ticket_real(self, inicio: datetime, fim: datetime) -> int | None:
+        """Gasto médio por pessoa nas visitas com pedido (e gente contada) do intervalo."""
+        dentro = [(pessoas, gasto) for sentou, pessoas, gasto in self.consumo
+                  if inicio <= sentou < fim and pessoas > 0]  # fmt: skip
+        if len(dentro) < MINIMO_VISITAS_TICKET_REAL:
+            return None
+        return round(sum(g for _, g in dentro) / sum(p for p, _ in dentro))
+
     def indicadores(self, inicio: datetime, fim: datetime) -> Indicadores:
-        return calcular(
+        real = self.ticket_real(inicio, fim)
+        resultado = calcular(
             self.visitas,
             self.mesas_info,
             inicio,
             fim,
-            ticket_medio_centavos=self.restaurante.ticket_medio_centavos,
+            ticket_medio_centavos=real or self.restaurante.ticket_medio_centavos,
             limite_alerta=timedelta(seconds=self.restaurante.alerta_atendimento_seg),
         )
+        return replace(resultado, ticket_real=real is not None)
 
 
 def carregar(
@@ -117,7 +149,8 @@ def carregar(
     fim = min(fim, agora)
     mesas = carregar_mesas(db, restaurante.id)
     ocupacoes = carregar_ocupacoes(db, restaurante.id, inicio, fim)
-    return Dados(restaurante, mesas, para_visitas(ocupacoes, mesas), inicio, fim)
+    consumo = consumo_das_visitas(db, restaurante.id, inicio, fim)
+    return Dados(restaurante, mesas, para_visitas(ocupacoes, mesas), inicio, fim, consumo)
 
 
 @dataclass
