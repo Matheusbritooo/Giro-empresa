@@ -10,6 +10,17 @@ import { useRestauranteAlvo } from "@/lib/restaurante";
 import { horaCurta } from "@/lib/salao";
 import type { Camera, Restaurante, Salao } from "@/lib/tipos";
 
+// Segunda = 0, como no servidor.
+const DIAS_DE_COMPRA = [
+  ["0", "Seg"],
+  ["1", "Ter"],
+  ["2", "Qua"],
+  ["3", "Qui"],
+  ["4", "Sex"],
+  ["5", "Sáb"],
+  ["6", "Dom"],
+] as const;
+
 export default function PaginaAjustes() {
   const restaurante = useRestauranteAlvo();
   const [tokenNovo, setTokenNovo] = useState<{ nome: string; token: string } | null>(null);
@@ -29,6 +40,11 @@ export default function PaginaAjustes() {
     evento.preventDefault();
     if (!dados) return;
     const form = new FormData(evento.currentTarget);
+    const diasCompra = form.getAll("dias_compra").map(String);
+    if (diasCompra.length === 0) {
+      setRecado({ tipo: "erro", texto: "Marque pelo menos um dia de compra." });
+      return;
+    }
     try {
       await api<Restaurante>(`/api/restaurantes/${dados.id}`, {
         metodo: "PATCH",
@@ -39,6 +55,8 @@ export default function PaginaAjustes() {
           ticket_medio_centavos: Math.round(Number(form.get("ticket")) * 100),
           abre_as: form.get("abre_as"),
           fecha_as: form.get("fecha_as"),
+          dias_compra: diasCompra.join(","),
+          folga_compra_pct: Number(form.get("folga")),
         },
       });
       setRecado({ tipo: "ok", texto: "Ajustes salvos. O painel já usa os novos valores." });
@@ -118,6 +136,41 @@ export default function PaginaAjustes() {
               type="time"
               defaultValue={dados.fecha_as}
               ajuda="No fechamento, chega o resumo da noite."
+              required
+            />
+            <fieldset className="flex flex-col gap-2 sm:col-span-2">
+              <legend className="text-sm font-semibold">Dias de compra</legend>
+              <div className="flex flex-wrap gap-2">
+                {DIAS_DE_COMPRA.map(([valor, texto]) => (
+                  <label
+                    key={valor}
+                    className="flex min-h-10 items-center gap-2 rounded-lg border border-linha bg-superficie px-3"
+                  >
+                    <input
+                      type="checkbox"
+                      name="dias_compra"
+                      value={valor}
+                      id={`dia-compra-${valor}`}
+                      defaultChecked={dados.dias_compra.split(",").includes(valor)}
+                      className="size-5 accent-[var(--ocupada)]"
+                    />
+                    {texto}
+                  </label>
+                ))}
+              </div>
+              <span className="text-xs text-tinta-suave">
+                A lista de compras cobre do dia da compra até a véspera da próxima.
+              </span>
+            </fieldset>
+            <Campo
+              rotulo="Folga da lista de compras (%)"
+              name="folga"
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              defaultValue={dados.folga_compra_pct}
+              ajuda="Compra um pouco a mais do que a previsão, para não faltar."
               required
             />
             <Botao type="submit" className="sm:col-span-3 sm:justify-self-start">

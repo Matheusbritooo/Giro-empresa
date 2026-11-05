@@ -14,6 +14,8 @@ export interface Restaurante {
   ticket_medio_centavos: number;
   abre_as: string; // "HH:MM" em São Paulo
   fecha_as: string;
+  dias_compra: string; // "1,4" = terça e sexta (segunda = 0)
+  folga_compra_pct: number;
 }
 
 export interface Usuario {
@@ -366,7 +368,12 @@ export interface Insumo {
   custo_centavos: number | null; // por kg, litro ou unidade; a equipe recebe vazio
   saldo: number;
   ativo: boolean;
+  situacao: SituacaoInsumo | null; // pela previsão; vazio fora de uso
+  acaba_em: string | null; // a noite em que acaba, nos próximos 7 dias
 }
+
+/** zerado; vai faltar (acaba antes de a compra chegar); comprar (entra na lista); tem. */
+export type SituacaoInsumo = "zerado" | "vai_faltar" | "comprar" | "tem";
 
 export interface LinhaFicha {
   insumo_id: number;
@@ -385,6 +392,9 @@ export interface Estoque {
   fichas: Ficha[];
   mostra_valores: boolean; // gerente e dono
   mostra_custo: boolean; // dono
+  hoje: string; // a noite de agora, em São Paulo
+  proxima_compra: string; // AAAA-MM-DD
+  cobre: string[]; // as noites que a próxima compra cobre
 }
 
 export const MOTIVOS_PERDA = [
@@ -417,4 +427,54 @@ export interface Movimento {
   prato: string | null;
   quem: string | null;
   em: string;
+}
+
+// Lista de compras (etapa 3, parte 2)
+
+export interface PratoNaConta {
+  item_id: number;
+  nome: string;
+  por_porcao: number;
+  pratos: number; // previstos nas noites que a compra cobre
+}
+
+export interface LinhaDeCompra {
+  insumo_id: number;
+  nome: string;
+  unidade: UnidadeInsumo;
+  onde_compra: string | null;
+  embalagem_quantidade: number;
+  embalagem_nome: string | null;
+  tem: number;
+  sai_ate_compra: number;
+  sobra: number;
+  precisa: number;
+  com_folga: number;
+  falta: number;
+  embalagens: number;
+  quantidade: number;
+  valor_centavos: number | null;
+  situacao: SituacaoInsumo;
+  acaba_em: string | null;
+  pratos: PratoNaConta[];
+}
+
+export interface NoiteDoPrato {
+  noite: string;
+  previstos: number;
+  ultimas: number[]; // as 4 noites iguais, da mais antiga à mais recente
+  ja_vendidos: number;
+}
+
+export interface ListaDeCompras {
+  hoje: string;
+  compra: string;
+  antes: string[];
+  cobre: string[];
+  folga_pct: number;
+  folga_padrao_pct: number;
+  comprar: LinhaDeCompra[];
+  nada_a_comprar: string[];
+  pratos: { item_id: number; nome: string; noites: NoiteDoPrato[] }[];
+  total_centavos: number | null;
 }

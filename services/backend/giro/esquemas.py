@@ -660,6 +660,7 @@ class EstoqueSaida(BaseModel):
     fichas: list[FichaSaida]
     mostra_valores: bool  # gerente e dono: preço dos ingredientes e valor das compras
     mostra_custo: bool  # dono: custo dos pratos
+    hoje: date  # a noite de agora, em São Paulo
     proxima_compra: date
     cobre: list[date]  # as noites que a próxima compra cobre
 

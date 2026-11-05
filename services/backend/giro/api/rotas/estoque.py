@@ -135,6 +135,7 @@ def ver_estoque(db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo) 
         fichas=fichas_saida(db, restaurante_id, usuario),
         mostra_valores=_ve_valores(usuario),
         mostra_custo=usuario.papel in VEEM_CUSTO,
+        hoje=plano.hoje,
         proxima_compra=plano.compra,
         cobre=plano.cobre,
     )

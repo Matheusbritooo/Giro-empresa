@@ -69,6 +69,8 @@ const salao: Salao = {
     ticket_medio_centavos: 8500,
     abre_as: "18:00",
     fecha_as: "23:30",
+    dias_compra: "1,4",
+    folga_compra_pct: 15,
   },
   mesas: [mesa({ id: 1, numero: 1 }), mesa({ id: 2, numero: 2 })],
   alertas: [],

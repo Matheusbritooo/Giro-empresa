@@ -102,3 +102,54 @@ test("dono muda a ficha e o custo do prato acompanha no cardápio", async ({ pag
   await expect(lasanha.getByRole("link", { name: "pela ficha" })).toBeVisible();
   await expect(lasanha.getByLabel("Custo de Lasanha à bolonhesa em reais")).toHaveCount(0);
 });
+
+test("gerente vê a lista de compras com o porquê e copia para o WhatsApp", async ({ page }) => {
+  await entrar(page, "gerente@cantina.demo");
+  await abrirEstoque(page);
+  await expect(page.getByText(/^Próxima compra:/)).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Até quando" })).toBeVisible();
+
+  await page.getByRole("tab", { name: "Lista de compras" }).click();
+  await expect(page.getByRole("heading", { name: /^Compra de / })).toBeVisible();
+  const primeira = page.locator("[data-testid^='compra-']").first();
+  await primeira.locator("summary").click();
+  await expect(primeira).toContainText(/Tem agora: .+/);
+  await expect(primeira).toContainText(/Com folga de \d+%: .+/);
+
+  // Fim de semana de feriado: mais folga só nesta conta.
+  await page.getByRole("button", { name: "40%" }).click();
+  await expect(page.getByRole("button", { name: "40%" })).toHaveAttribute("aria-pressed", "true");
+  await page.locator("[data-testid^='compra-'] summary").first().click();
+  await expect(page.locator("[data-testid^='compra-']").first()).toContainText("Com folga de 40%");
+
+  await page.getByRole("button", { name: "Copiar lista para o WhatsApp" }).click();
+  await expect(page.getByText(/Lista copiada|Não deu para copiar sozinho/).first()).toBeVisible();
+});
+
+test("a equipe não vê a lista de compras", async ({ page }) => {
+  await entrar(page, "equipe@cantina.demo");
+  await abrirEstoque(page);
+  await expect(page.getByRole("tab", { name: "Lista de compras" })).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: "Até quando" })).toBeVisible();
+});
+
+test("dono muda a folga em Ajustes e a lista passa a usar", async ({ page }, info) => {
+  const folga = info.project.name === "celular" ? "20" : "18";
+  await entrar(page, "marcos@cantina.demo");
+  await page
+    .getByRole("navigation", { name: "Seções" })
+    .getByRole("link", { name: "Ajustes" })
+    .click();
+  await expect(page.getByRole("group", { name: "Dias de compra" })).toBeVisible();
+  await expect(page.getByLabel("Ter")).toBeChecked();
+  await page.getByLabel("Folga da lista de compras (%)").fill(folga);
+  await page.getByRole("button", { name: "Salvar ajustes" }).click();
+  await expect(page.getByText("Ajustes salvos.")).toBeVisible();
+
+  await abrirEstoque(page);
+  await page.getByRole("tab", { name: "Lista de compras" }).click();
+  await expect(page.getByRole("button", { name: `${folga}% (padrão)` })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+});

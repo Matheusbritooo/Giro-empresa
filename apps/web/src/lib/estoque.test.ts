@@ -5,14 +5,19 @@ import {
   campoDaBase,
   custoDaFicha,
   ordenarInsumos,
+  plural,
   porPorcao,
   precoDoInsumo,
+  quando,
   quantidade,
   sugestoesDeAcabou,
+  textoAteQuando,
+  textoCompra,
   textoDaDiferenca,
+  textoDaLista,
   textoDoMovimento,
 } from "./estoque";
-import type { Ficha, Insumo, ItemCardapio } from "./tipos";
+import type { Ficha, Insumo, ItemCardapio, LinhaDeCompra, ListaDeCompras } from "./tipos";
 
 function insumo(
   id: number,
@@ -31,6 +36,8 @@ function insumo(
     custo_centavos: custo,
     saldo,
     ativo: true,
+    situacao: null,
+    acaba_em: null,
   };
 }
 
@@ -173,5 +180,62 @@ describe("textos", () => {
     expect(textoDoMovimento({ ...m, tipo: "venda", prato: null })).toBe("Vendas da noite");
     expect(textoDoMovimento({ ...m, tipo: "perda", motivo: "Estragou" })).toBe("Perda: Estragou");
     expect(textoDoMovimento({ ...m, tipo: "contagem", quantidade: 0 })).toBe("Contagem: bateu");
+  });
+});
+
+describe("previsão e lista de compras", () => {
+  it("o urgente vem primeiro, depois o que entra na compra", () => {
+    const lista = ordenarInsumos([
+      { ...REFRI, situacao: "tem" },
+      { ...CHOPP, situacao: "comprar" },
+      { ...CARNE, situacao: "vai_faltar" },
+    ]);
+    expect(lista.map((i) => i.nome)).toEqual(["Carne moída", "Chopp", "Refrigerante lata"]);
+  });
+
+  it("até quando dá, contado a partir de hoje (quarta, 04/11)", () => {
+    expect(quando("2026-11-04", "2026-11-04")).toBe("hoje");
+    expect(quando("2026-11-05", "2026-11-04")).toBe("amanhã");
+    expect(quando("2026-11-06", "2026-11-04")).toBe("na sexta");
+    expect(quando("2026-11-07", "2026-11-04")).toBe("no sábado");
+    expect(textoAteQuando({ ...CARNE, acaba_em: "2026-11-05" }, "2026-11-04")).toBe("acaba amanhã");
+    expect(textoAteQuando(CARNE, "2026-11-04")).toBe("dá a semana toda");
+    expect(textoAteQuando(MASSA, "2026-11-04")).toBe("não tem");
+  });
+
+  it("o que pedir ao fornecedor", () => {
+    expect(plural("pacote de 1 kg")).toBe("pacotes de 1 kg");
+    expect(plural("barril de 30 L")).toBe("barris de 30 L");
+    expect(textoCompra("g", 8, 1000, "pacote de 1 kg")).toBe("8 pacotes de 1 kg");
+    expect(textoCompra("ml", 1, 30_000, "barril de 30 L")).toBe("1 barril de 30 L");
+    expect(textoCompra("g", 7, 1000, "kg")).toBe("7 kg");
+    expect(textoCompra("un", 2, 12, null)).toBe("24 unidades");
+  });
+
+  it("monta a lista para o WhatsApp por onde se compra, sem preço", () => {
+    const linha = (nome: string, onde: string | null, embalagens: number, nomeEmb: string) =>
+      ({
+        nome,
+        onde_compra: onde,
+        unidade: "g",
+        embalagens,
+        embalagem_quantidade: 1000,
+        embalagem_nome: nomeEmb,
+        valor_centavos: 99_00,
+      }) as LinhaDeCompra;
+    const lista = {
+      compra: "2026-11-06",
+      comprar: [
+        linha("Carne moída", "Açougue", 12, "kg"),
+        linha("Massa de lasanha", "Atacado", 8, "pacote de 1 kg"),
+        linha("Sal grosso", null, 1, "pacote de 1 kg"),
+      ],
+    } as ListaDeCompras;
+    expect(textoDaLista(lista, "Cantina do Marcos")).toBe(
+      "Compras de sexta (Cantina do Marcos)\n" +
+        "\nAçougue\n- Carne moída: 12 kg\n" +
+        "\nAtacado\n- Massa de lasanha: 8 pacotes de 1 kg\n" +
+        "\nOutros\n- Sal grosso: 1 pacote de 1 kg\n",
+    );
   });
 });
