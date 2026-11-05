@@ -29,6 +29,8 @@ class RestauranteSaida(Saida):
     ticket_medio_centavos: int
     abre_as: str
     fecha_as: str
+    dias_compra: str  # "1,4" = terça e sexta (segunda = 0)
+    folga_compra_pct: int
 
 
 class UsuarioSaida(Saida):
@@ -93,6 +95,13 @@ class RestauranteAtualizacao(BaseModel):
     ticket_medio_centavos: int | None = Field(default=None, ge=500, le=100_000)
     abre_as: Horario | None = None
     fecha_as: Horario | None = None
+    dias_compra: str | None = Field(default=None, pattern=r"^[0-6](,[0-6]){0,6}$")
+    folga_compra_pct: int | None = Field(default=None, ge=0, le=100)
+
+    @field_validator("dias_compra")
+    @classmethod
+    def _dias_em_ordem(cls, valor: str | None) -> str | None:
+        return None if valor is None else ",".join(sorted(set(valor.split(","))))
 
 
 # Mesas e salão
@@ -587,6 +596,7 @@ class ContaEntrada(BaseModel):
 
 UnidadeInsumo = Literal["g", "ml", "un"]
 Quantidade = Annotated[int, Field(ge=1, le=10_000_000)]  # até 10 t, 10 mil litros
+SituacaoInsumo = Literal["zerado", "vai_faltar", "comprar", "tem"]
 # Lista fechada, como a do cancelamento: vira número no fim do mês.
 MotivoPerda = Literal["Venceu", "Estragou", "Caiu ou queimou", "Prato voltou", "Outro"]
 
@@ -621,6 +631,10 @@ class InsumoSaida(Saida):
     custo_centavos: int | None  # gerente e dono recebem; a equipe, vazio
     saldo: int
     ativo: bool
+    # Pela previsão: zerado, vai faltar (acaba antes da próxima compra), comprar (entra na
+    # próxima compra) ou tem. Vazio para ingrediente fora de uso.
+    situacao: SituacaoInsumo | None = None
+    acaba_em: date | None = None  # a noite em que acaba, nos próximos 7 dias
 
 
 class LinhaFicha(BaseModel):
@@ -646,6 +660,8 @@ class EstoqueSaida(BaseModel):
     fichas: list[FichaSaida]
     mostra_valores: bool  # gerente e dono: preço dos ingredientes e valor das compras
     mostra_custo: bool  # dono: custo dos pratos
+    proxima_compra: date
+    cobre: list[date]  # as noites que a próxima compra cobre
 
 
 class CompraEntrada(BaseModel):
@@ -692,3 +708,57 @@ class MovimentoSaida(BaseModel):
     prato: str | None  # venda e estorno: o prato do pedido
     quem: str | None  # nome de quem lançou (equipe do restaurante)
     em: datetime
+
+
+class PratoNaConta(BaseModel):
+    item_id: int
+    nome: str
+    por_porcao: int
+    pratos: int  # previstos nas noites que a compra cobre
+
+
+class LinhaCompraSaida(BaseModel):
+    insumo_id: int
+    nome: str
+    unidade: UnidadeInsumo
+    onde_compra: str | None
+    embalagem_quantidade: int
+    embalagem_nome: str | None
+    tem: int
+    sai_ate_compra: int  # o que ainda sai antes do dia da compra
+    sobra: int
+    precisa: int  # o que sai nas noites que a compra cobre
+    com_folga: int
+    falta: int
+    embalagens: int
+    quantidade: int
+    valor_centavos: int | None  # estimado pelo último preço médio
+    situacao: SituacaoInsumo
+    acaba_em: date | None
+    pratos: list[PratoNaConta]
+
+
+class NoiteDoPrato(BaseModel):
+    noite: date
+    previstos: int
+    ultimas: list[int]  # as 4 noites iguais, da mais antiga à mais recente
+    ja_vendidos: int  # só na noite de hoje
+
+
+class PrevisaoDoPratoSaida(BaseModel):
+    item_id: int
+    nome: str
+    noites: list[NoiteDoPrato]
+
+
+class ListaDeComprasSaida(BaseModel):
+    hoje: date
+    compra: date
+    antes: list[date]  # de hoje até a véspera da compra
+    cobre: list[date]
+    folga_pct: int
+    folga_padrao_pct: int  # a de Ajustes
+    comprar: list[LinhaCompraSaida]
+    nada_a_comprar: list[str]
+    pratos: list[PrevisaoDoPratoSaida]
+    total_centavos: int | None  # sem preço em algum item, não dá para somar

@@ -4,9 +4,14 @@ Quem faz o quê:
 - equipe vê o estoque e a ficha dos pratos (sem valores) e registra perda;
 - gerente também cadastra ingredientes, lança compra com o valor da nota e conta o estoque;
 - dono vê tudo, inclusive o custo dos pratos pela ficha.
+
+A lista de compras (gerente e dono) olha as últimas 4 noites iguais de cada prato, a ficha e
+o estoque de agora (giro/dominio/compras.py).
 """
 
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from giro.api.deps import (
@@ -30,9 +35,14 @@ from giro.esquemas import (
     InsumoAtualizacao,
     InsumoEntrada,
     InsumoSaida,
+    LinhaCompraSaida,
     LinhaFicha,
+    ListaDeComprasSaida,
     MovimentoSaida,
+    NoiteDoPrato,
     PerdaEntrada,
+    PratoNaConta,
+    PrevisaoDoPratoSaida,
 )
 from giro.modelos import (
     FichaTecnica,
@@ -41,9 +51,11 @@ from giro.modelos import (
     ItemPedido,
     MovimentoEstoque,
     Papel,
+    Restaurante,
     Usuario,
 )
 from giro.servicos import estoque as servico_estoque
+from giro.servicos.compras import plano_de_compras
 
 router = APIRouter(prefix="/api/estoque", tags=["estoque"])
 
@@ -108,11 +120,94 @@ def ver_estoque(db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo) 
     insumos = db.scalars(
         select(Insumo).where(Insumo.restaurante_id == restaurante_id).order_by(Insumo.nome)
     ).all()
+    plano = plano_de_compras(db, db.get_one(Restaurante, restaurante_id), agora())
+    previsto = {i.insumo.id: i for i in plano.itens}
+    saidas = []
+    for insumo in insumos:
+        if not (gestao or insumo.ativo):
+            continue
+        saida = insumo_saida(insumo, usuario)
+        if (item := previsto.get(insumo.id)) is not None:
+            saida.situacao, saida.acaba_em = item.situacao.value, item.acaba_em
+        saidas.append(saida)
     return EstoqueSaida(
-        insumos=[insumo_saida(i, usuario) for i in insumos if gestao or i.ativo],
+        insumos=saidas,
         fichas=fichas_saida(db, restaurante_id, usuario),
         mostra_valores=_ve_valores(usuario),
         mostra_custo=usuario.papel in VEEM_CUSTO,
+        proxima_compra=plano.compra,
+        cobre=plano.cobre,
+    )
+
+
+@router.get("/compras", dependencies=[exigir_papel(*GESTAO)])
+def ver_lista_de_compras(
+    db: Db,
+    restaurante_id: RestauranteAlvo,
+    folga: Annotated[int | None, Query(ge=0, le=100)] = None,
+) -> ListaDeComprasSaida:
+    """A lista da próxima compra, com o porquê de cada número. `folga` muda só esta conta
+    (um fim de semana de feriado, por exemplo); a de sempre fica em Ajustes."""
+    restaurante = db.get_one(Restaurante, restaurante_id)
+    plano = plano_de_compras(db, restaurante, agora(), folga)
+    comprar = sorted(
+        (i for i in plano.itens if i.linha.embalagens),
+        key=lambda i: (i.insumo.onde_compra or "~", i.insumo.nome),
+    )
+    valores = [i.valor_centavos for i in comprar]
+    return ListaDeComprasSaida(
+        hoje=plano.hoje,
+        compra=plano.compra,
+        antes=plano.antes,
+        cobre=plano.cobre,
+        folga_pct=plano.folga_pct,
+        folga_padrao_pct=restaurante.folga_compra_pct,
+        comprar=[
+            LinhaCompraSaida(
+                insumo_id=i.insumo.id,
+                nome=i.insumo.nome,
+                unidade=i.insumo.unidade,
+                onde_compra=i.insumo.onde_compra,
+                embalagem_quantidade=i.insumo.embalagem_quantidade,
+                embalagem_nome=i.insumo.embalagem_nome,
+                tem=i.linha.tem,
+                sai_ate_compra=i.linha.sai_ate_compra,
+                sobra=i.linha.sobra,
+                precisa=i.linha.precisa,
+                com_folga=i.linha.com_folga,
+                falta=i.linha.falta,
+                embalagens=i.linha.embalagens,
+                quantidade=i.linha.quantidade,
+                valor_centavos=i.valor_centavos,
+                situacao=i.situacao.value,
+                acaba_em=i.acaba_em,
+                pratos=[
+                    PratoNaConta(
+                        item_id=p.item_id, nome=p.nome, por_porcao=p.por_porcao, pratos=p.pratos
+                    )
+                    for p in i.pratos
+                ],
+            )
+            for i in comprar
+        ],
+        nada_a_comprar=[i.insumo.nome for i in plano.itens if not i.linha.embalagens],
+        pratos=[
+            PrevisaoDoPratoSaida(
+                item_id=p.item_id,
+                nome=p.nome,
+                noites=[
+                    NoiteDoPrato(
+                        noite=n.noite,
+                        previstos=n.previstos,
+                        ultimas=n.ultimas,
+                        ja_vendidos=n.ja_vendidos,
+                    )
+                    for n in p.noites
+                ],
+            )
+            for p in plano.pratos
+        ],
+        total_centavos=(sum(v for v in valores if v is not None) if None not in valores else None),
     )
 
 

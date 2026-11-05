@@ -40,6 +40,10 @@ class Restaurante(Base):
     # Horário do serviço, "HH:MM" em São Paulo: briefing na abertura, resumo no fechamento.
     abre_as: Mapped[str] = mapped_column(String(5), default="18:00", server_default="18:00")
     fecha_as: Mapped[str] = mapped_column(String(5), default="23:30", server_default="23:30")
+    # Dias em que o restaurante faz compra ("1,4" = terça e sexta; segunda = 0) e a folga da
+    # lista de compras, em por cento.
+    dias_compra: Mapped[str] = mapped_column(String(13), default="1,4", server_default="1,4")
+    folga_compra_pct: Mapped[int] = mapped_column(default=15, server_default="15")
     # Última noite (AAAA-MM-DD) que já recebeu o briefing e o resumo, para não mandar duas vezes.
     ultimo_briefing_noite: Mapped[str | None] = mapped_column(String(10))
     ultimo_resumo_noite: Mapped[str | None] = mapped_column(String(10))

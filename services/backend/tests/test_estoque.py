@@ -234,12 +234,8 @@ def test_um_restaurante_nao_ve_nem_mexe_no_estoque_do_outro(
     estoque,
 ):
     vizinha = como("dono@vizinha.demo")
-    assert vizinha.get("/api/estoque").json() == {
-        "insumos": [],
-        "fichas": [],
-        "mostra_valores": True,
-        "mostra_custo": True,
-    }
+    visto = vizinha.get("/api/estoque").json()
+    assert (visto["insumos"], visto["fichas"]) == ([], [])
     massa = estoque["massa"]["id"]
     assert (
         vizinha.post(
