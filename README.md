@@ -16,7 +16,7 @@ Projeto do TCM *O Segredo do Meu Negócio* (Técnico em Administração), da equ
 
 ## O que já funciona
 
-**Fases 0 (fundação), 1 (salão no simulador) e 2 (visão computacional) prontas. Fase 3 (inteligência) com resultados, replay, "E se?" e Copiloto. Cardápio e pedidos na mesa (etapas 1 e 2).**
+**Fases 0 (fundação), 1 (salão no simulador) e 2 (visão computacional) prontas. Fase 3 (inteligência) com resultados, replay, "E se?" e Copiloto. Cardápio e pedidos na mesa (etapas 1 e 2) e a primeira parte do estoque (etapa 3).**
 
 - Mapa de mesas ao vivo, com cronômetro em cada mesa e as cadeiras ocupadas desenhadas em volta.
 - **Salão em 3D realista**: a cantina inteira à noite (piso de tábua, lambri, toalha xadrez, balcão com flores, geladeira de bebidas, plantas, arandelas, a câmera no canto), com clientes de verdade sentados em cada mesa ocupada, o cardápio na mesa de quem espera, o prato servido e a louça suja na mesa para limpar. Um garçom anda pelos corredores até a mesa de quem tocou "Vou atender", anota o pedido e volta ao balcão. Nos alertas, **Ver no salão** leva a câmera do 3D até a mesa. Gira com o dedo ou o mouse, e tocar na placa da mesa abre o mesmo detalhe com "Liberar mesa". O botão **Ver como a câmera** mostra o campo de visão e o contorno que a visão desenha em volta de cada pessoa. As pessoas são ilustrativas (o selo logo abaixo do 3D diz isso): a câmera só conta, não filma ninguém. O acabamento se ajusta ao aparelho (alto, médio ou baixo; dá para forçar com `?qualidade=alto` na URL). No computador abre em 3D; no celular, na planta (dá para trocar, e o aparelho lembra).
@@ -71,6 +71,17 @@ Cardápio, etapa 2 (gestão):
 
 ![Matriz de lucro, quem pede também pede e tempo de cozinha](docs/telas/matriz-de-lucro.png)
 
+Cardápio, etapa 3, parte 1 (estoque):
+
+- **Ficha técnica de cada prato**: quanto de cada ingrediente vai em uma porção, mais o custo de "outros" (tempero, óleo). Com ficha, o custo do prato é calculado pela ficha e acompanha o preço das compras: a matriz de lucro fica sempre em dia. A equipe vê a ficha sem valores, para servir a porção igual todo dia.
+- **Estoque que baixa sozinho**: cada prato lançado tira do estoque o que a ficha diz. Cancelado antes do "Pronto", volta; depois do "Pronto", vira perda ("Prato cancelado"). Prato sem ficha não mexe no estoque.
+- **Chegou compra, perda e contagem**: o gerente lança a compra com o valor da nota (o preço do ingrediente vira o custo médio do que tinha com o que chegou); qualquer um registra perda com o motivo da lista; a contagem substitui a conta e mostra a diferença.
+- **Livro de cada ingrediente**: tudo o que entrou e saiu, com quem lançou e quando. Nada se apaga.
+- Ingrediente zerado pela conta sugere marcar "acabou" nos pratos que o usam. O GIRO nunca marca sozinho: a conta pode estar errada.
+- Controle só o que pesa no bolso (10 a 20 ingredientes: carnes, queijos, massas, bebidas). O seed traz 18 ingredientes da Cantina, as fichas de 15 itens e 4 semanas de compras, vendas, contagens e perdas.
+
+![Estoque da Cantina com o livro da muçarela aberto](docs/telas/estoque.png)
+
 ![Pedido da mesa no celular do garçom](docs/telas/pedido-celular.png)
 
 ![Tela da cozinha com a fila por mesa](docs/telas/cozinha.png)
@@ -123,6 +134,7 @@ Prefere Postgres, como em produção? `make banco` sobe um no Docker. Depois, an
 10. Pedido na mesa: no celular do garçom, toque numa mesa, em **Lançar pedido**, escolha 2 lasanhas e um refrigerante e lance. No computador, abra **Cozinha**: o pedido aparece na hora. Toque em **Pronto** e veja o celular atualizar.
 11. Com a mesa ainda aberta no salão, toque em **Pediu a conta**: a mesa mostra quando deve vagar.
 12. Feche com o dono em **Resultados**, "4 semanas": o prato do mês, o que cada mesa mais pediu e a **matriz de lucro** (Ravioli e Fettuccine caem em "cão"). Pergunte ao Copiloto "Qual prato eu tiro do cardápio?". O seed já traz o cardápio da cantina (22 itens) e os pedidos das 4 semanas.
+13. Abra **Estoque**: os 18 ingredientes, o que cada um tem e o **livro** da muçarela (vendas de cada noite, compras de terça e sexta, contagem de segunda). Em **Fichas dos pratos**, mostre o Fettuccine: pela ficha ele custa mais do que o digitado antes. Lance um pedido no celular e veja o estoque baixar na hora.
 
 Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 
@@ -252,6 +264,6 @@ O repositório já vem preparado para o grupo usar o Claude Code:
 |---|---|
 | 2b. Calibração em campo | Medir a visão com vídeo de um restaurante parceiro; receber a foto do gravador por FTPS para dispensar o conector |
 | 3. Inteligência (resto) | Previsão da próxima mesa a vagar, relatório semanal por e-mail "quanto a GIRO te devolveu" |
-| Cardápio, etapa 3 | Ler pedidos do sistema de caixa (PDV), estoque básico pela receita e previsão de compras |
+| Cardápio, etapa 3 (partes 2 a 4) | "Acaba no sábado" e lista de compras com o porquê; perdas (custo pela ficha contra o de verdade) e curva ABC; importar a planilha de vendas do sistema de caixa |
 | 4. Gestão GIRO | Leads com as perguntas de qualificação, assinatura e cobrança (Asaas), painel financeiro |
 | 5. Site | Página de vendas e calculadora de retorno |

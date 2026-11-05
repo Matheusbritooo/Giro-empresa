@@ -12,7 +12,7 @@ import { lancamentosDaCozinha } from "@/lib/pedido";
 import { useRestauranteAlvo } from "@/lib/restaurante";
 import { comBusca } from "@/lib/resultados";
 import { horaCurta, minutosEntre } from "@/lib/salao";
-import type { ItemCozinha } from "@/lib/tipos";
+import type { AvisoAoVivo, ItemCozinha } from "@/lib/tipos";
 
 /** Passou disso desde o lançamento, o pedido fica em destaque: a mesa está esperando. */
 const MINUTOS_ATRASADO = 20;
@@ -29,7 +29,10 @@ export default function PaginaCozinha() {
     [restaurante],
   );
   const { dados: fila, erro, recarregar } = useDados(restaurante ? buscar : null);
-  const aoAviso = useCallback(() => recarregar(), [recarregar]);
+  const aoAviso = useCallback(
+    (aviso: AvisoAoVivo) => aviso.tipo !== "estoque" && recarregar(),
+    [recarregar],
+  );
   const { estado, conexao } = useSalaoAoVivo(restaurante, semAlerta, aoAviso);
   const agora = useRelogio(estado.ajusteRelogioMs);
   const [saindo, setSaindo] = useState<Set<number>>(new Set());

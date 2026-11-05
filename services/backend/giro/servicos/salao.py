@@ -38,6 +38,7 @@ from giro.modelos import (
 )
 from giro.push import EnviadorPush
 from giro.servicos.cardapio import previsao_de_vaga
+from giro.servicos.estoque import baixar_pedidos
 from giro.tempo_real import CentralTempoReal
 
 TIPO_ALERTA_DO_EVENTO = {
@@ -235,7 +236,7 @@ class ServicoSalao:
         mudancas = _Mudancas()
         self._aplicar(db, mesa, maquina, maquina.registrar_pedido(agora), mudancas)
         ocupacao = ocupacoes_abertas(db, [mesa.id])[mesa.id]
-        db.add_all(
+        pedidos = [
             ItemPedido(
                 restaurante_id=mesa.restaurante_id,
                 ocupacao_id=ocupacao.id,
@@ -249,7 +250,10 @@ class ServicoSalao:
                 lancado_por_id=usuario_id,
             )
             for item, quantidade, observacao in linhas
-        )
+        ]
+        db.add_all(pedidos)
+        db.flush()  # os itens ganham id para o livro do estoque apontar para eles
+        baixar_pedidos(db, pedidos, agora)
         mudancas.mesas[mesa.id] = mesa
         db.commit()
         self._avisar(db, restaurante.id, mudancas)
@@ -265,6 +269,15 @@ class ServicoSalao:
         ocupacao.conta_pedida_em = agora if pedida else None
         db.commit()
         self._avisar(db, mesa.restaurante_id, _Mudancas(mesas={mesa.id: mesa}))
+
+    @_uma_por_vez
+    def mexer_no_estoque[T](self, db: Session, restaurante_id: int, mudanca: Callable[[], T]) -> T:
+        """Compra, perda, contagem e ficha esperam a vez dos pedidos (no SQLite não há
+        FOR UPDATE) e avisam as telas abertas para buscar o estoque de novo."""
+        resultado = mudanca()
+        db.commit()
+        self.central.publicar(restaurante_id, {"tipo": "estoque"})
+        return resultado
 
     def avisar_pedido(self, db: Session, mesa: Mesa) -> None:
         """Um item ficou pronto ou foi cancelado: atualiza a mesa e a tela da cozinha."""

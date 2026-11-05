@@ -63,7 +63,7 @@ export default function PaginaPedido() {
   const aoAviso = useCallback(
     (aviso: AvisoAoVivo) => {
       if (aviso.tipo === "cardapio") recarregarCardapio();
-      else if (aviso.mesa_id === mesaId) recarregarPedido();
+      else if (aviso.tipo === "pedido" && aviso.mesa_id === mesaId) recarregarPedido();
     },
     [mesaId, recarregarCardapio, recarregarPedido],
   );

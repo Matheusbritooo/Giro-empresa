@@ -106,8 +106,11 @@ export type MensagemAoVivo =
   | { tipo: "camera"; camera: Camera }
   | AvisoAoVivo;
 
-/** Avisos que não mudam o mapa: quem precisa busca de novo (pedido da mesa, cardápio). */
-export type AvisoAoVivo = { tipo: "pedido"; mesa_id: number } | { tipo: "cardapio" };
+/** Avisos que não mudam o mapa: quem precisa busca de novo (pedido, cardápio, estoque). */
+export type AvisoAoVivo =
+  | { tipo: "pedido"; mesa_id: number }
+  | { tipo: "cardapio" }
+  | { tipo: "estoque" };
 
 // Resultados, replay, "E se?" e Copiloto (Fase 3)
 
@@ -242,6 +245,7 @@ export interface ItemCardapio {
   custo_centavos: number | null; // só o dono recebe
   ativo: boolean;
   disponivel: boolean; // "tem hoje"
+  custo_pela_ficha: boolean; // com ficha técnica, o custo vem da ficha
 }
 
 export interface Cardapio {
@@ -346,4 +350,71 @@ export interface ResultadosCardapio {
   matrizes: MatrizCategoria[] | null; // só o dono recebe
   combinacoes: Combinacao[];
   tempos: TempoDoItem[];
+}
+
+// Estoque (etapa 3 do cardápio). Quantidade na unidade base: grama, mililitro ou unidade.
+
+export type UnidadeInsumo = "g" | "ml" | "un";
+
+export interface Insumo {
+  id: number;
+  nome: string;
+  unidade: UnidadeInsumo;
+  embalagem_quantidade: number;
+  embalagem_nome: string | null;
+  onde_compra: string | null;
+  custo_centavos: number | null; // por kg, litro ou unidade; a equipe recebe vazio
+  saldo: number;
+  ativo: boolean;
+}
+
+export interface LinhaFicha {
+  insumo_id: number;
+  quantidade: number; // por porção
+}
+
+export interface Ficha {
+  item_id: number;
+  linhas: LinhaFicha[];
+  custo_outros_centavos: number | null; // só o dono recebe
+  custo_centavos: number | null; // custo de uma porção pela ficha; só o dono recebe
+}
+
+export interface Estoque {
+  insumos: Insumo[];
+  fichas: Ficha[];
+  mostra_valores: boolean; // gerente e dono
+  mostra_custo: boolean; // dono
+}
+
+export const MOTIVOS_PERDA = [
+  "Venceu",
+  "Estragou",
+  "Caiu ou queimou",
+  "Prato voltou",
+  "Outro",
+] as const;
+export type MotivoPerda = (typeof MOTIVOS_PERDA)[number];
+
+export interface Diferenca {
+  insumo_id: number;
+  nome: string;
+  unidade: UnidadeInsumo;
+  antes: number;
+  contado: number;
+  diferenca: number;
+}
+
+export type TipoMovimento = "compra" | "venda" | "estorno" | "perda" | "contagem";
+
+export interface Movimento {
+  id: number;
+  tipo: TipoMovimento;
+  quantidade: number;
+  saldo_depois: number;
+  valor_centavos: number | null;
+  motivo: string | null;
+  prato: string | null;
+  quem: string | null;
+  em: string;
 }

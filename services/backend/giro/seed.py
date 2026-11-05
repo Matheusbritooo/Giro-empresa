@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from giro.banco import agora, criar_engine, criar_sessoes
 from giro.config import Config, obter_config
 from giro.demo_cardapio import criar_cardapio
+from giro.demo_estoque import gerar_estoque
 from giro.demo_historico import gerar_historico, refazer_historico
 from giro.dominio.indicadores import noite_de
 from giro.dominio.mesa import Estado
@@ -112,11 +113,13 @@ def semear(config: Config | None = None, zerar: bool = False, refazer: bool = Fa
                 criar_cardapio(db, cantina.id)  # demonstração criada antes do cardápio
                 criar = refazer_historico if refazer else gerar_historico
                 historico = criar(db, cantina.id, noite_de(agora()))
+                estoque = gerar_estoque(db, cantina.id, noite_de(agora()))
             db.commit()
             print(
                 "Dados de demonstração já existem."
                 + (" Salão zerado." if zerar else "")
                 + (f" Histórico: {historico} visitas." if historico else "")
+                + (f" Estoque: {estoque} lançamentos." if cantina and estoque else "")
             )
             return
 
@@ -151,6 +154,7 @@ def semear(config: Config | None = None, zerar: bool = False, refazer: bool = Fa
             )
         db.flush()
         historico = gerar_historico(db, cantina.id, noite_de(agora()))
+        estoque = gerar_estoque(db, cantina.id, noite_de(agora()))
         db.commit()
 
     if publica:  # endereço público: senha e token não vão para o log
@@ -160,6 +164,7 @@ def semear(config: Config | None = None, zerar: bool = False, refazer: bool = Fa
     for nome, email, papel in USUARIOS:
         print(f"  {papel.value:<11} {email:<24} {nome}")
     print(f"Histórico de 4 semanas para os resultados: {historico} visitas.")
+    print(f"Estoque de demonstração: 18 ingredientes e {estoque} lançamentos no livro.")
     if not publica:
         print(f"Token da câmera do simulador: {token}")
 

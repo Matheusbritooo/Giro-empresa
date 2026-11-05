@@ -3,13 +3,23 @@
 from datetime import timedelta
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from giro.banco import Base, agora, criar_engine, criar_sessoes
 from giro.config import Config
-from giro.modelos import Alerta, Camera, Mesa, Ocupacao, Usuario
+from giro.modelos import (
+    Alerta,
+    Camera,
+    Insumo,
+    ItemCardapio,
+    Mesa,
+    MovimentoEstoque,
+    Ocupacao,
+    Usuario,
+)
 from giro.seed import semear
 from giro.seguranca import hash_token, verificar_senha
+from giro.servicos.estoque import custos_das_fichas
 
 SEGREDO = "segredo-de-teste-com-tamanho-suficiente-para-hs256"
 
@@ -154,3 +164,36 @@ def test_ao_acordar_as_noites_passadas_viram_historico_e_hoje_fica(config_produc
         assert db.get(Ocupacao, ids[1]) is not None
         assert db.scalar(select(Alerta).where(Alerta.ocupacao_id == ids[0])) is None
         assert len(db.scalars(select(Ocupacao)).all()) == historico + 1
+
+
+def livro_confere(db):
+    """Saldo de cada ingrediente = soma do livro, e nenhum saldo negativo no caminho."""
+    somas = dict(
+        db.execute(
+            select(MovimentoEstoque.insumo_id, func.sum(MovimentoEstoque.quantidade)).group_by(
+                MovimentoEstoque.insumo_id
+            )
+        ).all()
+    )
+    insumos = db.scalars(select(Insumo)).all()
+    assert {i.id: i.saldo for i in insumos} == somas
+    assert db.scalar(select(func.min(MovimentoEstoque.saldo_depois))) >= 0
+    return len(insumos), db.scalar(select(func.count(MovimentoEstoque.id)))
+
+
+def test_demonstracao_tem_estoque_com_ficha_e_livro(config_producao, demo):
+    semear(config_producao)
+    with sessao(config_producao) as db:
+        ingredientes, linhas = livro_confere(db)
+        assert ingredientes == 18
+        tipos = set(db.scalars(select(MovimentoEstoque.tipo).distinct()))
+        assert tipos == {"compra", "venda", "contagem", "perda"}
+        # O custo dos pratos com ficha é o da ficha.
+        lasanha = db.scalar(select(ItemCardapio).where(ItemCardapio.nome == "Lasanha à bolonhesa"))
+        custos = custos_das_fichas(db, lasanha.restaurante_id)
+        assert lasanha.custo_centavos == custos[lasanha.id]
+        assert len(custos) == 15
+    # Ao acordar de novo, o livro é refeito igual, sem duplicar.
+    semear(config_producao, zerar=True, refazer=True)
+    with sessao(config_producao) as db:
+        assert livro_confere(db) == (18, linhas)

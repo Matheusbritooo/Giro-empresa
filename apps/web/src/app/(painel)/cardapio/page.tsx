@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useState } from "react";
 
 import { Aviso, Botao, Campo, Secao, Selecao } from "@/components/ui";
@@ -22,7 +23,8 @@ export default function PaginaCardapio() {
   const buscar = useCallback(() => api<Cardapio>("/api/cardapio", { restaurante }), [restaurante]);
   const { dados, erro, recarregar } = useDados(restaurante ? buscar : null);
   const aoAviso = useCallback(
-    (aviso: AvisoAoVivo) => aviso.tipo === "cardapio" && recarregar(),
+    // Compra muda o preço dos ingredientes, e com ele o custo dos pratos com ficha.
+    (aviso: AvisoAoVivo) => (aviso.tipo === "cardapio" || aviso.tipo === "estoque") && recarregar(),
     [recarregar],
   );
   useSalaoAoVivo(restaurante, semAlerta, aoAviso);
@@ -254,7 +256,21 @@ function LinhaItem({
       ) : (
         <span className="numeros text-tinta-suave">{preco(item.preco_centavos)}</span>
       )}
-      {mostraCusto && (
+      {mostraCusto && item.custo_pela_ficha && (
+        <span className="flex items-center gap-2 text-sm text-tinta-suave">
+          Custo{" "}
+          <span className="numeros font-semibold text-tinta">
+            {item.custo_centavos === null ? "sem preço" : preco(item.custo_centavos)}
+          </span>
+          <Link href="/estoque" className="underline underline-offset-2 hover:text-tinta">
+            pela ficha
+          </Link>
+          <span className="numeros w-24 font-semibold text-tinta">
+            {lucro === null ? "" : `lucro ${lucro}%`}
+          </span>
+        </span>
+      )}
+      {mostraCusto && !item.custo_pela_ficha && (
         <label className="flex items-center gap-2 text-sm text-tinta-suave">
           Custo R$
           <input

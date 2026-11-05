@@ -29,6 +29,7 @@ from giro.esquemas import (
     PedidoMesaSaida,
 )
 from giro.modelos import ItemCardapio, ItemPedido, Mesa, Usuario
+from giro.servicos.estoque import cancelar_pedido
 from giro.servicos.salao import mesas_salao, ocupacoes_abertas
 
 router = APIRouter(prefix="/api", tags=["pedidos"])
@@ -140,12 +141,15 @@ def marcar_pronto(
 def cancelar(
     pedido_id: int, dados: CancelamentoEntrada, db: Db, usuario: UsuarioAtual, servico: Servico
 ) -> ItemPedidoSaida:
-    """Só gerente e dono cancelam, sempre com motivo. Fica quem cancelou e quando."""
+    """Só gerente e dono cancelam, sempre com motivo. Fica quem cancelou e quando.
+    Antes do "Pronto", os ingredientes voltam para o estoque; depois, viram perda."""
     pedido = _item_pedido(db, pedido_id, usuario)
     if pedido.cancelado_em is None:
-        pedido.cancelado_em = agora()
+        momento = agora()
+        pedido.cancelado_em = momento
         pedido.cancelado_por_id = usuario.id
         pedido.motivo_cancelamento = dados.motivo
+        cancelar_pedido(db, pedido, usuario.id, momento)
         db.commit()
         servico.avisar_pedido(db, pedido.mesa)
     return ItemPedidoSaida.model_validate(pedido)
