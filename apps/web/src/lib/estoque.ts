@@ -7,8 +7,11 @@ import type {
   Ficha,
   Insumo,
   ItemCardapio,
+  LinhaDeCompra,
   LinhaFicha,
+  ListaDeCompras,
   Movimento,
+  SituacaoInsumo,
   UnidadeInsumo,
 } from "./tipos";
 
@@ -56,20 +59,89 @@ export function precoDoInsumo(insumo: Insumo): string | null {
   return preco(insumo.custo_centavos) + sufixo;
 }
 
-export type SituacaoInsumo = "zerado" | "tem";
-
-/** Zerado pela conta: pode ser que acabou de verdade, pode ser conta errada. */
+/** Pela previsão do servidor; sem ela (fora de uso), só zerado ou tem. */
 export function situacaoDoInsumo(insumo: Insumo): SituacaoInsumo {
-  return insumo.saldo <= 0 ? "zerado" : "tem";
+  return insumo.situacao ?? (insumo.saldo <= 0 ? "zerado" : "tem");
 }
 
-/** A lista do estoque: zerados primeiro, depois pelo nome. */
+export const ROTULO_SITUACAO: Record<SituacaoInsumo, string> = {
+  zerado: "Zerado",
+  vai_faltar: "Vai faltar",
+  comprar: "Comprar",
+  tem: "Tem",
+};
+
+const ORDEM: Record<SituacaoInsumo, number> = { zerado: 0, vai_faltar: 0, comprar: 1, tem: 2 };
+
+/** A lista do estoque: o urgente primeiro, depois o que entra na compra, depois o resto. */
 export function ordenarInsumos(insumos: Insumo[]): Insumo[] {
   return [...insumos].sort(
     (a, b) =>
-      Number(situacaoDoInsumo(a) === "tem") - Number(situacaoDoInsumo(b) === "tem") ||
+      ORDEM[situacaoDoInsumo(a)] - ORDEM[situacaoDoInsumo(b)] ||
       a.nome.localeCompare(b.nome, "pt-BR"),
   );
+}
+
+const DIAS_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+function diasEntre(de: string, ate: string): number {
+  return Math.round((Date.parse(`${ate}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86_400_000);
+}
+
+/** "hoje", "amanhã", "na quinta", "no sábado". */
+export function quando(dia: string, hoje: string): string {
+  const n = diasEntre(hoje, dia);
+  if (n === 0) return "hoje";
+  if (n === 1) return "amanhã";
+  const semana = new Date(`${dia}T12:00:00Z`).getUTCDay();
+  return `${semana === 0 || semana === 6 ? "no" : "na"} ${DIAS_SEMANA[semana]}`;
+}
+
+/** Até quando dá, para a tabela: "acaba amanhã", "dá a semana toda". */
+export function textoAteQuando(insumo: Insumo, hoje: string): string {
+  if (insumo.acaba_em) return `acaba ${quando(insumo.acaba_em, hoje)}`;
+  return insumo.saldo <= 0 ? "não tem" : "dá a semana toda";
+}
+
+/** Plural da primeira palavra: "pacote de 1 kg" vira "pacotes de 1 kg"; "barril", "barris". */
+export function plural(nome: string): string {
+  const [primeira, ...resto] = nome.split(" ");
+  let p = primeira;
+  if (p.endsWith("il")) p = `${p.slice(0, -2)}is`;
+  else if (/[rz]$/.test(p)) p = `${p}es`;
+  else if (p.endsWith("m")) p = `${p.slice(0, -1)}ns`;
+  else if (!p.endsWith("s")) p = `${p}s`;
+  return [p, ...resto].join(" ");
+}
+
+/** O que pedir ao fornecedor: "8 pacotes de 1 kg", "1 barril de 30 L" ou "7 kg". */
+export function textoCompra(
+  unidade: UnidadeInsumo,
+  embalagens: number,
+  embalagemQuantidade: number,
+  embalagemNome: string | null,
+): string {
+  const nome = embalagemNome?.trim() ?? "";
+  if (!nome || ["kg", "l", "g", "ml", "un"].includes(nome.toLowerCase()))
+    return quantidade(unidade, embalagens * embalagemQuantidade);
+  return `${embalagens} ${embalagens === 1 ? nome : plural(nome)}`;
+}
+
+/** A lista para colar no WhatsApp do fornecedor: por onde se compra, sem preço. */
+export function textoDaLista(lista: ListaDeCompras, restaurante: string): string {
+  const grupos = new Map<string, LinhaDeCompra[]>();
+  for (const linha of lista.comprar) {
+    const onde = linha.onde_compra ?? "Outros";
+    grupos.set(onde, [...(grupos.get(onde) ?? []), linha]);
+  }
+  const dia = DIAS_SEMANA[new Date(`${lista.compra}T12:00:00Z`).getUTCDay()];
+  let texto = `Compras de ${dia} (${restaurante})\n`;
+  for (const [onde, linhas] of grupos) {
+    texto += `\n${onde}\n`;
+    for (const l of linhas)
+      texto += `- ${l.nome}: ${textoCompra(l.unidade, l.embalagens, l.embalagem_quantidade, l.embalagem_nome)}\n`;
+  }
+  return texto;
 }
 
 /** Pratos ativos que levam o ingrediente. */

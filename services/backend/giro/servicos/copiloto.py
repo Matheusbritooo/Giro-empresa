@@ -8,7 +8,8 @@ e com eles:
 
 LGPD: para a IA vão só números agregados (turmas, minutos, reais, número da mesa, quantas
 vezes cada prato saiu). Nenhum nome, e-mail, imagem ou dado de quem sentou na mesa. A matriz
-de lucro dos pratos só vai quando quem pergunta é o dono (o único que vê custo).
+de lucro dos pratos só vai quando quem pergunta é o dono (o único que vê custo). Do estoque
+vão só quantidades (quanto tem, quando acaba, quanto comprar), nunca o valor em reais.
 """
 
 from __future__ import annotations
@@ -23,10 +24,12 @@ import anthropic
 from sqlalchemy.orm import Session
 
 from giro.config import Config
+from giro.dominio.compras import Situacao, texto_compra, texto_quantidade
 from giro.dominio.indicadores import FUSO, Indicadores, intervalo_da_noite, noite_de
 from giro.modelos import Restaurante
 from giro.servicos import resultados
 from giro.servicos.cardapio import ResultadosCardapio, resultados_cardapio
+from giro.servicos.compras import PlanoDeCompras, plano_de_compras
 
 log = logging.getLogger("giro.copiloto")
 
@@ -82,6 +85,8 @@ class Contexto:
     # O que saiu da cozinha nas 4 semanas (None sem pedidos lançados). A matriz de lucro só
     # vem preenchida para quem vê custo.
     cardapio: ResultadosCardapio | None = None
+    # Previsão e lista de compras (None sem ingrediente com ficha).
+    compras: PlanoDeCompras | None = None
 
     @property
     def dia_semana(self) -> int:
@@ -104,6 +109,7 @@ def montar_contexto(
     cardapio = resultados_cardapio(
         db, restaurante, resultados.Periodo.MES, hoje - timedelta(days=1), agora, com_custo
     )
+    compras = plano_de_compras(db, restaurante, agora)
     return Contexto(
         restaurante=restaurante,
         hoje=hoje,
@@ -113,6 +119,7 @@ def montar_contexto(
         hoje_ate_agora=dados.indicadores(inicio_hoje, min(fim_hoje, agora)),
         mesmo_dia=[r for d, r in noites if d.weekday() == hoje.weekday()],
         cardapio=cardapio if cardapio.visitas_com_pedido else None,
+        compras=compras if any(i.pratos for i in compras.itens) else None,
     )
 
 
@@ -212,7 +219,50 @@ def contexto_em_json(ctx: Contexto) -> str:
     }
     if ctx.cardapio is not None:
         dados["cardapio_ultimas_4_semanas"] = _cardapio_em_numeros(ctx.cardapio)
+    if ctx.compras is not None:
+        dados["estoque"] = _estoque_em_numeros(ctx.compras)
     return json.dumps(dados, ensure_ascii=False)
+
+
+def _quando(noite: date, hoje: date) -> str:
+    """ "hoje", "amanhã", "na quinta", "no sábado"."""
+    if noite == hoje:
+        return "hoje"
+    if noite == hoje + timedelta(days=1):
+        return "amanhã"
+    dia = DIAS[noite.weekday()]
+    return f"{'no' if noite.weekday() >= 5 else 'na'} {dia}"
+
+
+def _texto_do_item(item) -> str:
+    i = item.insumo
+    return texto_compra(i.unidade, item.linha.embalagens, i.embalagem_quantidade, i.embalagem_nome)
+
+
+def _estoque_em_numeros(plano: PlanoDeCompras) -> dict:
+    """Só quantidades: quanto tem, quando acaba e quanto comprar. Nunca reais."""
+    return {
+        "proxima_compra": f"{DIAS[plano.compra.weekday()]} ({_quando(plano.compra, plano.hoje)})",
+        "noites_que_a_compra_cobre": [DIAS[n.weekday()] for n in plano.cobre],
+        "folga_pct": plano.folga_pct,
+        "ingredientes": [
+            {
+                "nome": item.insumo.nome,
+                "tem": texto_quantidade(item.insumo.unidade, item.insumo.saldo),
+                "acaba": _quando(item.acaba_em, plano.hoje) if item.acaba_em else None,
+                "comprar": _texto_do_item(item) if item.linha.embalagens else None,
+            }
+            for item in plano.itens
+        ],
+    }
+
+
+def _acabam_antes_da_compra(plano: PlanoDeCompras) -> list:
+    return [
+        i
+        for i in plano.itens
+        if i.acaba_em is not None and (i.acaba_em < plano.compra or i.acaba_em == plano.hoje)
+    ]
 
 
 def _cardapio_em_numeros(c: ResultadosCardapio) -> dict:
@@ -320,7 +370,30 @@ def briefing(ctx: Contexto) -> Briefing:
         )
     if not dicas:
         dicas.append("O salão tem andado bem neste dia. Mantenha o ritmo.")
-    if ctx.cardapio is not None:
+    if ctx.compras is not None:
+        plano = ctx.compras
+        urgentes = _acabam_antes_da_compra(plano)
+        if urgentes:
+            nomes = ", ".join(
+                f"{i.insumo.nome.lower()} ({_quando(i.acaba_em, plano.hoje)})" for i in urgentes
+            )
+            # Acabar hoje é o que o dono precisa ler primeiro, até na notificação.
+            dica = (
+                f"Pela conta do estoque, acaba antes da compra de {DIAS[plano.compra.weekday()]}: "
+                f"{nomes}. Confira a geladeira e, se faltar, marque o prato como acabou."
+            )
+            if any(i.acaba_em == plano.hoje for i in urgentes):
+                dicas.insert(0, dica)
+            else:
+                dicas.append(dica)
+        elif plano.compra == plano.hoje:
+            itens = sum(1 for i in plano.itens if i.linha.embalagens)
+            if itens:
+                dicas.append(
+                    f"Hoje é dia de compra: {itens} "
+                    f"{'item' if itens == 1 else 'itens'} na lista, em Estoque."
+                )
+    elif ctx.cardapio is not None:
         prato = next((i for i in ctx.cardapio.itens if not i.bebida), None)
         if prato is not None:
             dicas.append(f"Confira o estoque para {prato.nome}: é o que mais sai da cozinha.")
@@ -418,9 +491,59 @@ def responder_sobre_cardapio(p: str, ctx: Contexto) -> str | None:
     return None
 
 
+def responder_sobre_estoque(p: str, ctx: Contexto) -> str | None:
+    """O que comprar e o que está acabando. None quando a pergunta não é sobre isso."""
+    comprar = any(t in p for t in ("comprar", "compra", "lista de compra", "fornecedor"))
+    acabando = any(t in p for t in ("acaba", "acabando", "falta", "faltar", "estoque"))
+    if not (comprar or acabando):
+        return None
+    plano = ctx.compras
+    if plano is None:
+        return (
+            "Ainda não tenho estoque para olhar. Cadastre os ingredientes e a ficha dos pratos "
+            "em Estoque: com isso eu digo o que comprar e o que vai acabar."
+        )
+    dia = DIAS[plano.compra.weekday()]
+    quando = _quando(plano.compra, plano.hoje)
+    if comprar:
+        itens = [i for i in plano.itens if i.linha.embalagens]
+        if not itens:
+            return (
+                f"Para a compra de {dia} ({quando}) não falta nada pela conta. "
+                "Confira a geladeira mesmo assim."
+            )
+        lista = "; ".join(f"{i.insumo.nome}: {_texto_do_item(i)}" for i in itens[:8])
+        resto = f" e mais {len(itens) - 8}" if len(itens) > 8 else ""
+        return (
+            f"Para a compra de {dia} ({quando}), que cobre até "
+            f"{DIAS[plano.cobre[-1].weekday()]}: {lista}{resto}. A lista completa, com o porquê "
+            "de cada número, está em Estoque, na aba Lista de compras."
+        )
+    urgentes = _acabam_antes_da_compra(plano)
+    depois = [i for i in plano.itens if i.situacao == Situacao.COMPRAR and i not in urgentes]
+    if not urgentes and not depois:
+        return f"Pela conta, nada acaba antes da compra de {dia} ({quando})."
+    partes = []
+    if urgentes:
+        nomes = ", ".join(
+            f"{i.insumo.nome.lower()} ({_quando(i.acaba_em, plano.hoje)})" for i in urgentes
+        )
+        partes.append(f"Acaba antes da compra de {dia}: {nomes}.")
+    if len(depois) > 4:
+        partes.append(
+            f"Outros {len(depois)} ingredientes dão até a compra e entram na lista de {dia}."
+        )
+    elif depois:
+        nomes = ", ".join(i.insumo.nome.lower() for i in depois)
+        partes.append(f"Precisa entrar na compra de {dia}: {nomes}.")
+    return " ".join(partes) + " Confira na geladeira: a conta pode estar errada."
+
+
 def responder_com_regras(pergunta: str, ctx: Contexto) -> str:
     """Respostas prontas para as perguntas mais comuns, quando a IA não está ligada."""
     p = _sem_acento(pergunta)
+    if (sobre_estoque := responder_sobre_estoque(p, ctx)) is not None:
+        return sobre_estoque
     if (sobre_cardapio := responder_sobre_cardapio(p, ctx)) is not None:
         return sobre_cardapio
     q = ctx.quatro_semanas

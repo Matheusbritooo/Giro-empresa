@@ -14,16 +14,21 @@ import {
   porPorcao,
   pratosQueUsam,
   precoDoInsumo,
+  quando,
   quantidade,
+  ROTULO_SITUACAO,
   situacaoDoInsumo,
   sugestoesDeAcabou,
+  textoAteQuando,
+  textoCompra,
   textoDaDiferenca,
+  textoDaLista,
   textoDoMovimento,
   unidadeDoCampo,
 } from "@/lib/estoque";
 import { campoDosCentavos, centavosDoCampo, preco } from "@/lib/pedido";
 import { useRestauranteAlvo } from "@/lib/restaurante";
-import { horaLocal, noiteDe, rotuloDia } from "@/lib/resultados";
+import { diaDaSemana, horaLocal, noiteDe, rotuloDia } from "@/lib/resultados";
 import { podeGerirMesas, useSessao } from "@/lib/sessao";
 import {
   type AvisoAoVivo,
@@ -33,6 +38,8 @@ import {
   type Ficha,
   type Insumo,
   type ItemCardapio,
+  type LinhaDeCompra,
+  type ListaDeCompras,
   MOTIVOS_PERDA,
   type Movimento,
   type UnidadeInsumo,
@@ -63,15 +70,32 @@ export default function PaginaEstoque() {
   const { dados: cardapio, recarregar: recarregarCardapio } = useDados(
     restaurante ? buscarCardapio : null,
   );
+  const [aba, setAba] = useState<"ingredientes" | "lista" | "fichas">("ingredientes");
+  // A lista de compras (gerente e dono) busca junto e se atualiza com os mesmos avisos.
+  const [folga, setFolga] = useState<number | null>(null);
+  const buscarLista = useCallback(
+    () =>
+      api<ListaDeCompras>(`/api/estoque/compras${folga === null ? "" : `?folga=${folga}`}`, {
+        restaurante,
+      }),
+    [restaurante, folga],
+  );
+  const {
+    dados: lista,
+    erro: erroLista,
+    recarregar: recarregarLista,
+  } = useDados(restaurante && gestao && aba === "lista" ? buscarLista : null);
   const aoAviso = useCallback(
     (aviso: AvisoAoVivo) => {
       if (aviso.tipo === "cardapio") recarregarCardapio();
-      else recarregarEstoque(); // pedido lançado ou cancelado mexe no estoque
+      else {
+        recarregarEstoque(); // pedido lançado ou cancelado mexe no estoque
+        recarregarLista();
+      }
     },
-    [recarregarCardapio, recarregarEstoque],
+    [recarregarCardapio, recarregarEstoque, recarregarLista],
   );
   useSalaoAoVivo(restaurante, semAlerta, aoAviso);
-  const [aba, setAba] = useState<"ingredientes" | "fichas">("ingredientes");
   const [recado, setRecado] = useState<Recado>(null);
 
   if (!restaurante) return <Aviso>Escolha um restaurante na lista de restaurantes.</Aviso>;
@@ -100,6 +124,7 @@ export default function PaginaEstoque() {
         {(
           [
             ["ingredientes", "Ingredientes"],
+            ...(gestao ? ([["lista", "Lista de compras"]] as const) : []),
             ["fichas", "Fichas dos pratos"],
           ] as const
         ).map(([valor, texto]) => (
@@ -137,6 +162,19 @@ export default function PaginaEstoque() {
             aoTerminar={pronto}
             aoErrar={falhou}
           />
+        </div>
+      ) : aba === "lista" ? (
+        <div role="tabpanel" id="painel-lista" aria-labelledby="aba-lista">
+          <Aviso>{erroLista}</Aviso>
+          {lista ? (
+            <ListaDaCompra
+              lista={lista}
+              restaurante={sessao?.restaurante?.nome ?? "restaurante"}
+              aoMudarFolga={setFolga}
+            />
+          ) : (
+            !erroLista && <p className="text-tinta-suave">Fazendo a conta da compra...</p>
+          )}
         </div>
       ) : (
         <div role="tabpanel" id="painel-fichas" aria-labelledby="aba-fichas">
@@ -227,8 +265,24 @@ function Ingredientes({
     }
   }
 
+  const hoje = estoque.hoje;
+  const vaoFaltar = ativos.filter((i) => situacaoDoInsumo(i) === "vai_faltar").length;
+  const naLista = ativos.filter((i) => situacaoDoInsumo(i) === "comprar").length;
+
   return (
     <div className="flex flex-col gap-5">
+      <p className="max-w-prose">
+        <b>
+          Próxima compra: {rotuloDia(estoque.proxima_compra)}
+          {perto(estoque.proxima_compra, hoje)}.
+        </b>{" "}
+        <span className="text-tinta-suave">
+          Ela cobre {juntar(estoque.cobre.map(diaDaSemana))}.{" "}
+          {vaoFaltar > 0 &&
+            `${vaoFaltar} ${vaoFaltar === 1 ? "ingrediente vai" : "ingredientes vão"} faltar antes dela. `}
+          {naLista > 0 && `${naLista} ${naLista === 1 ? "entra" : "entram"} na lista de compras.`}
+        </span>
+      </p>
       {sugestoes.map(({ insumo, pratos }) => (
         <div
           key={insumo.id}
@@ -321,6 +375,11 @@ function Ingredientes({
                   <th scope="col" className="px-4 py-3 text-right font-semibold">
                     {contando ? "Pela conta" : "Tem"}
                   </th>
+                  {!contando && (
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Até quando
+                    </th>
+                  )}
                   <th scope="col" className="px-4 py-3 font-semibold">
                     {contando ? "Contei" : "Situação"}
                   </th>
@@ -344,6 +403,7 @@ function Ingredientes({
                     contando={contando}
                     mostraValores={estoque.mostra_valores}
                     gestao={gestao}
+                    hoje={hoje}
                     livroAberto={livro === insumo.id}
                     aoAbrirLivro={() => setLivro((l) => (l === insumo.id ? null : insumo.id))}
                     usadoEm={pratosQueUsam(insumo.id, estoque.fichas, cardapio.itens)}
@@ -391,14 +451,21 @@ function Ingredientes({
   );
 }
 
+const SELOS = {
+  // Urgente: cor, padrão hachurado e palavra, nunca só cor.
+  zerado: "hachurado bg-atrasada text-sobre-cor",
+  vai_faltar: "hachurado bg-atrasada text-sobre-cor",
+  comprar: "bg-aguardando text-sobre-aguardando",
+  tem: "border border-linha text-tinta-suave",
+} as const;
+
 function SeloSituacao({ insumo }: { insumo: Insumo }) {
-  return situacaoDoInsumo(insumo) === "zerado" ? (
-    <span className="hachurado inline-flex rounded-full bg-atrasada px-2.5 py-0.5 text-xs font-bold text-sobre-cor">
-      Zerado
-    </span>
-  ) : (
-    <span className="inline-flex rounded-full border border-linha px-2.5 py-0.5 text-xs font-bold text-tinta-suave">
-      Tem
+  const situacao = situacaoDoInsumo(insumo);
+  return (
+    <span
+      className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-bold ${SELOS[situacao]}`}
+    >
+      {ROTULO_SITUACAO[situacao]}
     </span>
   );
 }
@@ -408,6 +475,7 @@ function LinhaInsumo({
   contando,
   mostraValores,
   gestao,
+  hoje,
   livroAberto,
   aoAbrirLivro,
   usadoEm,
@@ -418,13 +486,14 @@ function LinhaInsumo({
   contando: boolean;
   mostraValores: boolean;
   gestao: boolean;
+  hoje: string;
   livroAberto: boolean;
   aoAbrirLivro: () => void;
   usadoEm: ItemCardapio[];
   aoTerminar: (texto: string) => void;
   aoErrar: (e: unknown) => void;
 }) {
-  const colunas = 3 + (mostraValores ? 1 : 0) + (gestao ? 1 : 0);
+  const colunas = 4 + (mostraValores ? 1 : 0) + (gestao ? 1 : 0);
   return (
     <>
       <tr className="border-b border-linha last:border-b-0" data-testid={`insumo-${insumo.id}`}>
@@ -439,6 +508,11 @@ function LinhaInsumo({
         <td className="whitespace-nowrap px-4 py-3 text-right">
           {quantidade(insumo.unidade, insumo.saldo)}
         </td>
+        {!contando && (
+          <td className="whitespace-nowrap px-4 py-3 text-tinta-suave">
+            {textoAteQuando(insumo, hoje)}
+          </td>
+        )}
         <td className="px-4 py-3">
           {contando ? (
             <label className="flex items-center gap-2 text-tinta-suave">
@@ -1167,5 +1241,265 @@ function EditorFicha({
         Salvar ficha
       </Botao>
     </section>
+  );
+}
+
+// ---------- Lista de compras ----------
+
+/** " (hoje)" ou " (amanhã)"; mais longe, a data já diz tudo. */
+function perto(dia: string, hoje: string): string {
+  const q = quando(dia, hoje);
+  return q === "hoje" || q === "amanhã" ? ` (${q})` : "";
+}
+
+/** "sexta, sábado e domingo". */
+function juntar(partes: string[]): string {
+  return partes.length <= 1
+    ? (partes[0] ?? "")
+    : `${partes.slice(0, -1).join(", ")} e ${partes[partes.length - 1]}`;
+}
+
+function ListaDaCompra({
+  lista,
+  restaurante,
+  aoMudarFolga,
+}: {
+  lista: ListaDeCompras;
+  restaurante: string;
+  aoMudarFolga: (folga: number | null) => void;
+}) {
+  const [copia, setCopia] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
+  const folgas = [...new Set([10, lista.folga_padrao_pct, 25, 40])].sort((a, b) => a - b);
+  const grupos = new Map<string, LinhaDeCompra[]>();
+  for (const linha of lista.comprar) {
+    const onde = linha.onde_compra ?? "Outros";
+    grupos.set(onde, [...(grupos.get(onde) ?? []), linha]);
+  }
+  const noitesAntes = juntar(lista.antes.map(diaDaSemana));
+
+  async function copiar() {
+    const texto = textoDaLista(lista, restaurante);
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopia(null);
+      setCopiado(true);
+    } catch {
+      setCopia(texto); // sem permissão para copiar: mostra o texto para selecionar
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="max-w-prose">
+          <h2 className="font-placa text-3xl font-extrabold leading-none">
+            Compra de {rotuloDia(lista.compra)} {perto(lista.compra, lista.hoje)}
+          </h2>
+          <p className="text-tinta-suave">
+            Cobre {juntar(lista.cobre.map(diaDaSemana))}.
+            {lista.antes.length > 0 &&
+              ` Até lá ainda saem ${noitesAntes}: a conta já desconta o que vai sair.`}{" "}
+            Toque num item para ver de onde saiu o número.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Folga">
+          <span className="text-sm text-tinta-suave">Folga</span>
+          {folgas.map((f) => (
+            <button
+              key={f}
+              type="button"
+              aria-pressed={lista.folga_pct === f}
+              onClick={() => aoMudarFolga(f === lista.folga_padrao_pct ? null : f)}
+              className={`min-h-9 rounded-full border px-3 text-sm font-semibold ${
+                lista.folga_pct === f
+                  ? "border-tinta bg-fundo text-tinta"
+                  : "border-linha bg-superficie text-tinta-suave"
+              }`}
+            >
+              {f}%{f === lista.folga_padrao_pct ? " (padrão)" : ""}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {lista.comprar.length === 0 ? (
+        <div className="rounded-xl border-2 border-dashed border-linha p-6">
+          <p className="font-semibold">Pela conta, não falta nada para esta compra.</p>
+          <p className="text-tinta-suave">Confira a geladeira mesmo assim: a conta pode errar.</p>
+        </div>
+      ) : (
+        <div className="grid gap-x-8 gap-y-6 md:grid-cols-2">
+          {[...grupos]
+            .sort(([a], [b]) =>
+              a === "Outros" ? 1 : b === "Outros" ? -1 : a.localeCompare(b, "pt-BR"),
+            )
+            .map(([onde, linhas]) => (
+              <section key={onde} aria-label={onde} className="flex flex-col">
+                <h3 className="border-b-2 border-tinta pb-1 font-placa text-xl font-bold">
+                  {onde}
+                </h3>
+                {linhas.map((linha) => (
+                  <LinhaDaLista
+                    key={linha.insumo_id}
+                    linha={linha}
+                    folga={lista.folga_pct}
+                    noitesAntes={noitesAntes}
+                  />
+                ))}
+              </section>
+            ))}
+        </div>
+      )}
+
+      {lista.comprar.length > 0 && (
+        <div className="flex flex-wrap items-baseline justify-between gap-3 border-t-2 border-tinta pt-3">
+          <span>Total estimado, pelo preço médio das compras</span>
+          <span className="numeros font-placa text-3xl font-extrabold">
+            {lista.total_centavos === null
+              ? "falta o preço de algum item"
+              : preco(lista.total_centavos)}
+          </span>
+        </div>
+      )}
+      {lista.nada_a_comprar.length > 0 && (
+        <p className="text-sm text-tinta-suave">
+          Nada a comprar: {lista.nada_a_comprar.map((n) => n.toLowerCase()).join(", ")}.
+        </p>
+      )}
+      {lista.comprar.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <Botao className="self-start" onClick={copiar}>
+            Copiar lista para o WhatsApp
+          </Botao>
+          {copiado && (
+            <p role="status" className="text-sm">
+              Lista copiada. Cole no WhatsApp do fornecedor.
+            </p>
+          )}
+          {copia && (
+            <label className="flex flex-col gap-1 text-sm font-semibold" htmlFor="lista-texto">
+              Não deu para copiar sozinho. Selecione o texto e copie:
+              <textarea
+                id="lista-texto"
+                readOnly
+                value={copia}
+                rows={8}
+                className="rounded-lg border border-linha bg-superficie p-2 font-normal"
+              />
+            </label>
+          )}
+        </div>
+      )}
+
+      {lista.pratos.length > 0 && (
+        <details className="rounded-xl border border-linha bg-superficie p-4">
+          <summary className="cursor-pointer font-semibold">Como o GIRO previu cada prato</summary>
+          <p className="my-3 max-w-prose text-sm text-tinta-suave">
+            Para cada noite, o valor do meio das últimas 4 noites iguais (entre parênteses). Uma
+            noite de feriado não puxa a conta.
+          </p>
+          <div className="relative overflow-x-auto">
+            <table className="numeros w-full text-left text-sm">
+              <thead className="text-tinta-suave">
+                <tr className="border-b border-linha">
+                  <th scope="col" className="py-2 pr-4 font-semibold">
+                    Prato
+                  </th>
+                  {lista.cobre.map((n) => (
+                    <th key={n} scope="col" className="px-3 py-2 font-semibold">
+                      {diaDaSemana(n)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {lista.pratos.map((prato) => (
+                  <tr key={prato.item_id} className="border-b border-linha last:border-b-0">
+                    <th scope="row" className="py-2 pr-4 font-semibold">
+                      {prato.nome}
+                    </th>
+                    {prato.noites.map((n) => (
+                      <td key={n.noite} className="whitespace-nowrap px-3 py-2">
+                        <b>{n.previstos}</b>{" "}
+                        <span className="text-tinta-suave">({n.ultimas.join(", ")})</span>
+                        {n.ja_vendidos > 0 && (
+                          <span className="block text-xs text-tinta-suave">
+                            já saíram {n.ja_vendidos}
+                          </span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function LinhaDaLista({
+  linha,
+  folga,
+  noitesAntes,
+}: {
+  linha: LinhaDeCompra;
+  folga: number;
+  noitesAntes: string;
+}) {
+  const q = (base: number) => quantidade(linha.unidade, base);
+  const pedir = textoCompra(
+    linha.unidade,
+    linha.embalagens,
+    linha.embalagem_quantidade,
+    linha.embalagem_nome,
+  );
+  const pratos = linha.pratos
+    .slice(0, 3)
+    .map((p) => `${p.nome.toLowerCase()}: ${p.pratos} × ${porPorcao(linha.unidade, p.por_porcao)}`);
+  const outros = linha.pratos.length - pratos.length;
+  return (
+    <details className="border-b border-linha py-2" data-testid={`compra-${linha.insumo_id}`}>
+      <summary className="grid cursor-pointer list-none grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 [&::-webkit-details-marker]:hidden">
+        <span className="font-semibold">
+          {linha.nome}
+          {linha.situacao === "vai_faltar" && (
+            <span className="ml-2 text-xs font-bold text-atrasada">vai faltar antes</span>
+          )}
+        </span>
+        <span className="numeros text-right text-sm text-tinta-suave">
+          {linha.valor_centavos === null ? "" : preco(linha.valor_centavos)}
+        </span>
+        <span className="numeros font-placa text-xl font-extrabold">{pedir}</span>
+        <span className="text-right text-xs text-ocupada underline underline-offset-2">
+          Por que?
+        </span>
+      </summary>
+      <div className="numeros mt-2 flex flex-col gap-0.5 rounded-lg bg-fundo px-3 py-2 text-sm">
+        <span>
+          Tem agora: <b>{q(linha.tem)}</b>
+        </span>
+        {linha.sai_ate_compra > 0 && (
+          <span>
+            Até a compra ainda sai ({noitesAntes}): <b>{q(linha.sai_ate_compra)}</b>. Sobra{" "}
+            <b>{q(linha.sobra)}</b>
+          </span>
+        )}
+        <span>
+          Nas noites da compra sai: <b>{q(linha.precisa)}</b>
+          {pratos.length > 0 &&
+            ` (${pratos.join("; ")}${outros > 0 ? `; e mais ${outros} ${outros === 1 ? "prato" : "pratos"}` : ""})`}
+        </span>
+        <span>
+          Com folga de {folga}%: <b>{q(linha.com_folga)}</b>
+        </span>
+        <span>
+          Falta {q(linha.falta)}: <b>{pedir}</b>
+        </span>
+      </div>
+    </details>
   );
 }
