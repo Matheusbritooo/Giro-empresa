@@ -30,6 +30,7 @@ from giro.modelos import Restaurante
 from giro.servicos import resultados
 from giro.servicos.cardapio import ResultadosCardapio, resultados_cardapio
 from giro.servicos.compras import PlanoDeCompras, plano_de_compras
+from giro.servicos.perdas import RelatorioDePerdas, contagem_atrasada, relatorio_de_perdas
 
 log = logging.getLogger("giro.copiloto")
 
@@ -87,6 +88,10 @@ class Contexto:
     cardapio: ResultadosCardapio | None = None
     # Previsão e lista de compras (None sem ingrediente com ficha).
     compras: PlanoDeCompras | None = None
+    # Perdas dos últimos 7 dias e os ingredientes da curva A sem contagem há uma semana.
+    perdas: RelatorioDePerdas | None = None
+    contar: list[str] = field(default_factory=list)
+    com_custo: bool = False  # quem pergunta vê custo (o dono)
 
     @property
     def dia_semana(self) -> int:
@@ -110,6 +115,14 @@ def montar_contexto(
         db, restaurante, resultados.Periodo.MES, hoje - timedelta(days=1), agora, com_custo
     )
     compras = plano_de_compras(db, restaurante, agora)
+    com_previsao = any(i.pratos for i in compras.itens)
+    tem_estoque = bool(compras.itens)  # algum ingrediente cadastrado
+    perdas = relatorio_de_perdas(db, restaurante, resultados.Periodo.SEMANA, agora)
+    contar = (
+        [i.nome for i in contagem_atrasada(db, restaurante.id, agora, perdas.curva)]
+        if tem_estoque
+        else []
+    )
     return Contexto(
         restaurante=restaurante,
         hoje=hoje,
@@ -119,7 +132,10 @@ def montar_contexto(
         hoje_ate_agora=dados.indicadores(inicio_hoje, min(fim_hoje, agora)),
         mesmo_dia=[r for d, r in noites if d.weekday() == hoje.weekday()],
         cardapio=cardapio if cardapio.visitas_com_pedido else None,
-        compras=compras if any(i.pratos for i in compras.itens) else None,
+        compras=compras if com_previsao else None,
+        perdas=perdas if tem_estoque else None,
+        contar=contar,
+        com_custo=com_custo,
     )
 
 
@@ -221,7 +237,27 @@ def contexto_em_json(ctx: Contexto) -> str:
         dados["cardapio_ultimas_4_semanas"] = _cardapio_em_numeros(ctx.cardapio)
     if ctx.compras is not None:
         dados["estoque"] = _estoque_em_numeros(ctx.compras)
+    if ctx.perdas is not None:
+        dados["perdas_do_estoque_7_dias"] = _perdas_em_numeros(ctx.perdas, ctx.contar)
     return json.dumps(dados, ensure_ascii=False)
+
+
+def _perdas_em_numeros(r: RelatorioDePerdas, contar: list[str]) -> dict:
+    """Só quantidades: o que escapou de cada ingrediente e o que não foi contado. Nunca
+    reais, nem a porcentagem do custo."""
+    return {
+        "contado_no_periodo": r.ultima_contagem is not None,
+        "ingredientes": [
+            {
+                "nome": linha.insumo.nome,
+                "escapou": texto_quantidade(linha.insumo.unidade, linha.perda.escapou),
+                "sem_registro": texto_quantidade(linha.insumo.unidade, linha.perda.sem_registro),
+                "perda_registrada": texto_quantidade(linha.insumo.unidade, linha.perda.registrada),
+            }
+            for linha in r.linhas[:8]
+        ],
+        "curva_a_sem_contagem_ha_uma_semana": contar,
+    }
 
 
 def _quando(noite: date, hoje: date) -> str:
@@ -397,6 +433,13 @@ def briefing(ctx: Contexto) -> Briefing:
         prato = next((i for i in ctx.cardapio.itens if not i.bebida), None)
         if prato is not None:
             dicas.append(f"Confira o estoque para {prato.nome}: é o que mais sai da cozinha.")
+    if ctx.contar:
+        nomes = ", ".join(n.lower() for n in ctx.contar[:3])
+        resto = f" e mais {len(ctx.contar) - 3}" if len(ctx.contar) > 3 else ""
+        dicas.append(
+            f"Faz mais de uma semana sem contar {nomes}{resto}, da curva A. Uns 10 minutos de "
+            "contagem mostram onde o dinheiro escapa."
+        )
 
     curto = f"Hoje é {dia}: pico às {_hora(pico)}. {dicas[0]}"
     return Briefing(ctx.hoje, dia, frases, dicas, curto)
@@ -491,6 +534,59 @@ def responder_sobre_cardapio(p: str, ctx: Contexto) -> str | None:
     return None
 
 
+def _pct(fracao: float) -> str:
+    return f"{fracao * 100:.1f}%".replace(".", ",")
+
+
+def responder_sobre_perdas(p: str, ctx: Contexto) -> str | None:
+    """Onde o estoque perde dinheiro. Em reais só para o dono; o gerente ouve quantidades."""
+    sobre_perdas = any(
+        t in p for t in ("desperdic", "sumiu", "sumindo", "escapou", "escapa", "desvio")
+    ) or ("perd" in p and "estoque" in p)
+    if not sobre_perdas:
+        return None
+    r = ctx.perdas
+    if r is None:
+        return (
+            "Ainda não tenho estoque para olhar. Cadastre os ingredientes e a ficha dos pratos "
+            "em Estoque e conte o estoque uma vez por semana."
+        )
+    sem_contagem = (
+        "Ninguém contou o estoque nos últimos 7 dias: sem contagem, só aparece o que foi "
+        "registrado como perda. "
+        if r.ultima_contagem is None
+        else ""
+    )
+    if not r.linhas:
+        return sem_contagem + "Nos últimos 7 dias nada escapou do estoque pela conta."
+    principais = r.linhas[:3]
+    if not ctx.com_custo:
+        nomes = ", ".join(
+            f"{linha.insumo.nome.lower()} "
+            f"{texto_quantidade(linha.insumo.unidade, linha.perda.escapou)}"
+            for linha in principais
+        )
+        return (
+            f"{sem_contagem}Perdas em reais ficam com o dono. Em quantidade, nos últimos 7 dias "
+            f"escaparam: {nomes}."
+        )
+    vendeu = r.vendeu_centavos or 1
+    nomes = ", ".join(
+        f"{linha.insumo.nome.lower()} ({_reais(linha.valor_escapou or 0)})" for linha in principais
+    )
+    maior = (
+        "A maior parte não foi registrada: confira a porção e se a contagem está certa."
+        if r.sem_registro_centavos > r.registrada_centavos
+        else "A maior parte foi registrada como perda: veja os motivos em Estoque, Perdas."
+    )
+    return (
+        f"{sem_contagem}Nos últimos 7 dias escaparam {_reais(r.escapou_centavos)} do estoque. "
+        f"Pela ficha, os ingredientes custaram {_pct(r.custo_pela_ficha_centavos / vendeu)} "
+        f"do que vendeu; de verdade, {_pct(r.custo_de_verdade_centavos / vendeu)}. "
+        f"Os que mais pesaram: {nomes}. {maior}"
+    )
+
+
 def responder_sobre_estoque(p: str, ctx: Contexto) -> str | None:
     """O que comprar e o que está acabando. None quando a pergunta não é sobre isso."""
     comprar = any(t in p for t in ("comprar", "compra", "lista de compra", "fornecedor"))
@@ -542,6 +638,8 @@ def responder_sobre_estoque(p: str, ctx: Contexto) -> str | None:
 def responder_com_regras(pergunta: str, ctx: Contexto) -> str:
     """Respostas prontas para as perguntas mais comuns, quando a IA não está ligada."""
     p = _sem_acento(pergunta)
+    if (sobre_perdas := responder_sobre_perdas(p, ctx)) is not None:
+        return sobre_perdas
     if (sobre_estoque := responder_sobre_estoque(p, ctx)) is not None:
         return sobre_estoque
     if (sobre_cardapio := responder_sobre_cardapio(p, ctx)) is not None:

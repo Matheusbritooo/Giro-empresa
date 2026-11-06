@@ -140,6 +140,8 @@ SUMICO = {
 SUMICO_PADRAO = (0.0, 0.02)
 # Na última compra antes de hoje, comprou pouco destes: o estoque mostra o que está acabando.
 COMPROU_POUCO = {"Massa de lasanha", "Muçarela", "Mascarpone"}
+# E a muçarela veio mais cara: a aba de perdas mostra "o preço subiu" e o que pesa nos pratos.
+PRECO_SUBIU = {"Muçarela"}
 
 
 def criar_estoque(db: Session, restaurante_id: int) -> dict[str, Insumo]:
@@ -263,12 +265,21 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
             }
         )
 
-    def comprar(insumo: Insumo, quantidade: int, quando: datetime) -> None:
+    ultimo_preco: dict[int, float] = {}
+    mais_caro: set[int] = set()
+
+    def comprar(insumo: Insumo, quantidade: int, quando: datetime, subiu: bool = False) -> None:
         embalagens = math.ceil(quantidade / insumo.embalagem_quantidade)
         if embalagens <= 0:
             return
         quanto = embalagens * insumo.embalagem_quantidade
         unitario = INSUMOS_POR_NOME[insumo.nome][5] * (1 + sorteio.uniform(-0.03, 0.06))
+        if subiu and insumo.id in ultimo_preco:
+            unitario = ultimo_preco[insumo.id] * 1.15  # a nota veio 15% mais cara
+            mais_caro.add(insumo.id)
+        elif insumo.id in mais_caro:  # e o preço continua alto nas compras seguintes
+            unitario = ultimo_preco[insumo.id] * (1 + sorteio.uniform(-0.01, 0.01))
+        ultimo_preco[insumo.id] = unitario
         valor = round(quanto * unitario / base_do_preco(insumo.unidade))
         preco[insumo.id] = custo_medio(
             saldo[insumo.id], preco[insumo.id], quanto, valor, insumo.unidade
@@ -297,9 +308,7 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
         if dia == primeira:  # o estoque que já tinha quando o GIRO começou a contar
             for insumo_id in por_id:
                 tinha = sum(previsto(dia + timedelta(days=n), insumo_id) for n in range(3))
-                anotar(
-                    insumo_id, TipoMovimento.CONTAGEM, round(tinha * 1.2), manha, usuario=gerente
-                )
+                anotar(insumo_id, TipoMovimento.INICIAL, round(tinha * 1.2), manha, usuario=gerente)
         if dia.weekday() == SEGUNDA:  # fechado: dia de contar
             for insumo_id, insumo in por_id.items():
                 saiu = sum(consumo.get(d, {}).get(insumo_id, 0) for d in semana_passada)
@@ -312,7 +321,8 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
                 precisa = sum(previsto(n, insumo_id) for n in ciclo) * (1 + FOLGA)
                 if dia == ultima_compra and insumo.nome in COMPROU_POUCO:
                     precisa *= 0.7
-                comprar(insumo, round(precisa - saldo[insumo_id]), manha)
+                subiu = dia == ultima_compra and insumo.nome in PRECO_SUBIU
+                comprar(insumo, round(precisa - saldo[insumo_id]), manha, subiu)
         # Perdas registradas pela equipe.
         tarde = datetime.combine(dia, time(16), FUSO)
         perdas = []
