@@ -370,6 +370,8 @@ export interface Insumo {
   ativo: boolean;
   situacao: SituacaoInsumo | null; // pela previsão; vazio fora de uso
   acaba_em: string | null; // a noite em que acaba, nos próximos 7 dias
+  curva: "A" | "B" | "C" | null; // curva ABC das 4 semanas: os da A valem contar toda semana
+  contado_em: string | null; // a última contagem
 }
 
 /** zerado; vai faltar (acaba antes de a compra chegar); comprar (entra na lista); tem. */
@@ -415,7 +417,7 @@ export interface Diferenca {
   diferenca: number;
 }
 
-export type TipoMovimento = "compra" | "venda" | "estorno" | "perda" | "contagem";
+export type TipoMovimento = "compra" | "venda" | "estorno" | "perda" | "contagem" | "inicial";
 
 export interface Movimento {
   id: number;
@@ -477,4 +479,55 @@ export interface ListaDeCompras {
   nada_a_comprar: string[];
   pratos: { item_id: number; nome: string; noites: NoiteDoPrato[] }[];
   total_centavos: number | null;
+}
+
+// Perdas do estoque (só o dono). Quantidade na unidade base; valores pelo preço médio de hoje.
+
+export interface LinhaDePerda {
+  insumo_id: number;
+  nome: string;
+  unidade: UnidadeInsumo;
+  pela_ficha: number;
+  registrada: number;
+  sem_registro: number; // negativa: a contagem achou a mais
+  saiu: number;
+  escapou: number;
+  valor_escapou_centavos: number | null;
+  valor_sem_registro_centavos: number | null;
+  curva: "A" | "B" | "C" | null;
+  prato: string | null; // o prato que mais usou o ingrediente no período
+  por_porcao: number | null;
+}
+
+export interface PrecoQueSubiu {
+  insumo_id: number;
+  nome: string;
+  unidade: UnidadeInsumo;
+  antes_centavos: number;
+  agora_centavos: number;
+  pct: number;
+  em: string;
+  pratos: { nome: string; a_mais_centavos: number }[];
+}
+
+export interface Perdas {
+  periodo: "semana" | "mes";
+  primeira_noite: string;
+  ultima_noite: string;
+  vendeu_centavos: number;
+  custo_pela_ficha_centavos: number;
+  custo_de_verdade_centavos: number;
+  escapou_centavos: number;
+  registrada_centavos: number;
+  sem_registro_centavos: number;
+  itens_sem_custo: string[];
+  ultima_contagem: string | null;
+  linhas: LinhaDePerda[];
+  por_motivo: {
+    motivo: string;
+    valor_centavos: number | null;
+    itens: { nome: string; unidade: UnidadeInsumo; quantidade: number }[];
+  }[];
+  precos: PrecoQueSubiu[];
+  curva_a: string[];
 }
