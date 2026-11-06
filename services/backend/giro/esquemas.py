@@ -608,7 +608,7 @@ class InsumoEntrada(BaseModel):
     embalagem_nome: str | None = Field(default=None, max_length=40)
     onde_compra: str | None = Field(default=None, max_length=40)
     custo_centavos: Centavos | None = None  # por kg, litro ou unidade
-    # "Tem agora": vira a primeira contagem do ingrediente.
+    # "Tem agora": o saldo de partida do ingrediente.
     saldo: int | None = Field(default=None, ge=0, le=10_000_000)
 
 
@@ -635,6 +635,9 @@ class InsumoSaida(Saida):
     # próxima compra) ou tem. Vazio para ingrediente fora de uso.
     situacao: SituacaoInsumo | None = None
     acaba_em: date | None = None  # a noite em que acaba, nos próximos 7 dias
+    # Curva ABC pelo que saiu nas últimas 4 semanas: os da A valem contar toda semana.
+    curva: Literal["A", "B", "C"] | None = None
+    contado_em: datetime | None = None  # a última contagem
 
 
 class LinhaFicha(BaseModel):
@@ -701,7 +704,7 @@ class ContagemSaida(BaseModel):
 
 class MovimentoSaida(BaseModel):
     id: int
-    tipo: Literal["compra", "venda", "estorno", "perda", "contagem"]
+    tipo: Literal["compra", "venda", "estorno", "perda", "contagem", "inicial"]
     quantidade: int
     saldo_depois: int
     valor_centavos: int | None  # só gerente e dono recebem
@@ -763,3 +766,68 @@ class ListaDeComprasSaida(BaseModel):
     nada_a_comprar: list[str]
     pratos: list[PrevisaoDoPratoSaida]
     total_centavos: int | None  # sem preço em algum item, não dá para somar
+
+
+# Perdas do estoque (só o dono). Quantidade na unidade base; valores pelo preço médio de hoje.
+
+
+class LinhaPerdaSaida(BaseModel):
+    insumo_id: int
+    nome: str
+    unidade: UnidadeInsumo
+    pela_ficha: int  # o que os pratos vendidos levam
+    registrada: int  # perdas lançadas, com motivo
+    sem_registro: int  # o que a contagem achou a menos (negativa: achou a mais)
+    saiu: int  # o que saiu de verdade
+    escapou: int
+    valor_escapou_centavos: int | None
+    valor_sem_registro_centavos: int | None
+    curva: Literal["A", "B", "C"] | None
+    prato: str | None  # o prato que mais usou o ingrediente no período
+    por_porcao: int | None
+
+
+class ItemPerdidoSaida(BaseModel):
+    nome: str
+    unidade: UnidadeInsumo
+    quantidade: int
+
+
+class PerdaPorMotivoSaida(BaseModel):
+    motivo: str
+    valor_centavos: int | None
+    itens: list[ItemPerdidoSaida]
+
+
+class PratoMaisCaroSaida(BaseModel):
+    nome: str
+    a_mais_centavos: int  # por prato
+
+
+class PrecoQueSubiuSaida(BaseModel):
+    insumo_id: int
+    nome: str
+    unidade: UnidadeInsumo
+    antes_centavos: int  # por kg, litro ou unidade, na nota anterior
+    agora_centavos: int
+    pct: int
+    em: datetime
+    pratos: list[PratoMaisCaroSaida]
+
+
+class PerdasSaida(BaseModel):
+    periodo: Literal["semana", "mes"]
+    primeira_noite: date
+    ultima_noite: date
+    vendeu_centavos: int
+    custo_pela_ficha_centavos: int
+    custo_de_verdade_centavos: int
+    escapou_centavos: int
+    registrada_centavos: int
+    sem_registro_centavos: int
+    itens_sem_custo: list[str]  # vendidos sem custo: ficam fora da conta
+    ultima_contagem: datetime | None  # sem contagem no período, só aparece o registrado
+    linhas: list[LinhaPerdaSaida]
+    por_motivo: list[PerdaPorMotivoSaida]
+    precos: list[PrecoQueSubiuSaida]
+    curva_a: list[str]  # os ingredientes que valem contar toda semana

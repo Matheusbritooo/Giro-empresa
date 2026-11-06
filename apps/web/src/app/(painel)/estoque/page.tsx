@@ -11,8 +11,11 @@ import {
   campoDaBase,
   custoDaFicha,
   ordenarInsumos,
+  dicaDaPerda,
+  porcento,
   porPorcao,
   pratosQueUsam,
+  precisaContar,
   precoDoInsumo,
   quando,
   quantidade,
@@ -28,7 +31,7 @@ import {
 } from "@/lib/estoque";
 import { campoDosCentavos, centavosDoCampo, preco } from "@/lib/pedido";
 import { useRestauranteAlvo } from "@/lib/restaurante";
-import { diaDaSemana, horaLocal, noiteDe, rotuloDia } from "@/lib/resultados";
+import { diaDaSemana, horaLocal, noiteDe, reais, rotuloDia } from "@/lib/resultados";
 import { podeGerirMesas, useSessao } from "@/lib/sessao";
 import {
   type AvisoAoVivo,
@@ -40,6 +43,7 @@ import {
   type ItemCardapio,
   type LinhaDeCompra,
   type ListaDeCompras,
+  type Perdas,
   MOTIVOS_PERDA,
   type Movimento,
   type UnidadeInsumo,
@@ -54,6 +58,7 @@ export default function PaginaEstoque() {
   const { sessao } = useSessao();
   const restaurante = useRestauranteAlvo();
   const gestao = !!sessao && podeGerirMesas(sessao.usuario.papel);
+  const veCusto = sessao?.usuario.papel === "dono" || sessao?.usuario.papel === "admin_giro";
   const buscarEstoque = useCallback(
     () => api<Estoque>("/api/estoque", { restaurante }),
     [restaurante],
@@ -70,7 +75,17 @@ export default function PaginaEstoque() {
   const { dados: cardapio, recarregar: recarregarCardapio } = useDados(
     restaurante ? buscarCardapio : null,
   );
-  const [aba, setAba] = useState<"ingredientes" | "lista" | "fichas">("ingredientes");
+  const [aba, setAba] = useState<"ingredientes" | "lista" | "perdas" | "fichas">("ingredientes");
+  const [periodo, setPeriodo] = useState<"semana" | "mes">("semana");
+  const buscarPerdas = useCallback(
+    () => api<Perdas>(`/api/estoque/perdas?periodo=${periodo}`, { restaurante }),
+    [restaurante, periodo],
+  );
+  const {
+    dados: perdas,
+    erro: erroPerdas,
+    recarregar: recarregarPerdas,
+  } = useDados(restaurante && veCusto && aba === "perdas" ? buscarPerdas : null);
   // A lista de compras (gerente e dono) busca junto e se atualiza com os mesmos avisos.
   const [folga, setFolga] = useState<number | null>(null);
   const buscarLista = useCallback(
@@ -91,9 +106,10 @@ export default function PaginaEstoque() {
       else {
         recarregarEstoque(); // pedido lançado ou cancelado mexe no estoque
         recarregarLista();
+        recarregarPerdas();
       }
     },
-    [recarregarCardapio, recarregarEstoque, recarregarLista],
+    [recarregarCardapio, recarregarEstoque, recarregarLista, recarregarPerdas],
   );
   useSalaoAoVivo(restaurante, semAlerta, aoAviso);
   const [recado, setRecado] = useState<Recado>(null);
@@ -119,12 +135,13 @@ export default function PaginaEstoque() {
       <div
         role="tablist"
         aria-label="Partes do estoque"
-        className="inline-flex self-start rounded-xl border border-linha bg-superficie p-1"
+        className="inline-flex max-w-full flex-wrap self-start rounded-xl border border-linha bg-superficie p-1"
       >
         {(
           [
             ["ingredientes", "Ingredientes"],
             ...(gestao ? ([["lista", "Lista de compras"]] as const) : []),
+            ...(veCusto ? ([["perdas", "Perdas"]] as const) : []),
             ["fichas", "Fichas dos pratos"],
           ] as const
         ).map(([valor, texto]) => (
@@ -174,6 +191,15 @@ export default function PaginaEstoque() {
             />
           ) : (
             !erroLista && <p className="text-tinta-suave">Fazendo a conta da compra...</p>
+          )}
+        </div>
+      ) : aba === "perdas" ? (
+        <div role="tabpanel" id="painel-perdas" aria-labelledby="aba-perdas">
+          <Aviso>{erroPerdas}</Aviso>
+          {perdas ? (
+            <PerdasDoEstoque perdas={perdas} aoMudarPeriodo={setPeriodo} />
+          ) : (
+            !erroPerdas && <p className="text-tinta-suave">Fazendo a conta das perdas...</p>
           )}
         </div>
       ) : (
@@ -268,6 +294,7 @@ function Ingredientes({
   const hoje = estoque.hoje;
   const vaoFaltar = ativos.filter((i) => situacaoDoInsumo(i) === "vai_faltar").length;
   const naLista = ativos.filter((i) => situacaoDoInsumo(i) === "comprar").length;
+  const contar = gestao ? ativos.filter((i) => precisaContar(i, hoje)) : [];
 
   return (
     <div className="flex flex-col gap-5">
@@ -283,6 +310,12 @@ function Ingredientes({
           {naLista > 0 && `${naLista} ${naLista === 1 ? "entra" : "entram"} na lista de compras.`}
         </span>
       </p>
+      {contar.length > 0 && (
+        <p className="max-w-prose rounded-xl border-l-4 border-aguardando bg-superficie px-4 py-3">
+          <b>Hora de contar:</b> {contar.map((i) => i.nome.toLowerCase()).join(", ")}. São da curva
+          A (os que mais pesam no bolso) e não são contados há mais de uma semana.
+        </p>
+      )}
       {sugestoes.map(({ insumo, pratos }) => (
         <div
           key={insumo.id}
@@ -499,6 +532,11 @@ function LinhaInsumo({
       <tr className="border-b border-linha last:border-b-0" data-testid={`insumo-${insumo.id}`}>
         <th scope="row" className="px-4 py-3 font-semibold">
           {insumo.nome}
+          {gestao && insumo.curva === "A" && (
+            <span className="ml-2 rounded border border-linha px-1.5 text-xs font-bold text-tinta-suave">
+              curva A
+            </span>
+          )}
           {usadoEm.length > 0 && (
             <span className="block text-xs font-normal text-tinta-suave">
               vai em {usadoEm.length} {usadoEm.length === 1 ? "prato" : "pratos"}
@@ -1501,5 +1539,255 @@ function LinhaDaLista({
         </span>
       </div>
     </details>
+  );
+}
+
+// ---------- Perdas (só o dono) ----------
+
+function PerdasDoEstoque({
+  perdas,
+  aoMudarPeriodo,
+}: {
+  perdas: Perdas;
+  aoMudarPeriodo: (periodo: "semana" | "mes") => void;
+}) {
+  const vendeu = perdas.vendeu_centavos || 1;
+  const porMes = perdas.periodo === "semana" ? perdas.escapou_centavos * 4 : null;
+  const dicas = perdas.linhas.filter((l) => l.escapou > 0).slice(0, 3);
+  // Centavos de diferença só poluem a tabela: entram somados numa linha.
+  const relevantes = perdas.linhas.filter(
+    (l) => l.valor_escapou_centavos === null || Math.abs(l.valor_escapou_centavos) >= 100,
+  );
+  const miudos = perdas.linhas.filter((l) => !relevantes.includes(l));
+  const somaMiudos = miudos.reduce((s, l) => s + (l.valor_escapou_centavos ?? 0), 0);
+  return (
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <p className="max-w-prose text-tinta-suave">
+          De {rotuloDia(perdas.primeira_noite)} a {rotuloDia(perdas.ultima_noite)}. A ficha diz
+          quanto <b className="text-tinta">deveria</b> sair pelo que foi vendido; a contagem diz
+          quanto <b className="text-tinta">saiu</b>. Valores pelo preço médio de hoje.
+        </p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Período">
+          {(
+            [
+              ["semana", "7 dias"],
+              ["mes", "4 semanas"],
+            ] as const
+          ).map(([valor, texto]) => (
+            <button
+              key={valor}
+              type="button"
+              aria-pressed={perdas.periodo === valor}
+              onClick={() => aoMudarPeriodo(valor)}
+              className={`min-h-9 rounded-full border px-3 text-sm font-semibold ${
+                perdas.periodo === valor
+                  ? "border-tinta bg-fundo text-tinta"
+                  : "border-linha bg-superficie text-tinta-suave"
+              }`}
+            >
+              {texto}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {!perdas.ultima_contagem && (
+        <p className="max-w-prose rounded-xl border-l-4 border-aguardando bg-superficie px-4 py-3">
+          Ninguém contou o estoque neste período. Sem contagem, só aparece o que foi registrado como
+          perda: conte os ingredientes da curva A uma vez por semana.
+        </p>
+      )}
+
+      <dl className="numeros grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-linha bg-linha md:grid-cols-4">
+        <div className="flex flex-col gap-0.5 bg-superficie px-4 py-3">
+          <dt className="text-sm font-semibold text-tinta-suave">Vendeu</dt>
+          <dd className="font-placa text-3xl font-extrabold">{reais(perdas.vendeu_centavos)}</dd>
+          <dd className="text-xs text-tinta-suave">nos pedidos lançados</dd>
+        </div>
+        <div className="flex flex-col gap-0.5 bg-superficie px-4 py-3">
+          <dt className="text-sm font-semibold text-tinta-suave">Custo pela ficha</dt>
+          <dd className="font-placa text-3xl font-extrabold">
+            {porcento(perdas.custo_pela_ficha_centavos / vendeu)}
+          </dd>
+          <dd className="text-xs text-tinta-suave">
+            {reais(perdas.custo_pela_ficha_centavos)} em ingredientes
+          </dd>
+        </div>
+        <div className="flex flex-col gap-0.5 bg-superficie px-4 py-3">
+          <dt className="text-sm font-semibold text-tinta-suave">Custo de verdade</dt>
+          <dd className="font-placa text-3xl font-extrabold">
+            {porcento(perdas.custo_de_verdade_centavos / vendeu)}
+          </dd>
+          <dd className="text-xs text-tinta-suave">pelo estoque contado</dd>
+        </div>
+        <div className="flex flex-col gap-0.5 bg-superficie px-4 py-3">
+          <dt className="text-sm font-semibold text-tinta-suave">Escapou</dt>
+          <dd className="font-placa text-3xl font-extrabold text-atrasada">
+            {reais(perdas.escapou_centavos)}
+          </dd>
+          <dd className="text-xs text-tinta-suave">
+            {porMes !== null ? `uns ${reais(porMes)} por mês` : "nas 4 semanas"}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <section aria-labelledby="titulo-diferenca" className="flex min-w-0 flex-col gap-2">
+          <h2 id="titulo-diferenca" className="font-placa text-2xl font-bold">
+            Onde ficou a diferença
+          </h2>
+          {perdas.linhas.length === 0 ? (
+            <p className="text-tinta-suave">Nada escapou do estoque neste período.</p>
+          ) : (
+            <div className="relative overflow-x-auto rounded-xl border border-linha bg-superficie">
+              <table className="numeros w-full text-left text-sm">
+                <thead className="text-tinta-suave">
+                  <tr className="border-b border-linha">
+                    <th scope="col" className="px-4 py-3 font-semibold">
+                      Ingrediente
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">
+                      Pela ficha
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">
+                      Saiu
+                    </th>
+                    <th scope="col" className="px-4 py-3 text-right font-semibold">
+                      Escapou
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {relevantes.map((l) => (
+                    <tr key={l.insumo_id} className="border-b border-linha last:border-b-0">
+                      <th scope="row" className="px-4 py-3 font-semibold">
+                        {l.nome}
+                      </th>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {quantidade(l.unidade, l.pela_ficha)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {quantidade(l.unidade, l.saiu)}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        <b>
+                          {l.valor_escapou_centavos === null
+                            ? quantidade(l.unidade, l.escapou)
+                            : preco(l.valor_escapou_centavos)}
+                        </b>
+                        <span className="block text-xs text-tinta-suave">
+                          {quantidade(l.unidade, l.escapou)}
+                          {l.registrada > 0 &&
+                            `, ${quantidade(l.unidade, l.registrada)} registrada`}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                {miudos.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t border-linha text-tinta-suave">
+                      <th scope="row" colSpan={3} className="px-4 py-3 font-normal">
+                        Outros {miudos.length} ingredientes, menos de R$ 1 cada
+                      </th>
+                      <td className="whitespace-nowrap px-4 py-3 text-right">
+                        {preco(somaMiudos)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          )}
+        </section>
+
+        <div className="flex min-w-0 flex-col gap-5">
+          {dicas.length > 0 && (
+            <section aria-labelledby="titulo-olhar" className="flex flex-col gap-2">
+              <h2 id="titulo-olhar" className="font-placa text-2xl font-bold">
+                O que olhar primeiro
+              </h2>
+              <ul className="flex list-disc flex-col gap-1.5 pl-5">
+                {dicas.map((l) => (
+                  <li key={l.insumo_id}>{dicaDaPerda(l)}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <section aria-labelledby="titulo-registradas" className="flex flex-col gap-2">
+            <h2 id="titulo-registradas" className="font-placa text-2xl font-bold">
+              Perdas registradas
+            </h2>
+            {perdas.por_motivo.length === 0 ? (
+              <p className="text-tinta-suave">Ninguém registrou perda neste período.</p>
+            ) : (
+              <ul className="flex flex-col gap-1.5">
+                {perdas.por_motivo.map((m) => (
+                  <li key={m.motivo}>
+                    <b>{m.motivo}:</b>{" "}
+                    {m.itens
+                      .map(
+                        (i) => `${quantidade(i.unidade, i.quantidade)} de ${i.nome.toLowerCase()}`,
+                      )
+                      .join(", ")}
+                    {m.valor_centavos !== null && (
+                      <span className="text-tinta-suave"> ({preco(m.valor_centavos)})</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      </div>
+
+      {perdas.precos.length > 0 && (
+        <section aria-labelledby="titulo-precos" className="flex flex-col gap-2">
+          <h2 id="titulo-precos" className="font-placa text-2xl font-bold">
+            O preço subiu
+          </h2>
+          <ul className="flex flex-col gap-3">
+            {perdas.precos.map((p) => {
+              const medida = p.unidade === "g" ? "/kg" : p.unidade === "ml" ? "/L" : " a unidade";
+              return (
+                <li
+                  key={p.insumo_id}
+                  className="rounded-xl border-l-4 border-aguardando bg-superficie px-4 py-3"
+                >
+                  <b>{p.nome}</b> subiu {p.pct}%: de {preco(p.antes_centavos)}
+                  {medida} para {preco(p.agora_centavos)}
+                  {medida}, desde {rotuloDia(noiteDe(Date.parse(p.em)))}.
+                  {p.pratos.length > 0 && (
+                    <span className="block text-sm text-tinta-suave">
+                      Cada prato passou a custar a mais:{" "}
+                      {p.pratos
+                        .map(
+                          (prato) => `${prato.nome.toLowerCase()} ${preco(prato.a_mais_centavos)}`,
+                        )
+                        .join("; ")}
+                      . Vale rever o preço ou a porção.
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      {perdas.curva_a.length > 0 && (
+        <p className="max-w-prose rounded-xl border-l-4 border-ocupada bg-superficie px-4 py-3">
+          <b>Curva ABC:</b> {perdas.curva_a.length} ingredientes somam 80% do que sai do estoque:{" "}
+          {perdas.curva_a.map((n) => n.toLowerCase()).join(", ")}. São esses que valem uma contagem
+          toda semana.
+        </p>
+      )}
+      {perdas.itens_sem_custo.length > 0 && (
+        <p className="text-sm text-tinta-suave">
+          Sem custo informado, fora da conta: {perdas.itens_sem_custo.join(", ")}.
+        </p>
+      )}
+    </div>
   );
 }

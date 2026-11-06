@@ -153,3 +153,31 @@ test("dono muda a folga em Ajustes e a lista passa a usar", async ({ page }, inf
     "true",
   );
 });
+
+test("dono vê as perdas: custo pela ficha, de verdade e o preço que subiu", async ({ page }) => {
+  await entrar(page, "marcos@cantina.demo");
+  await abrirEstoque(page);
+  await page.getByRole("tab", { name: "Perdas" }).click();
+  await expect(page.getByRole("term").filter({ hasText: "Custo pela ficha" })).toBeVisible();
+  await expect(page.getByRole("term").filter({ hasText: "Escapou" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Onde ficou a diferença" })).toBeVisible();
+  // A demonstração tem a muçarela sumindo na contagem e vindo mais cara na última compra.
+  await expect(page.getByRole("row", { name: /^Muçarela/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "O preço subiu" })).toBeVisible();
+  await expect(page.getByText(/^Muçarela subiu \d+%/)).toBeVisible();
+  await expect(page.getByText(/^Curva ABC:/)).toBeVisible();
+
+  await page.getByRole("button", { name: "4 semanas" }).click();
+  await expect(page.getByRole("button", { name: "4 semanas" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByText("nas 4 semanas")).toBeVisible();
+});
+
+test("perdas em reais ficam com o dono", async ({ page }) => {
+  await entrar(page, "gerente@cantina.demo");
+  await abrirEstoque(page);
+  await expect(page.getByRole("tab", { name: "Lista de compras" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Perdas" })).toHaveCount(0);
+});

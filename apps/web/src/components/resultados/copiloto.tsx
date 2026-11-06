@@ -13,6 +13,7 @@ const SUGESTOES = [
   "Qual prato eu tiro do cardápio?",
   "Qual prato demora mais?",
   "O que eu preciso comprar?",
+  "Onde estou perdendo no estoque?",
 ];
 
 /** O Copiloto GIRO: o recado antes do turno e uma caixa para perguntar em português. */

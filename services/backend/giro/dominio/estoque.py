@@ -28,6 +28,7 @@ class TipoMovimento(StrEnum):
     ESTORNO = "estorno"  # prato cancelado antes de sair da cozinha: volta para o estoque
     PERDA = "perda"
     CONTAGEM = "contagem"  # o que foi contado substitui a conta; a diferença fica registrada
+    INICIAL = "inicial"  # o que já tinha quando o ingrediente entrou no estoque
 
 
 # Lista fechada: o motivo vira número no fim do mês e não abre espaço para dado pessoal.

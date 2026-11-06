@@ -187,7 +187,7 @@ def test_demonstracao_tem_estoque_com_ficha_e_livro(config_producao, demo):
         ingredientes, linhas = livro_confere(db)
         assert ingredientes == 18
         tipos = set(db.scalars(select(MovimentoEstoque.tipo).distinct()))
-        assert tipos == {"compra", "venda", "contagem", "perda"}
+        assert tipos == {"inicial", "compra", "venda", "contagem", "perda"}
         # O custo dos pratos com ficha é o da ficha.
         lasanha = db.scalar(select(ItemCardapio).where(ItemCardapio.nome == "Lasanha à bolonhesa"))
         custos = custos_das_fichas(db, lasanha.restaurante_id)

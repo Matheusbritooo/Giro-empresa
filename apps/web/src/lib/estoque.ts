@@ -2,12 +2,14 @@
 // Quantidade sempre na unidade base do ingrediente: grama, mililitro ou unidade.
 
 import { preco } from "./pedido";
+import { noiteDe } from "./resultados";
 import type {
   Diferenca,
   Ficha,
   Insumo,
   ItemCardapio,
   LinhaDeCompra,
+  LinhaDePerda,
   LinhaFicha,
   ListaDeCompras,
   Movimento,
@@ -222,5 +224,33 @@ export function textoDoMovimento(m: Movimento): string {
       return `Perda: ${m.motivo ?? "sem motivo"}`;
     case "contagem":
       return m.quantidade === 0 ? "Contagem: bateu" : "Contagem: acertou a conta";
+    case "inicial":
+      return "Já tinha quando entrou no estoque";
   }
+}
+
+/** "28,3%" */
+export function porcento(fracao: number): string {
+  return `${(fracao * 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+/** Os da curva A sem contagem há mais de uma semana: a contagem deles mostra onde o dinheiro escapa. */
+export function precisaContar(insumo: Insumo, hoje: string): boolean {
+  if (insumo.curva !== "A" || !insumo.ativo) return false;
+  if (!insumo.contado_em) return true;
+  const contado = noiteDe(Date.parse(insumo.contado_em));
+  return (Date.parse(`${hoje}T12:00:00Z`) - Date.parse(`${contado}T12:00:00Z`)) / 86_400_000 > 7;
+}
+
+/** O que olhar primeiro num ingrediente que escapou. */
+export function dicaDaPerda(linha: LinhaDePerda): string {
+  const sumiu = quantidade(linha.unidade, linha.sem_registro);
+  if (linha.sem_registro > linha.registrada) {
+    const porcao =
+      linha.prato && linha.por_porcao
+        ? ` A ficha diz ${porPorcao(linha.unidade, linha.por_porcao)} por ${linha.prato.toLowerCase()}: confira a porção na bancada.`
+        : " Confira a porção e se a contagem está certa.";
+    return `${linha.nome}: ${sumiu} sumiram sem registro.${porcao}`;
+  }
+  return `${linha.nome}: a maior parte foi registrada como perda. Veja o motivo e compre menos de cada vez.`;
 }

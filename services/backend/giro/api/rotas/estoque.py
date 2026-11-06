@@ -9,7 +9,7 @@ A lista de compras (gerente e dono) olha as últimas 4 noites iguais de cada pra
 o estoque de agora (giro/dominio/compras.py).
 """
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
@@ -25,6 +25,7 @@ from giro.api.deps import (
 )
 from giro.banco import agora
 from giro.dominio.estoque import TipoMovimento
+from giro.dominio.perdas import preco_da_nota, subida_de_preco
 from giro.esquemas import (
     CompraEntrada,
     ContagemEntrada,
@@ -35,13 +36,19 @@ from giro.esquemas import (
     InsumoAtualizacao,
     InsumoEntrada,
     InsumoSaida,
+    ItemPerdidoSaida,
     LinhaCompraSaida,
     LinhaFicha,
+    LinhaPerdaSaida,
     ListaDeComprasSaida,
     MovimentoSaida,
     NoiteDoPrato,
     PerdaEntrada,
+    PerdaPorMotivoSaida,
+    PerdasSaida,
+    PratoMaisCaroSaida,
     PratoNaConta,
+    PrecoQueSubiuSaida,
     PrevisaoDoPratoSaida,
 )
 from giro.modelos import (
@@ -55,7 +62,9 @@ from giro.modelos import (
     Usuario,
 )
 from giro.servicos import estoque as servico_estoque
+from giro.servicos import perdas as servico_perdas
 from giro.servicos.compras import plano_de_compras
+from giro.servicos.resultados import Periodo
 
 router = APIRouter(prefix="/api/estoque", tags=["estoque"])
 
@@ -120,8 +129,11 @@ def ver_estoque(db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo) 
     insumos = db.scalars(
         select(Insumo).where(Insumo.restaurante_id == restaurante_id).order_by(Insumo.nome)
     ).all()
-    plano = plano_de_compras(db, db.get_one(Restaurante, restaurante_id), agora())
+    momento = agora()
+    plano = plano_de_compras(db, db.get_one(Restaurante, restaurante_id), momento)
     previsto = {i.insumo.id: i for i in plano.itens}
+    curva = servico_perdas.curva_do_restaurante(db, restaurante_id, momento)
+    contados = servico_perdas.ultimas_contagens(db, restaurante_id)
     saidas = []
     for insumo in insumos:
         if not (gestao or insumo.ativo):
@@ -129,6 +141,8 @@ def ver_estoque(db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo) 
         saida = insumo_saida(insumo, usuario)
         if (item := previsto.get(insumo.id)) is not None:
             saida.situacao, saida.acaba_em = item.situacao.value, item.acaba_em
+        saida.curva = curva.get(insumo.id) if insumo.ativo else None
+        saida.contado_em = contados.get(insumo.id)
         saidas.append(saida)
     return EstoqueSaida(
         insumos=saidas,
@@ -235,9 +249,15 @@ def criar_insumo(
     def criar() -> Insumo:
         db.add(insumo)
         db.flush()
-        if dados.saldo is not None:  # "tem agora" vira a primeira contagem
-            servico_estoque.registrar_contagem(
-                db, restaurante_id, {insumo.id: dados.saldo}, usuario.id, agora()
+        if dados.saldo:  # "tem agora": o saldo de partida, que não é sobra nem perda
+            servico_estoque.mover(
+                db,
+                insumo.id,
+                restaurante_id,
+                TipoMovimento.INICIAL,
+                dados.saldo,
+                agora(),
+                usuario_id=usuario.id,
             )
         return insumo
 
@@ -303,13 +323,29 @@ def registrar_compra(
     if not insumo.ativo:
         raise HTTPException(status.HTTP_409_CONFLICT, f"{insumo.nome} saiu do estoque")
 
+    # A nota anterior, para avisar o dono se o preço subiu (o custo médio, se não houver).
+    notas = servico_perdas.precos_das_notas(db, insumo, limite=1)
+    antes = notas[0][1] if notas else insumo.custo_centavos
+
     def comprar() -> Insumo:
         servico_estoque.registrar_compra(
             db, insumo, dados.quantidade, dados.valor_centavos, usuario.id, agora()
         )
         return insumo
 
-    return insumo_saida(servico.mexer_no_estoque(db, insumo.restaurante_id, comprar), usuario)
+    saida = insumo_saida(servico.mexer_no_estoque(db, insumo.restaurante_id, comprar), usuario)
+    if dados.valor_centavos is not None:
+        nota = preco_da_nota(dados.quantidade, dados.valor_centavos, insumo.unidade)
+        if (subida := subida_de_preco(antes, nota)) is not None:
+            pratos = servico_perdas.pratos_que_encarecem(db, insumo, subida)
+            servico.push.enviar(
+                insumo.restaurante_id,
+                "O preço subiu",
+                servico_perdas.texto_do_preco(insumo, subida, pratos),
+                (Papel.DONO,),
+                url="/estoque",
+            )
+    return saida
 
 
 @router.post("/perdas", status_code=status.HTTP_201_CREATED)
@@ -372,4 +408,74 @@ def registrar_contagem(
             )
             for d in diferencas
         ]
+    )
+
+
+@router.get("/perdas", dependencies=[exigir_papel(*VEEM_CUSTO)])
+def ver_perdas(
+    db: Db,
+    restaurante_id: RestauranteAlvo,
+    periodo: Annotated[Literal["semana", "mes"], Query()] = "semana",
+) -> PerdasSaida:
+    """Custo pela ficha contra o custo de verdade, o que escapou e onde. Só o dono: são
+    valores em reais do custo."""
+    restaurante = db.get_one(Restaurante, restaurante_id)
+    r = servico_perdas.relatorio_de_perdas(db, restaurante, Periodo(periodo), agora())
+    return PerdasSaida(
+        periodo=periodo,
+        primeira_noite=r.primeira_noite,
+        ultima_noite=r.ultima_noite,
+        vendeu_centavos=r.vendeu_centavos,
+        custo_pela_ficha_centavos=r.custo_pela_ficha_centavos,
+        custo_de_verdade_centavos=r.custo_de_verdade_centavos,
+        escapou_centavos=r.escapou_centavos,
+        registrada_centavos=r.registrada_centavos,
+        sem_registro_centavos=r.sem_registro_centavos,
+        itens_sem_custo=r.itens_sem_custo,
+        ultima_contagem=r.ultima_contagem,
+        linhas=[
+            LinhaPerdaSaida(
+                insumo_id=linha.insumo.id,
+                nome=linha.insumo.nome,
+                unidade=linha.insumo.unidade,
+                pela_ficha=linha.perda.pela_ficha,
+                registrada=linha.perda.registrada,
+                sem_registro=linha.perda.sem_registro,
+                saiu=linha.perda.saiu,
+                escapou=linha.perda.escapou,
+                valor_escapou_centavos=linha.valor_escapou,
+                valor_sem_registro_centavos=linha.valor_sem_registro,
+                curva=r.curva.get(linha.insumo.id),
+                prato=linha.prato,
+                por_porcao=linha.por_porcao,
+            )
+            for linha in r.linhas
+        ],
+        por_motivo=[
+            PerdaPorMotivoSaida(
+                motivo=m.motivo,
+                valor_centavos=m.valor_centavos,
+                itens=[
+                    ItemPerdidoSaida(nome=i.nome, unidade=i.unidade, quantidade=q)
+                    for i, q in m.itens
+                ],
+            )
+            for m in r.por_motivo
+        ],
+        precos=[
+            PrecoQueSubiuSaida(
+                insumo_id=p.insumo.id,
+                nome=p.insumo.nome,
+                unidade=p.insumo.unidade,
+                antes_centavos=p.subida.antes_centavos,
+                agora_centavos=p.subida.agora_centavos,
+                pct=p.subida.pct,
+                em=p.em,
+                pratos=[PratoMaisCaroSaida(nome=n, a_mais_centavos=v) for n, v in p.pratos],
+            )
+            for p in r.precos
+        ],
+        curva_a=[
+            i.nome for i in servico_perdas.ingredientes_da_curva(db, restaurante_id, r.curva, "A")
+        ],
     )
