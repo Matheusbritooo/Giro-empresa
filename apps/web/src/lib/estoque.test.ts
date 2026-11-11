@@ -286,6 +286,9 @@ describe("perdas", () => {
     expect(dicaDaPerda(linha)).toBe(
       "Muçarela: 2,46 kg sumiram sem registro. A ficha diz 100 g por lasanha à bolonhesa: confira a porção na bancada.",
     );
+    expect(dicaDaPerda({ ...linha, sem_registro: 1000, prato: null })).toBe(
+      "Muçarela: 1 kg sumiu sem registro. Confira a porção e se a contagem está certa.",
+    );
     expect(dicaDaPerda({ ...linha, registrada: 3000 })).toBe(
       "Muçarela: a maior parte foi registrada como perda. Veja o motivo e compre menos de cada vez.",
     );

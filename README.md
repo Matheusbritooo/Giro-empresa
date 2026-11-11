@@ -97,6 +97,7 @@ Cardápio, etapa 3, parte 3 (perdas, só o dono):
 
 - **Custo pela ficha contra o custo de verdade** (CMV), em 7 dias ou 4 semanas: a ficha diz quanto deveria sair pelo que foi vendido; o livro e a contagem dizem quanto saiu. A diferença é o que **escapou**, em reais, com a estimativa do mês.
 - **Onde ficou a diferença**: cada ingrediente com o que saiu pela ficha, o que saiu de verdade e o que escapou (registrado como perda ou sumido sem registro). Diferença de centavos fica somada numa linha.
+- **A contagem vale pelos dias que cobre**: o que ela acha a menos é repartido pelos dias desde a contagem anterior, e a tela mostra o que sumiu nos 7 (ou 28) dias até a última contagem. Assim a primeira contagem depois de um mês não joga o mês inteiro numa semana. Ingrediente que saiu de uso continua na conta.
 - **O que olhar primeiro**: para os três que mais custaram, a dica certa ("A ficha diz 100 g por lasanha: confira a porção na bancada").
 - **Perdas registradas por motivo** e **o preço subiu**: a compra que veio mais de 10% mais cara e quanto cada prato passou a custar a mais. Na hora da compra, o dono recebe o aviso no celular.
 - **Curva ABC**: os poucos ingredientes que somam 80% do que sai do estoque. A tela de Ingredientes marca os da curva A para o gerente e lembra quando passam de uma semana sem contagem; o recado antes do turno também.

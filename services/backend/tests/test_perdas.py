@@ -1,8 +1,14 @@
 """Perdas do estoque: custo pela ficha contra o de verdade, o que escapou, perdas por motivo,
 curva ABC, o preço que subiu (com aviso no celular do dono), perfis, isolamento e Copiloto."""
 
-import pytest
+from datetime import timedelta
 
+import pytest
+from sqlalchemy import select, update
+
+from giro.banco import agora
+from giro.modelos import Insumo, MovimentoEstoque
+from giro.servicos.perdas import contagem_atrasada
 from tests.test_cardapio import cardapio, id_da_mesa, lancar  # noqa: F401 (fixture)
 from tests.test_copiloto import PushDeMentira
 from tests.test_estoque import estoque, saldos  # noqa: F401 (fixture)
@@ -51,6 +57,46 @@ def test_custo_pela_ficha_e_de_verdade(como, semana):
     ]
     # Curva ABC das 4 semanas: muçarela R$ 42 e carne R$ 9,12 somam mais de 80%.
     assert perdas["curva_a"] == ["Carne moída", "Muçarela"]
+
+
+def test_contagem_depois_de_um_mes_nao_cai_inteira_na_semana(app, como, estoque):  # noqa: F811
+    """O estoque entrou há 28 dias e só hoje alguém contou: falta 1 kg de muçarela (R$ 42).
+    Isso sumiu ao longo do mês: a semana leva um quarto, e não o mês inteiro."""
+    with app.state.sessoes() as db:
+        db.execute(update(MovimentoEstoque).values(em=agora() - timedelta(days=28)))
+        db.commit()
+    contagem = {"itens": [{"insumo_id": estoque["mucarela"]["id"], "quantidade": 2000}]}
+    assert como("gerente@cantina.demo").post("/api/estoque/contagens", json=contagem).json()
+    dono = como("dono@cantina.demo")
+    semana_, mes = (
+        dono.get(f"/api/estoque/perdas?periodo={periodo}").json() for periodo in ("semana", "mes")
+    )
+    assert (semana_["linhas"][0]["sem_registro"], semana_["sem_registro_centavos"]) == (250, 1050)
+    assert (mes["linhas"][0]["sem_registro"], mes["sem_registro_centavos"]) == (1000, 4200)
+
+
+def test_ingrediente_fora_de_uso_continua_nas_perdas(como, semana, estoque):  # noqa: F811
+    """Tirar o ingrediente de uso não apaga do relatório do dono o que escapou dele."""
+    dono, gerente = como("dono@cantina.demo"), como("gerente@cantina.demo")
+    antes = dono.get("/api/estoque/perdas").json()
+    fora = gerente.patch(f"/api/estoque/insumos/{estoque['mucarela']['id']}", json={"ativo": False})
+    assert fora.status_code == 200
+    depois = dono.get("/api/estoque/perdas").json()
+    assert depois["escapou_centavos"] == antes["escapou_centavos"] == 3360
+    assert depois["por_motivo"] == antes["por_motivo"]
+    # Fora de uso, sai da curva e do lembrete de contagem, mas a linha continua lá.
+    linhas = [(linha["nome"], linha["escapou"], linha["curva"]) for linha in depois["linhas"]]
+    assert linhas == [("Muçarela", 800, None)]
+    assert "Muçarela" in antes["curva_a"] and "Muçarela" not in depois["curva_a"]
+
+
+def test_lembrete_de_contagem_conta_em_noites_como_o_painel(app, semana):
+    """Contou há 7 noites: ainda não é "mais de uma semana". Na oitava, o lembrete volta."""
+    with app.state.sessoes() as db:
+        cantina = db.scalars(select(Insumo.restaurante_id)).first()
+        atrasados = lambda quando: [i.nome for i in contagem_atrasada(db, cantina, quando)]  # noqa: E731
+        assert "Muçarela" not in atrasados(agora() + timedelta(days=7))
+        assert "Muçarela" in atrasados(agora() + timedelta(days=8))
 
 
 def test_curva_e_contagem_aparecem_no_estoque(como, semana):

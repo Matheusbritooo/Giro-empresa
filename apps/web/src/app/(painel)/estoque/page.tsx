@@ -1566,7 +1566,8 @@ function PerdasDoEstoque({
         <p className="max-w-prose text-tinta-suave">
           De {rotuloDia(perdas.primeira_noite)} a {rotuloDia(perdas.ultima_noite)}. A ficha diz
           quanto <b className="text-tinta">deveria</b> sair pelo que foi vendido; a contagem diz
-          quanto <b className="text-tinta">saiu</b>. Valores pelo preço médio de hoje.
+          quanto <b className="text-tinta">saiu</b>. O que a contagem acha a menos vale para os dias
+          desde a contagem anterior. Valores pelo preço médio de hoje.
         </p>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Período">
           {(

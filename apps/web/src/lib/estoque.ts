@@ -246,11 +246,12 @@ export function precisaContar(insumo: Insumo, hoje: string): boolean {
 export function dicaDaPerda(linha: LinhaDePerda): string {
   const sumiu = quantidade(linha.unidade, linha.sem_registro);
   if (linha.sem_registro > linha.registrada) {
+    const verbo = sumiu.startsWith("1 ") ? "sumiu" : "sumiram";
     const porcao =
       linha.prato && linha.por_porcao
         ? ` A ficha diz ${porPorcao(linha.unidade, linha.por_porcao)} por ${linha.prato.toLowerCase()}: confira a porção na bancada.`
         : " Confira a porção e se a contagem está certa.";
-    return `${linha.nome}: ${sumiu} sumiram sem registro.${porcao}`;
+    return `${linha.nome}: ${sumiu} ${verbo} sem registro.${porcao}`;
   }
   return `${linha.nome}: a maior parte foi registrada como perda. Veja o motivo e compre menos de cada vez.`;
 }

@@ -1,6 +1,6 @@
 """Perdas, curva ABC e preço que subiu, com contas à mão."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from giro.dominio.perdas import (
     Movimentos,
@@ -9,6 +9,7 @@ from giro.dominio.perdas import (
     impacto_no_prato,
     perda_do_insumo,
     preco_da_nota,
+    sem_registro_no_periodo,
     subida_de_preco,
     subida_recente,
 )
@@ -22,6 +23,52 @@ def test_o_que_saiu_pela_ficha_e_o_que_escapou():
     assert (perda.escapou, perda.saiu) == (2700, 32_600)
     # A contagem achou a mais: a diferença é negativa (sobrou).
     assert perda_do_insumo(Movimentos(venda=-1000, contagem=200)).escapou == -200
+
+
+def test_a_contagem_vale_para_o_tempo_que_ela_cobre():
+    agora = datetime(2026, 11, 6, 23, tzinfo=UTC)  # sexta à noite
+    contou = datetime(2026, 11, 6, 15, tzinfo=UTC)
+    dias = lambda n: timedelta(days=n)  # noqa: E731
+
+    def no_periodo(contagens, entrou, tamanho, hoje=agora):
+        return sem_registro_no_periodo(contagens, entrou, hoje - dias(tamanho), hoje, tamanho)
+
+    # O estoque entrou há 28 dias e só hoje alguém contou: falta 1 kg. Os 7 dias levam um
+    # quarto (250 g), não o quilo inteiro; as 4 semanas levam tudo.
+    primeira = [(contou, -1000)]
+    assert no_periodo(primeira, contou - dias(28), 7) == -250
+    assert no_periodo(primeira, contou - dias(28), 28) == -1000
+
+    # Contagem toda semana: os 7 dias mostram a semana que a última contagem fechou, e o
+    # número não muda nos dias seguintes, enquanto ninguém conta de novo.
+    toda_semana = [
+        (contou - dias(21), -400),
+        (contou - dias(14), -300),
+        (contou - dias(7), -200),
+        (contou, -100),
+    ]
+    assert no_periodo(toda_semana, contou - dias(28), 7) == -100
+    assert no_periodo(toda_semana, contou - dias(28), 7, agora + dias(3)) == -100
+    assert no_periodo(toda_semana, contou - dias(28), 28) == -1000
+    # A contagem saiu do período: sem contagem, não há o que dizer.
+    assert no_periodo(toda_semana, contou - dias(28), 7, agora + dias(8)) == 0
+
+    # Começou contando tarde e depois pegou o ritmo: nas 4 semanas até a última contagem
+    # cabem 7 dos 28 dias da primeira (700 g) e as três semanais (210 g). Antes eram 3,01 kg.
+    pegou_o_ritmo = [
+        (contou - dias(21), -2800),
+        (contou - dias(14), -70),
+        (contou - dias(7), -70),
+        (contou, -70),
+    ]
+    assert no_periodo(pegou_o_ritmo, contou - dias(49), 28) == -910
+
+    # A contagem achou a mais (compra que ninguém lançou): reparte do mesmo jeito.
+    assert no_periodo([(contou, 600)], contou - dias(14), 7) == 300
+    # Entrou no estoque e foi contado na mesma hora: não há tempo para repartir.
+    assert no_periodo([(contou, -500)], contou, 7) == -500
+    # Contagem depois do fim do período não entra na conta.
+    assert no_periodo([(contou, -100), (agora + dias(1), -999)], contou - dias(7), 7) == -100
 
 
 def test_curva_abc():

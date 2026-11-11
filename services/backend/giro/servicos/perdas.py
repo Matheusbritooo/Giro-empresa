@@ -23,6 +23,7 @@ from giro.dominio.perdas import (
     impacto_no_prato,
     perda_do_insumo,
     preco_da_nota,
+    sem_registro_no_periodo,
     subida_recente,
 )
 from giro.modelos import (
@@ -33,10 +34,10 @@ from giro.modelos import (
     MovimentoEstoque,
     Restaurante,
 )
-from giro.servicos.resultados import Periodo, intervalo
+from giro.servicos.resultados import NOITES, Periodo, intervalo
 
 JANELA = timedelta(days=28)  # curva ABC e preços que subiram
-CONTAGEM_ATRASADA = timedelta(days=7)
+DIAS_SEM_CONTAR = 7  # curva A sem contagem há mais noites que isso vira lembrete
 
 
 @dataclass
@@ -96,8 +97,10 @@ def _valor(insumo: Insumo, quantidade: int) -> int | None:
 
 
 def _somas(
-    db: Session, restaurante_id: int, inicio: datetime, fim: datetime
+    db: Session, restaurante_id: int, inicio: datetime, fim: datetime, dias: int
 ) -> dict[int, Movimentos]:
+    """O livro no período, por ingrediente. `dias` é o tamanho do período em dias inteiros
+    (o de hoje ainda não acabou): é por ele que a diferença das contagens é medida."""
     somas: dict[int, dict[str, int]] = defaultdict(dict)
     for insumo_id, tipo, total in db.execute(
         select(
@@ -108,13 +111,57 @@ def _somas(
             MovimentoEstoque.em >= inicio,
             MovimentoEstoque.em < fim,
             # Compra entra no estoque e o saldo de partida já estava lá: nenhum dos dois é
-            # saída, perda ou sobra.
-            MovimentoEstoque.tipo.not_in([TipoMovimento.COMPRA.value, TipoMovimento.INICIAL.value]),
+            # saída, perda ou sobra. A contagem entra à parte, repartida pelo tempo que cobre.
+            MovimentoEstoque.tipo.not_in(
+                [
+                    TipoMovimento.COMPRA.value,
+                    TipoMovimento.INICIAL.value,
+                    TipoMovimento.CONTAGEM.value,
+                ]
+            ),
         )
         .group_by(MovimentoEstoque.insumo_id, MovimentoEstoque.tipo)
     ):
         somas[insumo_id][tipo] = int(total or 0)
+    for insumo_id, parte in _sem_registro(db, restaurante_id, inicio, fim, dias).items():
+        if parte:
+            somas[insumo_id]["contagem"] = parte
     return {i: Movimentos(**s) for i, s in somas.items()}
+
+
+def _sem_registro(
+    db: Session, restaurante_id: int, inicio: datetime, fim: datetime, dias: int
+) -> dict[int, int]:
+    """Por ingrediente, a parte das diferenças das contagens que cabe ao período (com o sinal
+    do livro): cada contagem vale para o tempo desde a anterior, não só para o dia dela."""
+    contagens: dict[int, list[tuple[datetime, int]]] = defaultdict(list)
+    for insumo_id, em, quantidade in db.execute(
+        select(MovimentoEstoque.insumo_id, MovimentoEstoque.em, MovimentoEstoque.quantidade)
+        .where(
+            MovimentoEstoque.restaurante_id == restaurante_id,
+            MovimentoEstoque.tipo == TipoMovimento.CONTAGEM.value,
+            MovimentoEstoque.em < fim,
+        )
+        .order_by(MovimentoEstoque.em, MovimentoEstoque.id)
+    ):
+        contagens[insumo_id].append((em, quantidade))
+    # Só interessa quem foi contado dentro do período.
+    contagens = {i: c for i, c in contagens.items() if c[-1][0] >= inicio}
+    if not contagens:
+        return {}
+    entrou = dict(
+        db.execute(
+            select(MovimentoEstoque.insumo_id, func.min(MovimentoEstoque.em))
+            .where(
+                MovimentoEstoque.restaurante_id == restaurante_id,
+                MovimentoEstoque.insumo_id.in_(list(contagens)),
+            )
+            .group_by(MovimentoEstoque.insumo_id)
+        ).all()
+    )
+    return {
+        i: sem_registro_no_periodo(c, entrou[i], inicio, fim, dias) for i, c in contagens.items()
+    }
 
 
 def ultimas_contagens(db: Session, restaurante_id: int) -> dict[int, datetime]:
@@ -136,7 +183,7 @@ def curva_do_restaurante(
 ) -> dict[int, str]:
     """Curva ABC pelo que saiu de cada ingrediente nas últimas 4 semanas, em reais de hoje."""
     insumos = insumos if insumos is not None else _insumos(db, restaurante_id)
-    somas = _somas(db, restaurante_id, agora - JANELA, agora)
+    somas = _somas(db, restaurante_id, agora - JANELA, agora, JANELA.days)
     gasto = {}
     for insumo in insumos:
         saiu = perda_do_insumo(somas.get(insumo.id, Movimentos())).saiu
@@ -144,14 +191,11 @@ def curva_do_restaurante(
     return curva_abc(gasto)
 
 
-def _insumos(db: Session, restaurante_id: int) -> list[Insumo]:
-    return list(
-        db.scalars(
-            select(Insumo)
-            .where(Insumo.restaurante_id == restaurante_id, Insumo.ativo.is_(True))
-            .order_by(Insumo.nome)
-        )
-    )
+def _insumos(db: Session, restaurante_id: int, fora_de_uso: bool = False) -> list[Insumo]:
+    consulta = select(Insumo).where(Insumo.restaurante_id == restaurante_id).order_by(Insumo.nome)
+    if not fora_de_uso:
+        consulta = consulta.where(Insumo.ativo.is_(True))
+    return list(db.scalars(consulta))
 
 
 def precos_das_notas(db: Session, insumo: Insumo, limite: int = 2) -> list[tuple[datetime, int]]:
@@ -209,8 +253,11 @@ def relatorio_de_perdas(
     hoje = noite_de(agora)
     inicio, fim = intervalo(periodo, hoje)
     fim = min(fim, agora)
-    insumos = _insumos(db, restaurante.id)
-    somas = _somas(db, restaurante.id, inicio, fim)
+    # O que escapou de um ingrediente continua na conta depois que ele sai de uso: tirar o
+    # ingrediente do estoque não pode apagar a perda do relatório do dono.
+    todos = _insumos(db, restaurante.id, fora_de_uso=True)
+    insumos = [i for i in todos if i.ativo]
+    somas = _somas(db, restaurante.id, inicio, fim, NOITES[periodo])
 
     # Vendas do período: quanto entrou e quanto os pratos custam (pela ficha ou o digitado).
     vendeu = custo_ficha = 0
@@ -252,7 +299,7 @@ def relatorio_de_perdas(
 
     linhas = []
     registrada = sem_registro = 0
-    for insumo in insumos:
+    for insumo in todos:
         perda = perda_do_insumo(somas.get(insumo.id, Movimentos()))
         if perda.escapou == 0 and perda.registrada == 0 and perda.sem_registro == 0:
             continue
@@ -275,7 +322,7 @@ def relatorio_de_perdas(
 
     # Perdas registradas, por motivo (inclui o prato cancelado depois do "Pronto").
     por_motivo: dict[str, list[tuple[Insumo, int]]] = defaultdict(list)
-    por_id = {i.id: i for i in insumos}
+    por_id = {i.id: i for i in todos}
     for motivo, insumo_id, total in db.execute(
         select(
             MovimentoEstoque.motivo,
@@ -338,15 +385,17 @@ def relatorio_de_perdas(
 def contagem_atrasada(
     db: Session, restaurante_id: int, agora: datetime, curva: dict[int, str] | None = None
 ) -> list[Insumo]:
-    """Os ingredientes da curva A sem contagem há mais de uma semana."""
+    """Os ingredientes da curva A sem contagem há mais de uma semana, em noites (a mesma
+    conta do painel: contou na sexta, o lembrete volta no sábado da semana seguinte)."""
     insumos = _insumos(db, restaurante_id)
     curva = curva if curva is not None else curva_do_restaurante(db, restaurante_id, agora, insumos)
     contados = ultimas_contagens(db, restaurante_id)
+    hoje = noite_de(agora)
     return [
         i
         for i in insumos
         if curva.get(i.id) == "A"
-        and (contados.get(i.id) is None or agora - contados[i.id] > CONTAGEM_ATRASADA)
+        and (contados.get(i.id) is None or (hoje - noite_de(contados[i.id])).days > DIAS_SEM_CONTAR)
     ]
 
 

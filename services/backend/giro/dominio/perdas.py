@@ -12,12 +12,17 @@ Pelo livro do estoque, num período, para cada ingrediente:
 
 A diferença sem registro só aparece quando alguém conta o estoque. É nela que mora a porção
 maior que a ficha, o desperdício que ninguém anotou, o erro de contagem e o desvio.
+
+Ela vale para o tempo todo entre uma contagem e a outra, não só para o dia da contagem:
+
+    contou em 09/10 ──────── 28 dias, faltou 1 kg ────────► contou em 06/11
+                                          os 7 dias até 06/11 levam 250 g, não 1 kg
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from giro.dominio.estoque import base_do_preco
 
@@ -54,6 +59,42 @@ def perda_do_insumo(m: Movimentos) -> PerdaDoInsumo:
     return PerdaDoInsumo(
         pela_ficha=-(m.venda + m.estorno), registrada=-m.perda, sem_registro=-m.contagem
     )
+
+
+def sem_registro_no_periodo(
+    contagens: list[tuple[datetime, int]],
+    desde: datetime,
+    inicio: datetime,
+    fim: datetime,
+    dias: int,
+) -> int:
+    """Quanto as contagens acharam de diferença num período de `dias` dias, com o sinal do
+    livro (negativa quando sumiu). `contagens` vem da mais antiga para a mais recente:
+    (quando, diferença); `desde` é quando o ingrediente entrou no livro.
+
+    A contagem mostra o que sumiu desde a contagem anterior, não só no dia em que foi feita:
+    a diferença é repartida por igual por esse tempo. Assim a primeira contagem depois de um
+    mês não joga o mês inteiro numa semana.
+
+    Depois da última contagem ninguém mediu nada, e a conta não inventa: vale o que sumiu nos
+    `dias` dias até a última contagem feita dentro do período. Com contagem toda semana, os
+    7 dias mostram a semana que ela fechou, e o número só muda quando alguém conta de novo.
+    Sem contagem no período, não há o que dizer (zero)."""
+    contagens = [c for c in contagens if c[0] < fim]
+    if not contagens or contagens[-1][0] < inicio:
+        return 0
+    comeco = contagens[-1][0] - timedelta(days=dias)
+    total = 0.0
+    anterior = desde
+    for quando, diferenca in contagens:
+        cobriu = (quando - anterior).total_seconds()
+        if cobriu <= 0:  # contada duas vezes no mesmo instante: não há tempo para repartir
+            total += diferenca if quando >= comeco else 0
+        else:
+            dentro = (quando - max(anterior, comeco)).total_seconds()
+            total += diferenca * max(dentro, 0.0) / cobriu
+        anterior = quando
+    return round(total)
 
 
 def curva_abc(valores: dict[int, float]) -> dict[int, str]:
