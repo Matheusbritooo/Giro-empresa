@@ -474,6 +474,8 @@ class LinhaPedidoEntrada(BaseModel):
 
 class PedidoEntrada(BaseModel):
     itens: list[LinhaPedidoEntrada] = Field(min_length=1, max_length=40)
+    # Inventada pelo aparelho a cada lançamento: reenviar com a mesma chave não lança de novo.
+    chave: str | None = Field(default=None, min_length=8, max_length=64, pattern=r"^[A-Za-z0-9-]+$")
 
 
 # Lista fechada: o motivo vira número nos relatórios e não abre espaço para dado pessoal.

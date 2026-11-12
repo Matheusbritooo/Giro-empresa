@@ -15,7 +15,7 @@ import {
   SeletorVista,
   type Vista,
 } from "@/components/planta";
-import { Aviso } from "@/components/ui";
+import { Aviso, Esqueleto } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useDados } from "@/lib/dados";
 import {
@@ -64,7 +64,10 @@ export default function PaginaReplay() {
     () => api<Replay>(`/api/resultados/replay?dia=${dia}`, { restaurante }),
     [dia, restaurante],
   );
-  const { dados: replay, erro } = useDados(restaurante ? buscar : null);
+  const { dados: replay, erro } = useDados(
+    restaurante ? buscar : null,
+    `replay:${restaurante}:${dia}`,
+  );
   const voltar = comBusca("/resultados", parametros, {});
 
   if (!restaurante) return <Aviso>Escolha um restaurante na lista de restaurantes.</Aviso>;
@@ -85,7 +88,7 @@ export default function PaginaReplay() {
       </header>
       <Aviso>{erro}</Aviso>
       {!replay || replay.dia !== dia ? (
-        !erro && <p className="text-tinta-suave">Buscando os horários da noite...</p>
+        !erro && <Esqueleto rotulo="Buscando os horários da noite" />
       ) : !linha ? (
         <div className="rounded-xl border-2 border-dashed border-linha p-6">
           <p className="font-semibold">Nenhuma mesa foi registrada nessa noite.</p>

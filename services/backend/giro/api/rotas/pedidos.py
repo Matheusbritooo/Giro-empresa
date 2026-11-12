@@ -30,7 +30,7 @@ from giro.esquemas import (
 )
 from giro.modelos import ItemCardapio, ItemPedido, Mesa, Usuario
 from giro.servicos.estoque import cancelar_pedido
-from giro.servicos.salao import mesas_salao, ocupacoes_abertas
+from giro.servicos.salao import lancamento_com_chave, mesas_salao, ocupacoes_abertas
 
 router = APIRouter(prefix="/api", tags=["pedidos"])
 
@@ -82,6 +82,10 @@ def lancar_pedido(
     mesa_id: int, dados: PedidoEntrada, db: Db, usuario: UsuarioAtual, servico: Servico
 ) -> PedidoMesaSaida:
     mesa = _mesa(db, mesa_id, usuario)
+    # O aparelho reenviou um pedido que já tinha entrado (a resposta se perdeu na rede): não
+    # confere nada de novo, nem se algo acabou nesse meio tempo. Só devolve o pedido da mesa.
+    if lancamento_com_chave(db, mesa, dados.chave) is not None:
+        return pedido_da_mesa(db, mesa)
     if not mesa.ativa:
         raise HTTPException(status.HTTP_409_CONFLICT, f"a mesa {mesa.numero} está desativada")
     ids = {linha.item_id for linha in dados.itens}
@@ -104,7 +108,7 @@ def lancar_pedido(
             raise HTTPException(status.HTTP_409_CONFLICT, f"{item.nome} acabou")
         observacao = (linha.observacao or "").strip() or None
         linhas.append((item, linha.quantidade, observacao))
-    servico.registrar_pedido(db, mesa, linhas, usuario.id, agora())
+    servico.registrar_pedido(db, mesa, linhas, usuario.id, agora(), dados.chave)
     return pedido_da_mesa(db, mesa)
 
 

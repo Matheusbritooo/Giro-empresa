@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { camera, entrar } from "./apoio";
+import { camera, entrarNoSalao } from "./apoio";
 
 // Aviso que o próprio @react-three/fiber dá no three 0.186 (THREE.Clock virou THREE.Timer).
 const AVISOS_CONHECIDOS = [/THREE\.Clock/];
@@ -35,8 +35,7 @@ test.skip(({ isMobile }) => isMobile, "no celular o salão abre na planta");
 test("salão 3D no nível alto abre com efeitos, selo e garçom no balcão", async ({ page }) => {
   test.setTimeout(150_000); // nível alto no processador (SwiftShader) é lento
 
-  await entrar(page, "marcos@cantina.demo");
-  await expect(page).toHaveURL(/\/salao$/);
+  await entrarNoSalao(page, "marcos@cantina.demo");
   const problemas = vigiarConsole(page);
   const deFora = vigiarDownloads(page);
   await page.goto("/salao?qualidade=alto");
@@ -58,8 +57,7 @@ test("'Ver no salão' leva a câmera até a mesa e o garçom vai atender", async
 }) => {
   test.setTimeout(120_000);
 
-  await entrar(page, "marcos@cantina.demo");
-  await expect(page).toHaveURL(/\/salao$/);
+  await entrarNoSalao(page, "marcos@cantina.demo");
   const problemas = vigiarConsole(page);
   const deFora = vigiarDownloads(page);
   // O nível médio tem os mesmos clientes, garçom e efeitos do alto, sem a oclusão (mais leve na CI).
@@ -121,8 +119,7 @@ test("se o desenho de um cliente não baixar, o salão 3D continua aberto", asyn
     }
   });
 
-  await entrar(page, "marcos@cantina.demo");
-  await expect(page).toHaveURL(/\/salao$/);
+  await entrarNoSalao(page, "marcos@cantina.demo");
   await page.goto("/salao?qualidade=baixo");
   const salao = page.getByTestId("salao-3d");
   await expect(salao).toHaveAttribute("data-qualidade", "baixo");

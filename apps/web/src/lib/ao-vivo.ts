@@ -3,6 +3,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 
 import { urlAoVivo } from "./api";
+import { dadoGuardado, guardarDado } from "./dados";
 import { aplicarMensagem, type EstadoSalao, SALAO_VAZIO } from "./salao";
 import type { Alerta, AvisoAoVivo, MensagemAoVivo } from "./tipos";
 
@@ -15,14 +16,27 @@ function redutor(estado: EstadoSalao, mensagem: MensagemAoVivo): EstadoSalao {
   return aplicarMensagem(estado, mensagem);
 }
 
+/** Onde o último salão visto fica guardado: a tela abre com ele enquanto o canal conecta, e o
+ * pedido sem internet tira daqui o número da mesa. */
+export function chaveDoSalao(restaurante: number): string {
+  return `salao:${restaurante}`;
+}
+
+function salaoInicial(restaurante: number | null): EstadoSalao {
+  return (restaurante && dadoGuardado<EstadoSalao>(chaveDoSalao(restaurante))) || SALAO_VAZIO;
+}
+
 /** Conecta no canal ao vivo do salão e mantém tudo atualizado, reconectando se cair. */
 export function useSalaoAoVivo(
   restaurante: number | null,
   aoChegarAlerta: (alerta: Alerta) => void,
   aoAviso?: (aviso: AvisoAoVivo) => void,
 ) {
-  const [estado, despachar] = useReducer(redutor, SALAO_VAZIO);
+  const [estado, despachar] = useReducer(redutor, restaurante, salaoInicial);
   const [conexao, setConexao] = useState<Conexao>("conectando");
+  useEffect(() => {
+    if (restaurante && estado.salao) guardarDado(chaveDoSalao(restaurante), estado);
+  }, [restaurante, estado]);
   const avisar = useRef(aoChegarAlerta);
   const avisarOutros = useRef(aoAviso);
   useEffect(() => {
@@ -35,6 +49,7 @@ export function useSalaoAoVivo(
     let ws: WebSocket | null = null;
     let tentativa = 0;
     let encerrado = false;
+    let jaConectou = false;
     let ping: ReturnType<typeof setInterval> | undefined;
     let espera: ReturnType<typeof setTimeout> | undefined;
     const vistos = new Set<number>();
@@ -47,6 +62,10 @@ export function useSalaoAoVivo(
       ws.onmessage = (evento) => {
         const mensagem = JSON.parse(evento.data) as MensagemAoVivo;
         if (mensagem.tipo === "salao") {
+          // O canal voltou depois de cair: quem tem lista na tela busca de novo, porque os
+          // avisos desse meio tempo se perderam (o pedido que subiu da fila, por exemplo).
+          if (jaConectou) avisarOutros.current?.({ tipo: "reconectou" });
+          jaConectou = true;
           tentativa = 0;
           setConexao("ao_vivo");
           mensagem.salao.alertas.forEach((a) => vistos.add(a.id));

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import { api, ErroApi } from "./api";
+import { limparDados } from "./dados";
 import type { Papel, Sessao } from "./tipos";
 
 interface ContextoSessao {
@@ -31,12 +32,14 @@ export function ProvedorSessao({ children }: { children: React.ReactNode }) {
       metodo: "POST",
       corpo: { email, senha },
     });
+    limparDados(); // quem entra não vê o que a conta anterior deixou na memória
     setSessao(nova);
     return nova;
   }, []);
 
   const sair = useCallback(async () => {
     await api("/api/auth/sair", { metodo: "POST" }).catch(() => undefined);
+    limparDados();
     setSessao(null);
   }, []);
 
@@ -61,8 +64,10 @@ export function useSessaoObrigatoria(): Sessao | null {
   return sessao;
 }
 
+/** O dono abre no resumo do dia; quem trabalha no salão, no salão. */
 export function paginaInicial(papel: Papel): string {
-  return papel === "admin_giro" ? "/restaurantes" : "/salao";
+  if (papel === "admin_giro") return "/restaurantes";
+  return papel === "dono" ? "/hoje" : "/salao";
 }
 
 export const podeGerirMesas = (papel: Papel) => papel !== "equipe";

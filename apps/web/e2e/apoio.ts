@@ -32,6 +32,19 @@ export async function entrar(page: Page, email: string) {
   await page.getByRole("button", { name: "Entrar" }).click();
 }
 
+/** Entra e vai para o salão: o dono abre no resumo do dia ("Hoje"), os outros já no salão. */
+export async function entrarNoSalao(page: Page, email: string) {
+  await entrar(page, email);
+  await expect(page).toHaveURL(/\/(hoje|salao)$/);
+  if (!page.url().endsWith("/salao")) {
+    await page
+      .getByRole("navigation", { name: "Seções" })
+      .getByRole("link", { name: "Salão" })
+      .click();
+  }
+  await expect(page).toHaveURL(/\/salao$/);
+}
+
 /** Abre o salão sempre na planta, que é o que estes testes conferem. */
 export async function preferirPlanta(page: Page) {
   await page.addInitScript(() => localStorage.setItem("giro:vista", "planta"));

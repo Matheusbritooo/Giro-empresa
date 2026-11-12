@@ -34,7 +34,12 @@ export function aplicarMensagem(
 
   // Pedido, cardápio ou estoque mudou: quem precisa (cozinha, pedido, estoque) busca de novo;
   // o total da mesa chega numa mensagem "mesa" logo em seguida.
-  if (mensagem.tipo === "pedido" || mensagem.tipo === "cardapio" || mensagem.tipo === "estoque")
+  if (
+    mensagem.tipo === "pedido" ||
+    mensagem.tipo === "cardapio" ||
+    mensagem.tipo === "estoque" ||
+    mensagem.tipo === "reconectou"
+  )
     return estado;
 
   if (mensagem.tipo === "camera") {

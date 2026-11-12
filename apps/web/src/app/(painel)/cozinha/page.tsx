@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { Aviso } from "@/components/ui";
+import { Aviso, Esqueleto } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useRelogio, useSalaoAoVivo } from "@/lib/ao-vivo";
 import { useDados } from "@/lib/dados";
@@ -28,7 +28,11 @@ export default function PaginaCozinha() {
     () => api<ItemCozinha[]>("/api/cozinha", { restaurante }),
     [restaurante],
   );
-  const { dados: fila, erro, recarregar } = useDados(restaurante ? buscar : null);
+  const {
+    dados: fila,
+    erro,
+    recarregar,
+  } = useDados(restaurante ? buscar : null, `cozinha:${restaurante}`);
   const aoAviso = useCallback(
     (aviso: AvisoAoVivo) => aviso.tipo !== "estoque" && recarregar(),
     [recarregar],
@@ -85,7 +89,7 @@ export default function PaginaCozinha() {
       <Aviso>{erro ?? recado}</Aviso>
 
       {!fila ? (
-        !erro && <p className="text-tinta-suave">Abrindo a fila...</p>
+        !erro && <Esqueleto rotulo="Abrindo a fila" />
       ) : lancamentos.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-linha p-6">
           <p className="font-semibold">Nada na fila.</p>

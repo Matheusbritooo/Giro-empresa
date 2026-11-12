@@ -1,8 +1,9 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
-import { Aviso, Botao, Campo, Selecao } from "@/components/ui";
+import { Aviso, Botao, Campo, Esqueleto, Selecao } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSalaoAoVivo } from "@/lib/ao-vivo";
 import { useDados } from "@/lib/dados";
@@ -54,6 +55,9 @@ function semAlerta() {}
 type Recado = { tipo: "erro" | "ok"; texto: string } | null;
 type Formulario = "compra" | "perda" | "contagem" | "novo" | null;
 
+type Aba = "ingredientes" | "lista" | "perdas" | "fichas";
+const ABAS: Aba[] = ["ingredientes", "lista", "perdas", "fichas"];
+
 export default function PaginaEstoque() {
   const { sessao } = useSessao();
   const restaurante = useRestauranteAlvo();
@@ -71,11 +75,21 @@ export default function PaginaEstoque() {
     dados: estoque,
     erro,
     recarregar: recarregarEstoque,
-  } = useDados(restaurante ? buscarEstoque : null);
+  } = useDados(restaurante ? buscarEstoque : null, `estoque:${restaurante}`);
   const { dados: cardapio, recarregar: recarregarCardapio } = useDados(
     restaurante ? buscarCardapio : null,
+    `cardapio:${restaurante}`,
   );
-  const [aba, setAba] = useState<"ingredientes" | "lista" | "perdas" | "fichas">("ingredientes");
+  // A tela "Hoje" manda direto para a aba certa: /estoque?aba=perdas.
+  const abaPedida = useSearchParams().get("aba") as Aba | null;
+  const [escolhida, setAba] = useState<Aba>(
+    abaPedida && ABAS.includes(abaPedida) ? abaPedida : "ingredientes",
+  );
+  // Aba que o perfil não vê (lista para a equipe, perdas para o gerente) cai nos ingredientes.
+  const aba =
+    (escolhida === "lista" && !gestao) || (escolhida === "perdas" && !veCusto)
+      ? "ingredientes"
+      : escolhida;
   const [periodo, setPeriodo] = useState<"semana" | "mes">("semana");
   const buscarPerdas = useCallback(
     () => api<Perdas>(`/api/estoque/perdas?periodo=${periodo}`, { restaurante }),
@@ -85,7 +99,10 @@ export default function PaginaEstoque() {
     dados: perdas,
     erro: erroPerdas,
     recarregar: recarregarPerdas,
-  } = useDados(restaurante && veCusto && aba === "perdas" ? buscarPerdas : null);
+  } = useDados(
+    restaurante && veCusto && aba === "perdas" ? buscarPerdas : null,
+    `perdas:${restaurante}:${periodo}`,
+  );
   // A lista de compras (gerente e dono) busca junto e se atualiza com os mesmos avisos.
   const [folga, setFolga] = useState<number | null>(null);
   const buscarLista = useCallback(
@@ -99,11 +116,14 @@ export default function PaginaEstoque() {
     dados: lista,
     erro: erroLista,
     recarregar: recarregarLista,
-  } = useDados(restaurante && gestao && aba === "lista" ? buscarLista : null);
+  } = useDados(
+    restaurante && gestao && aba === "lista" ? buscarLista : null,
+    `compras:${restaurante}:${folga ?? "padrao"}`,
+  );
   const aoAviso = useCallback(
     (aviso: AvisoAoVivo) => {
-      if (aviso.tipo === "cardapio") recarregarCardapio();
-      else {
+      if (aviso.tipo === "cardapio" || aviso.tipo === "reconectou") recarregarCardapio();
+      if (aviso.tipo !== "cardapio") {
         recarregarEstoque(); // pedido lançado ou cancelado mexe no estoque
         recarregarLista();
         recarregarPerdas();
@@ -168,7 +188,7 @@ export default function PaginaEstoque() {
       <Aviso>{erro}</Aviso>
 
       {!estoque || !cardapio ? (
-        !erro && <p className="text-tinta-suave">Abrindo o estoque...</p>
+        !erro && <Esqueleto linhas={6} rotulo="Abrindo o estoque" />
       ) : aba === "ingredientes" ? (
         <div role="tabpanel" id="painel-ingredientes" aria-labelledby="aba-ingredientes">
           <Ingredientes
@@ -190,7 +210,7 @@ export default function PaginaEstoque() {
               aoMudarFolga={setFolga}
             />
           ) : (
-            !erroLista && <p className="text-tinta-suave">Fazendo a conta da compra...</p>
+            !erroLista && <Esqueleto rotulo="Fazendo a conta da compra" />
           )}
         </div>
       ) : aba === "perdas" ? (
@@ -199,7 +219,7 @@ export default function PaginaEstoque() {
           {perdas ? (
             <PerdasDoEstoque perdas={perdas} aoMudarPeriodo={setPeriodo} />
           ) : (
-            !erroPerdas && <p className="text-tinta-suave">Fazendo a conta das perdas...</p>
+            !erroPerdas && <Esqueleto formato="cartoes" rotulo="Fazendo a conta das perdas" />
           )}
         </div>
       ) : (
@@ -609,7 +629,7 @@ function Livro({
     () => api<Movimento[]>(`/api/estoque/insumos/${insumo.id}/movimentos`),
     [insumo.id],
   );
-  const { dados, erro } = useDados(buscar);
+  const { dados, erro } = useDados(buscar, `movimentos:${insumo.id}`);
   return (
     <div className="flex flex-col gap-3">
       <p className="text-tinta-suave">
@@ -618,7 +638,7 @@ function Livro({
       </p>
       <Aviso>{erro}</Aviso>
       {!dados ? (
-        !erro && <p className="text-tinta-suave">Abrindo o livro...</p>
+        !erro && <Esqueleto linhas={3} rotulo="Abrindo o livro" />
       ) : dados.length === 0 ? (
         <p className="text-tinta-suave">Nada lançado ainda.</p>
       ) : (
