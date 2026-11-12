@@ -108,11 +108,16 @@ export type MensagemAoVivo =
   | { tipo: "camera"; camera: Camera }
   | AvisoAoVivo;
 
-/** Avisos que não mudam o mapa: quem precisa busca de novo (pedido, cardápio, estoque). */
+/**
+ * Avisos que não mudam o mapa: quem precisa busca de novo (pedido, cardápio, estoque).
+ * "reconectou" não vem do servidor: o painel avisa a si mesmo quando o canal ao vivo volta
+ * depois de cair, porque nesse meio tempo pode ter perdido qualquer um dos outros.
+ */
 export type AvisoAoVivo =
   | { tipo: "pedido"; mesa_id: number }
   | { tipo: "cardapio" }
-  | { tipo: "estoque" };
+  | { tipo: "estoque" }
+  | { tipo: "reconectou" };
 
 // Resultados, replay, "E se?" e Copiloto (Fase 3)
 
@@ -530,4 +535,33 @@ export interface Perdas {
   }[];
   precos: PrecoQueSubiu[];
   curva_a: string[];
+}
+
+// Tela "Hoje": a noite até agora e o que pede atenção
+
+/** Algo que pede atenção, com a tela onde se resolve. */
+export interface Pendencia {
+  tipo: string; // cozinha, zerado, vai_faltar, compra, contar, preco, perdas, acabou, alerta, camera
+  texto: string;
+  href: string;
+  urgente: boolean;
+}
+
+export interface Hoje {
+  dia: string;
+  dia_semana: string;
+  noite: {
+    mesas_atendidas: number;
+    pessoas_atendidas: number;
+    desistencias: number;
+    vendeu_centavos: number;
+    ficou_na_mesa_centavos: number;
+    espera_media_seg: number | null;
+    parada_media_seg: number | null;
+  };
+  /** Como costumam ser as noites iguais a esta (null em restaurante novo). */
+  costuma: { noites: number; mesas_atendidas: number; hora_pico: number | null } | null;
+  pendencias: Pendencia[];
+  esperar: string[];
+  dicas: string[];
 }

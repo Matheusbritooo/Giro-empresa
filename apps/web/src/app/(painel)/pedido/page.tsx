@@ -2,13 +2,21 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ContaDaMesa } from "@/components/detalhe-mesa";
-import { Aviso, Botao } from "@/components/ui";
+import { useFilaDePedidos } from "@/components/faixa-conexao";
+import { Aviso, Botao, Esqueleto } from "@/components/ui";
 import { api, ErroApi } from "@/lib/api";
 import { useSalaoAoVivo } from "@/lib/ao-vivo";
 import { useDados } from "@/lib/dados";
+import {
+  enfileirar,
+  novaChave,
+  ouvirEnvios,
+  type PedidoNaFila,
+  tirarDaFila,
+} from "@/lib/fila-pedidos";
 import {
   adicionar,
   type Filtro,
@@ -54,20 +62,27 @@ export default function PaginaPedido() {
     [restaurante],
   );
   const buscarPedido = useCallback(() => api<PedidoMesa>(`/api/mesas/${mesaId}/pedido`), [mesaId]);
-  const cardapio = useDados(restaurante ? buscarCardapio : null);
-  const pedido = useDados(mesaId > 0 ? buscarPedido : null);
+  const cardapio = useDados(restaurante ? buscarCardapio : null, `cardapio:${restaurante}`);
+  const pedido = useDados(mesaId > 0 ? buscarPedido : null, `pedido:${mesaId}`);
   const recarregarCardapio = cardapio.recarregar;
   const recarregarPedido = pedido.recarregar;
 
   // Outro garçom lançou, a cozinha marcou pronto ou algo acabou: busca de novo.
   const aoAviso = useCallback(
     (aviso: AvisoAoVivo) => {
-      if (aviso.tipo === "cardapio") recarregarCardapio();
-      else if (aviso.tipo === "pedido" && aviso.mesa_id === mesaId) recarregarPedido();
+      if (aviso.tipo === "cardapio" || aviso.tipo === "reconectou") recarregarCardapio();
+      if (aviso.tipo === "reconectou" || (aviso.tipo === "pedido" && aviso.mesa_id === mesaId))
+        recarregarPedido();
     },
     [mesaId, recarregarCardapio, recarregarPedido],
   );
-  useSalaoAoVivo(restaurante, semAlerta, aoAviso);
+  const { estado: aoVivo } = useSalaoAoVivo(restaurante, semAlerta, aoAviso);
+  // Pedidos desta mesa que este aparelho guardou sem rede (esperando subir ou recusados).
+  const fila = useFilaDePedidos();
+  useEffect(
+    () => ouvirEnvios((subiu) => subiu === mesaId && recarregarPedido()),
+    [mesaId, recarregarPedido],
+  );
 
   const [rascunho, setRascunho] = useState<LinhaRascunho[]>([]);
   const [filtro, setFiltro] = useState<Filtro>("mais");
@@ -81,13 +96,20 @@ export default function PaginaPedido() {
   if (!(mesaId > 0)) return <Aviso>Escolha a mesa no salão.</Aviso>;
 
   const voltar = comBusca("/salao", parametros, { mesa: null });
-  const erro = cardapio.erro ?? pedido.erro;
-  if (!cardapio.dados || !pedido.dados) {
-    return erro ? <Aviso>{erro}</Aviso> : <p className="text-tinta-suave">Abrindo o pedido...</p>;
+  // Sem internet, o pedido da mesa pode não ter chegado: a mesa vem do último salão visto, e
+  // dá para lançar do mesmo jeito (o cardápio é o que este aparelho guardou).
+  const mesa = pedido.dados?.mesa ?? aoVivo.salao?.mesas.find((m) => m.id === mesaId) ?? null;
+  if (!cardapio.dados || !mesa) {
+    const erro = cardapio.erro ?? pedido.erro;
+    return erro ? <Aviso>{erro}</Aviso> : <Esqueleto rotulo="Abrindo o pedido" />;
   }
 
-  const { mesa, itens: jaPedidos, total_centavos } = pedido.dados;
+  const jaPedidos = pedido.dados?.itens ?? [];
+  const total_centavos = pedido.dados?.total_centavos ?? 0;
   const menu = cardapio.dados;
+  const daMesa = fila.filter((p) => p.mesaId === mesaId && p.usuarioId === sessao?.usuario.id);
+  const esperandoRede = daMesa.filter((p) => !p.recusado);
+  const naoEntraram = daMesa.filter((p) => p.recusado);
   const porId = new Map(menu.itens.map((i) => [i.id, i]));
   const escolher = itensParaEscolher(menu, filtro, busca);
   const naCozinha = jaPedidos.filter((i) => situacaoDoItem(i) === "na_cozinha").length;
@@ -95,31 +117,69 @@ export default function PaginaPedido() {
   const categorias = menu.categorias.filter((c) => c.ativa);
 
   async function lancar() {
-    if (enviando || rascunho.length === 0) return;
+    if (enviando || rascunho.length === 0 || !sessao || !mesa) return;
     setEnviando(true);
     setRecado(null);
+    // A chave nasce antes de enviar: se a resposta se perder no caminho, o reenvio leva a
+    // mesma chave e o servidor não lança duas vezes.
+    const chave = novaChave();
+    const itens = rascunho.map((l) => ({
+      item_id: l.itemId,
+      quantidade: l.quantidade,
+      observacao: l.observacao.trim() || null,
+    }));
     try {
       await api<PedidoMesa>(`/api/mesas/${mesaId}/pedidos`, {
         metodo: "POST",
-        corpo: {
-          itens: rascunho.map((l) => ({
-            item_id: l.itemId,
-            quantidade: l.quantidade,
-            observacao: l.observacao.trim() || null,
-          })),
-        },
+        corpo: { itens, chave },
       });
       setRascunho([]);
       setObsAberta(null);
       setRecado({ tipo: "ok", texto: `Pedido da mesa ${mesa.numero} lançado.` });
       recarregarPedido();
     } catch (e) {
+      if (e instanceof ErroApi && e.status === 0) {
+        // Sem rede: fica guardado neste aparelho e sobe sozinho (a faixa do topo cuida disso).
+        enfileirar({
+          chave,
+          usuarioId: sessao.usuario.id,
+          mesaId,
+          mesaNumero: mesa.numero,
+          itens: itens.map((i) => ({ ...i, nome: porId.get(i.item_id)?.nome ?? "Item" })),
+          guardadoEm: Date.now(),
+        });
+        setRascunho([]);
+        setObsAberta(null);
+        setRecado({
+          tipo: "ok",
+          texto: `Sem conexão. Pedido da mesa ${mesa.numero} guardado: sobe sozinho quando a rede voltar.`,
+        });
+        return;
+      }
       setRecado({ tipo: "erro", texto: (e as Error).message });
       // "Lasanha acabou": o cardápio mudou desde que a tela abriu.
       if (e instanceof ErroApi && e.status === 409) recarregarCardapio();
     } finally {
       setEnviando(false);
     }
+  }
+
+  /** O pedido que o servidor recusou volta para o garçom acertar, sem o que não dá mais. */
+  function montarDeNovo(recusado: PedidoNaFila) {
+    setRascunho(
+      recusado.itens
+        .filter((i) => {
+          const item = porId.get(i.item_id);
+          return !!item && item.ativo && item.disponivel;
+        })
+        .map((i) => ({
+          itemId: i.item_id,
+          quantidade: i.quantidade,
+          observacao: i.observacao ?? "",
+        })),
+    );
+    tirarDaFila(recusado.chave);
+    setRecado(null);
   }
 
   async function cancelar(item: ItemPedido, motivo: string) {
@@ -139,8 +199,8 @@ export default function PaginaPedido() {
       setRecado({
         tipo: "ok",
         texto: pedida
-          ? `Mesa ${mesa.numero} pediu a conta.`
-          : `Conta da mesa ${mesa.numero} desfeita.`,
+          ? `Mesa ${mesa?.numero} pediu a conta.`
+          : `Conta da mesa ${mesa?.numero} desfeita.`,
       });
       recarregarPedido();
     } catch (e) {
@@ -250,6 +310,42 @@ export default function PaginaPedido() {
             aoLancar={lancar}
           />
 
+          {naoEntraram.map((recusado) => (
+            <div
+              key={recusado.chave}
+              role="alert"
+              className="flex flex-col gap-2 rounded-xl border-l-4 border-atrasada bg-superficie p-3"
+            >
+              <p className="font-semibold">Este pedido não entrou: {recusado.recusado}.</p>
+              <ItensGuardados pedido={recusado} />
+              <div className="flex flex-wrap gap-2">
+                <Botao variante="secundario" onClick={() => montarDeNovo(recusado)}>
+                  Montar de novo
+                </Botao>
+                <Botao variante="secundario" onClick={() => tirarDaFila(recusado.chave)}>
+                  Descartar
+                </Botao>
+              </div>
+            </div>
+          ))}
+          {esperandoRede.length > 0 && (
+            <section
+              aria-labelledby="titulo-esperando"
+              data-testid="esperando-rede"
+              className="flex flex-col gap-2 rounded-xl border-2 border-dashed border-aguardando p-3"
+            >
+              <h2 id="titulo-esperando" className="font-semibold">
+                Esperando a rede
+              </h2>
+              <p className="text-sm text-tinta-suave">
+                Guardado neste aparelho. Sobe sozinho quando a conexão voltar.
+              </p>
+              {esperandoRede.map((guardado) => (
+                <ItensGuardados key={guardado.chave} pedido={guardado} />
+              ))}
+            </section>
+          )}
+
           <section aria-labelledby="titulo-ja-pedido" className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between gap-3">
               <h2 id="titulo-ja-pedido" className="font-placa text-2xl font-bold">
@@ -261,7 +357,11 @@ export default function PaginaPedido() {
                 </span>
               )}
             </div>
-            {jaPedidos.length === 0 ? (
+            {!pedido.dados ? (
+              <p className="text-tinta-suave">
+                Sem conexão: o que a mesa já pediu aparece quando a rede voltar.
+              </p>
+            ) : jaPedidos.length === 0 ? (
               <p className="text-tinta-suave">Nada lançado nessa visita ainda.</p>
             ) : (
               <ul className="flex flex-col divide-y divide-linha rounded-xl border border-linha bg-superficie px-3">
@@ -292,6 +392,22 @@ export default function PaginaPedido() {
         </div>
       </div>
     </>
+  );
+}
+
+function ItensGuardados({ pedido }: { pedido: PedidoNaFila }) {
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {pedido.itens.map((item) => (
+        <li key={item.item_id} className="flex gap-2">
+          <span className="numeros font-bold">{item.quantidade}</span>
+          <span>
+            {item.nome}
+            {item.observacao && <span className="text-tinta-suave"> ({item.observacao})</span>}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

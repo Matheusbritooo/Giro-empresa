@@ -45,7 +45,9 @@ export default function PaginaResultados() {
     () => api<Resultados>(`/api/resultados?periodo=${periodo}&dia=${dia}`, { restaurante }),
     [periodo, dia, restaurante],
   );
-  const { dados, erro } = useDados(restaurante ? buscar : null);
+  // Uma gaveta só: ao voltar, abre com o último período visto (e o `atualizando` abaixo
+  // esmaece enquanto o pedido de agora não chega).
+  const { dados, erro } = useDados(restaurante ? buscar : null, `resultados:${restaurante}`);
 
   if (!restaurante) return <Aviso>Escolha um restaurante na lista de restaurantes.</Aviso>;
   if (sessao && !podeGerirMesas(sessao.usuario.papel)) {

@@ -22,9 +22,9 @@ export default function PaginaCameras() {
     () => api<Camera[]>("/api/cameras", { restaurante }),
     [restaurante],
   );
-  const cameras = useDados(restaurante ? buscarCameras : null);
+  const cameras = useDados(restaurante ? buscarCameras : null, `cameras:${restaurante}`);
   const buscarMesas = useCallback(() => api<Mesa[]>("/api/mesas", { restaurante }), [restaurante]);
-  const mesas = useDados(restaurante ? buscarMesas : null);
+  const mesas = useDados(restaurante ? buscarMesas : null, `mesas:${restaurante}`);
 
   if (!restaurante) return <Aviso>Escolha um restaurante na lista de restaurantes.</Aviso>;
 

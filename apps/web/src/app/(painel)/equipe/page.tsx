@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 
-import { Aviso, Botao, Campo, PAPEIS, Secao, Selecao } from "@/components/ui";
+import { Aviso, Botao, Campo, Esqueleto, PAPEIS, Secao, Selecao } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useDados } from "@/lib/dados";
 import { useRestauranteAlvo } from "@/lib/restaurante";
@@ -15,7 +15,11 @@ export default function PaginaEquipe() {
   const [recado, setRecado] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
   const souAdmin = sessao?.usuario.papel === "admin_giro";
   const buscar = useCallback(() => api<Usuario[]>("/api/usuarios", { restaurante }), [restaurante]);
-  const { dados: usuarios, erro, recarregar } = useDados(restaurante ? buscar : null);
+  const {
+    dados: usuarios,
+    erro,
+    recarregar,
+  } = useDados(restaurante ? buscar : null, `usuarios:${restaurante}`);
 
   async function criar(evento: React.FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -86,7 +90,7 @@ export default function PaginaEquipe() {
 
       <Secao titulo="Quem tem acesso">
         {usuarios === null ? (
-          <p className="text-tinta-suave">Carregando...</p>
+          <Esqueleto />
         ) : (
           <ul className="flex flex-col divide-y divide-linha">
             {usuarios.map((usuario) => {

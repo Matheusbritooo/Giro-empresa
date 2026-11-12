@@ -1,12 +1,15 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { entrar, preferirPlanta } from "./apoio";
+import { entrar, entrarNoSalao, preferirPlanta } from "./apoio";
 
 test.beforeEach(async ({ page }) => preferirPlanta(page));
 
 // Cada projeto (celular e computador) usa mesas diferentes, já que o banco é o mesmo. E
 // mesas que os outros testes não usam: pedido deixa a mesa ocupada.
-const MESAS = { celular: { garcom: 4, gerente: 6 }, computador: { garcom: 8, gerente: 11 } };
+const MESAS = {
+  celular: { garcom: 4, gerente: 6, semRede: 13 },
+  computador: { garcom: 8, gerente: 11, semRede: 14 },
+};
 
 /** "R$ 1.234" vira 1234 (para conferir o total mesmo se o teste rodar de novo na mesa). */
 async function totalDaMesa(page: Page): Promise<number> {
@@ -113,8 +116,7 @@ test("gerente cancela item com motivo e marca o que acabou", async ({ page }, in
 });
 
 test("dono vê o prato da semana e o que cada mesa mais pediu", async ({ page }) => {
-  await entrar(page, "marcos@cantina.demo");
-  await expect(page).toHaveURL(/\/salao$/);
+  await entrarNoSalao(page, "marcos@cantina.demo");
   await page.goto("/resultados?periodo=semana");
   const cardapio = page.getByTestId("cardapio-periodo");
   await expect(cardapio.getByTestId("prato-do-periodo")).toHaveText("Lasanha à bolonhesa");
@@ -136,4 +138,77 @@ test("gerente vê o cardápio do período, mas a matriz de lucro é só do dono"
   const cardapio = page.getByTestId("cardapio-periodo");
   await expect(cardapio).toContainText("A matriz de lucro dos pratos aparece só para o dono");
   await expect(cardapio.getByTestId("matriz-de-lucro")).toHaveCount(0);
+});
+
+test("sem internet o pedido fica guardado no aparelho e sobe sozinho quando a rede volta", async ({
+  page,
+  context,
+}, info) => {
+  const { semRede: mesa } = MESAS[info.project.name as keyof typeof MESAS];
+  await entrar(page, "equipe@cantina.demo");
+  await expect(page).toHaveURL(/\/salao$/);
+  await abrirPedido(page, mesa);
+  const antes = await totalDaMesa(page);
+  const jaTinha = await page.locator('[data-situacao="na_cozinha"]').count();
+
+  // O Wi-Fi do salão cai com o pedido montado.
+  await page.getByRole("button", { name: /^Refrigerante lata/ }).click();
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "Lançar pedido" }).click();
+  await expect(
+    page.getByText(
+      `Sem conexão. Pedido da mesa ${mesa} guardado: sobe sozinho quando a rede voltar.`,
+    ),
+  ).toBeVisible();
+  const faixa = page.getByTestId("faixa-conexao");
+  await expect(faixa).toContainText("Sem conexão. 1 pedido na fila");
+  await expect(page.getByTestId("esperando-rede")).toContainText("Refrigerante lata");
+  // O garçom segue montando o próximo: o rascunho ficou livre.
+  await expect(page.getByTestId("rascunho")).toHaveCount(0);
+
+  // A rede volta: o pedido sobe sem ninguém tocar em nada, uma vez só.
+  await context.setOffline(false);
+  await expect(page.getByTestId("esperando-rede")).toHaveCount(0);
+  await expect(page.getByTestId("total-mesa")).toHaveText(
+    `R$ ${(antes + 7).toLocaleString("pt-BR")}`,
+  );
+  await expect(page.locator('[data-situacao="na_cozinha"]')).toHaveCount(jaTinha + 1);
+  await expect(faixa).toHaveCount(0);
+});
+
+test("pedido guardado que o servidor recusa volta para o garçom decidir", async ({
+  page,
+  context,
+}, info) => {
+  const { semRede: mesa } = MESAS[info.project.name as keyof typeof MESAS];
+  await entrar(page, "equipe@cantina.demo");
+  await expect(page).toHaveURL(/\/salao$/);
+  await abrirPedido(page, mesa);
+  const antes = await totalDaMesa(page);
+  await page.getByRole("button", { name: /^Lasanha à bolonhesa/ }).click();
+  await context.setOffline(true);
+  await page.getByRole("button", { name: "Lançar pedido" }).click();
+  await expect(page.getByTestId("esperando-rede")).toContainText("Lasanha à bolonhesa");
+
+  // Enquanto estava sem rede, a cozinha marcou que a lasanha acabou: o servidor não aceita.
+  await page.route("**/api/mesas/*/pedidos", (rota) =>
+    rota.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Lasanha à bolonhesa acabou" }),
+    }),
+  );
+  await context.setOffline(false);
+  await expect(page.getByTestId("faixa-conexao")).toContainText(
+    `O pedido da mesa ${mesa} não entrou: Lasanha à bolonhesa acabou.`,
+  );
+  await expect(page.getByText("Este pedido não entrou: Lasanha à bolonhesa acabou.")).toBeVisible();
+  await expect(page.getByTestId("esperando-rede")).toHaveCount(0);
+
+  // "Montar de novo" devolve o pedido para o rascunho, e a faixa some.
+  await page.unroute("**/api/mesas/*/pedidos");
+  await page.getByRole("button", { name: "Montar de novo" }).click();
+  await expect(page.getByTestId("rascunho")).toContainText("Lasanha à bolonhesa");
+  await expect(page.getByTestId("faixa-conexao")).toHaveCount(0);
+  await expect(page.getByTestId("total-mesa")).toHaveText(`R$ ${antes.toLocaleString("pt-BR")}`);
 });

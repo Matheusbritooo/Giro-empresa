@@ -1,14 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-import { camera, entrar } from "./apoio";
+import { camera, entrarNoSalao } from "./apoio";
 
 test("dono vê o salão em 3D ao vivo, abre a mesa pela placa e pode voltar para a planta", async ({
   page,
   request,
 }, info) => {
   test.skip(info.project.name === "celular", "no celular o salão abre na planta");
-  await entrar(page, "marcos@cantina.demo");
-  await expect(page).toHaveURL(/\/salao$/);
+  await entrarNoSalao(page, "marcos@cantina.demo");
 
   // No computador o salão abre em 3D, com uma placa clicável sobre cada mesa.
   const salao = page.getByTestId("salao-3d");

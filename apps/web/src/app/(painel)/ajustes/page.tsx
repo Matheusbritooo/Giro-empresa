@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
-import { Aviso, Botao, Campo, Secao } from "@/components/ui";
+import { Aviso, Botao, Campo, Esqueleto, Secao } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useDados } from "@/lib/dados";
 import { useRestauranteAlvo } from "@/lib/restaurante";
@@ -32,7 +32,11 @@ export default function PaginaAjustes() {
     ]);
     return { restaurante: salao.restaurante, cameras };
   }, [restaurante]);
-  const { dados: carregado, erro, recarregar } = useDados(restaurante ? buscar : null);
+  const {
+    dados: carregado,
+    erro,
+    recarregar,
+  } = useDados(restaurante ? buscar : null, `ajustes:${restaurante}`);
   const dados = carregado?.restaurante ?? null;
   const cameras = carregado?.cameras ?? [];
 
@@ -178,7 +182,7 @@ export default function PaginaAjustes() {
             </Botao>
           </form>
         ) : (
-          <p className="text-tinta-suave">Carregando...</p>
+          <Esqueleto />
         )}
       </Secao>
 
