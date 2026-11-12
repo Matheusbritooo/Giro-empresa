@@ -16,10 +16,11 @@ test("dono abre no resumo do dia e vai direto ao que pede atenção", async ({ p
   await expect(page.getByRole("term").filter({ hasText: "Ficou na mesa" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "O que esperar de hoje" })).toBeVisible();
 
-  // O preço da muçarela subiu: só o dono vê, e o link leva direto para a aba Perdas.
+  // Um ingrediente veio mais caro na última compra (na demonstração, pelo menos a muçarela):
+  // só o dono vê, e o link leva direto para a aba Perdas.
   const pendencias = page.getByTestId("pendencias");
   const preco = pendencias.locator('[data-tipo="preco"]').first();
-  await expect(preco).toContainText("Muçarela subiu");
+  await expect(preco).toContainText(/ subiu \d+%/);
   await preco.getByRole("link", { name: /^Ver as perdas/ }).click();
   await expect(page).toHaveURL(/\/estoque\?aba=perdas$/);
   await expect(page.getByRole("tab", { name: "Perdas" })).toHaveAttribute("aria-selected", "true");

@@ -283,7 +283,7 @@ function IndicadorConexao({ conexao }: { conexao: Conexao }) {
         aria-hidden
         className={`size-2.5 rounded-full ${aoVivo ? "bg-ocupada" : "bg-aguardando"}`}
       />
-      {aoVivo ? "Ao vivo" : "Reconectando..."}
+      {aoVivo ? "Ao vivo" : conexao === "conectando" ? "Conectando..." : "Reconectando..."}
     </span>
   );
 }

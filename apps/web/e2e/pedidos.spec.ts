@@ -117,9 +117,19 @@ test("gerente cancela item com motivo e marca o que acabou", async ({ page }, in
 
 test("dono vê o prato da semana e o que cada mesa mais pediu", async ({ page }) => {
   await entrarNoSalao(page, "marcos@cantina.demo");
+  // O prato da semana muda com o dia (lasanha e parmegiana se revezam na demonstração): o
+  // teste confere que a tela mostra o primeiro prato que o servidor mandou, seja qual for.
+  const resposta = page.waitForResponse(
+    (r) => r.url().includes("/api/resultados/cardapio") && r.url().includes("periodo=semana"),
+  );
   await page.goto("/resultados?periodo=semana");
+  const { itens } = (await (await resposta).json()) as {
+    itens: { nome: string; bebida: boolean }[];
+  };
+  const pratoDaSemana = itens.find((i) => !i.bebida)?.nome ?? "";
+  expect(pratoDaSemana).not.toBe("");
   const cardapio = page.getByTestId("cardapio-periodo");
-  await expect(cardapio.getByTestId("prato-do-periodo")).toHaveText("Lasanha à bolonhesa");
+  await expect(cardapio.getByTestId("prato-do-periodo")).toHaveText(pratoDaSemana);
   await expect(cardapio.getByRole("table")).toContainText("Comida favorita");
   await cardapio.getByRole("button", { name: "Bebida", exact: true }).click();
   await expect(cardapio.getByRole("list", { name: /Bebidas mais pedidas/ })).toBeVisible();
@@ -173,7 +183,7 @@ test("sem internet o pedido fica guardado no aparelho e sobe sozinho quando a re
     `R$ ${(antes + 7).toLocaleString("pt-BR")}`,
   );
   await expect(page.locator('[data-situacao="na_cozinha"]')).toHaveCount(jaTinha + 1);
-  await expect(faixa).toHaveCount(0);
+  await expect(faixa).toHaveText(`Pedido da mesa ${mesa} enviado.`);
 });
 
 test("pedido guardado que o servidor recusa volta para o garçom decidir", async ({

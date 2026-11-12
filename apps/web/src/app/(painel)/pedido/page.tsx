@@ -9,6 +9,7 @@ import { useFilaDePedidos } from "@/components/faixa-conexao";
 import { Aviso, Botao, Esqueleto } from "@/components/ui";
 import { api, ErroApi } from "@/lib/api";
 import { useSalaoAoVivo } from "@/lib/ao-vivo";
+import { useConexao } from "@/lib/conexao";
 import { useDados } from "@/lib/dados";
 import {
   enfileirar,
@@ -63,7 +64,9 @@ export default function PaginaPedido() {
   );
   const buscarPedido = useCallback(() => api<PedidoMesa>(`/api/mesas/${mesaId}/pedido`), [mesaId]);
   const cardapio = useDados(restaurante ? buscarCardapio : null, `cardapio:${restaurante}`);
-  const pedido = useDados(mesaId > 0 ? buscarPedido : null, `pedido:${mesaId}`);
+  // Sem chave de propósito: o pedido guardado poderia ser o da visita anterior da mesma mesa,
+  // e mostrar o que outro cliente pediu é pior do que esperar um instante.
+  const pedido = useDados(mesaId > 0 ? buscarPedido : null);
   const recarregarCardapio = cardapio.recarregar;
   const recarregarPedido = pedido.recarregar;
 
@@ -79,6 +82,7 @@ export default function PaginaPedido() {
   const { estado: aoVivo } = useSalaoAoVivo(restaurante, semAlerta, aoAviso);
   // Pedidos desta mesa que este aparelho guardou sem rede (esperando subir ou recusados).
   const fila = useFilaDePedidos();
+  const ligada = useConexao();
   useEffect(
     () => ouvirEnvios((subiu) => subiu === mesaId && recarregarPedido()),
     [mesaId, recarregarPedido],
@@ -358,9 +362,15 @@ export default function PaginaPedido() {
               )}
             </div>
             {!pedido.dados ? (
-              <p className="text-tinta-suave">
-                Sem conexão: o que a mesa já pediu aparece quando a rede voltar.
-              </p>
+              !pedido.erro ? (
+                <Esqueleto linhas={2} rotulo="Buscando o que a mesa já pediu" />
+              ) : (
+                <p className="text-tinta-suave">
+                  {ligada
+                    ? pedido.erro
+                    : "Sem conexão: o que a mesa já pediu aparece quando a rede voltar."}
+                </p>
+              )
             ) : jaPedidos.length === 0 ? (
               <p className="text-tinta-suave">Nada lançado nessa visita ainda.</p>
             ) : (
@@ -378,16 +388,23 @@ export default function PaginaPedido() {
                 ))}
               </ul>
             )}
-            <div className="flex items-baseline justify-between border-t-2 border-tinta pt-2 font-bold">
-              <span>Total da mesa</span>
-              <span className="numeros font-placa text-3xl font-extrabold" data-testid="total-mesa">
-                {preco(total_centavos)}
-              </span>
-            </div>
+            {pedido.dados && (
+              <div className="flex items-baseline justify-between border-t-2 border-tinta pt-2 font-bold">
+                <span>Total da mesa</span>
+                <span
+                  className="numeros font-placa text-3xl font-extrabold"
+                  data-testid="total-mesa"
+                >
+                  {preco(total_centavos)}
+                </span>
+              </div>
+            )}
             {!gestao && jaPedidos.length > 0 && (
               <p className="text-sm text-tinta-suave">Para cancelar um item, chame o gerente.</p>
             )}
-            {mesa.estado === "ocupada" && <ContaDaMesa mesa={mesa} aoPedirConta={pedirConta} />}
+            {pedido.dados && mesa.estado === "ocupada" && (
+              <ContaDaMesa mesa={mesa} aoPedirConta={pedirConta} />
+            )}
           </section>
         </div>
       </div>
