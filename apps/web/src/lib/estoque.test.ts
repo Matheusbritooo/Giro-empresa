@@ -4,9 +4,12 @@ import {
   baseDoCampo,
   campoDaBase,
   custoDaFicha,
+  dicaDaPerda,
   ordenarInsumos,
   plural,
+  porcento,
   porPorcao,
+  precisaContar,
   precoDoInsumo,
   quando,
   quantidade,
@@ -17,7 +20,14 @@ import {
   textoDaLista,
   textoDoMovimento,
 } from "./estoque";
-import type { Ficha, Insumo, ItemCardapio, LinhaDeCompra, ListaDeCompras } from "./tipos";
+import type {
+  Ficha,
+  Insumo,
+  ItemCardapio,
+  LinhaDeCompra,
+  LinhaDePerda,
+  ListaDeCompras,
+} from "./tipos";
 
 function insumo(
   id: number,
@@ -38,6 +48,8 @@ function insumo(
     ativo: true,
     situacao: null,
     acaba_em: null,
+    curva: null,
+    contado_em: null,
   };
 }
 
@@ -236,6 +248,49 @@ describe("previsão e lista de compras", () => {
         "\nAçougue\n- Carne moída: 12 kg\n" +
         "\nAtacado\n- Massa de lasanha: 8 pacotes de 1 kg\n" +
         "\nOutros\n- Sal grosso: 1 pacote de 1 kg\n",
+    );
+  });
+});
+
+describe("perdas", () => {
+  it("porcentagem com vírgula", () => {
+    expect(porcento(0.283)).toBe("28,3%");
+    expect(porcento(0.3)).toBe("30,0%");
+  });
+
+  it("a curva A sem contagem há mais de uma semana precisa ser contada", () => {
+    const hoje = "2026-11-06";
+    const a = { ...CARNE, curva: "A" as const };
+    expect(precisaContar(a, hoje)).toBe(true); // nunca contada
+    expect(precisaContar({ ...a, contado_em: "2026-11-02T13:00:00Z" }, hoje)).toBe(false);
+    expect(precisaContar({ ...a, contado_em: "2026-10-26T13:00:00Z" }, hoje)).toBe(true);
+    expect(precisaContar({ ...CARNE, curva: "B" }, hoje)).toBe(false);
+  });
+
+  it("a dica do que olhar primeiro", () => {
+    const linha: LinhaDePerda = {
+      insumo_id: 1,
+      nome: "Muçarela",
+      unidade: "g",
+      pela_ficha: 21_460,
+      registrada: 300,
+      sem_registro: 2457,
+      saiu: 24_217,
+      escapou: 2757,
+      valor_escapou_centavos: 11_882,
+      valor_sem_registro_centavos: 10_000,
+      curva: "A",
+      prato: "Lasanha à bolonhesa",
+      por_porcao: 100,
+    };
+    expect(dicaDaPerda(linha)).toBe(
+      "Muçarela: 2,46 kg sumiram sem registro. A ficha diz 100 g por lasanha à bolonhesa: confira a porção na bancada.",
+    );
+    expect(dicaDaPerda({ ...linha, sem_registro: 1000, prato: null })).toBe(
+      "Muçarela: 1 kg sumiu sem registro. Confira a porção e se a contagem está certa.",
+    );
+    expect(dicaDaPerda({ ...linha, registrada: 3000 })).toBe(
+      "Muçarela: a maior parte foi registrada como perda. Veja o motivo e compre menos de cada vez.",
     );
   });
 });
