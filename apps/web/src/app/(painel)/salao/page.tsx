@@ -18,7 +18,7 @@ import {
   SeletorVista,
   type Vista,
 } from "@/components/planta";
-import { Aviso } from "@/components/ui";
+import { Aviso, Esqueleto } from "@/components/ui";
 import { api } from "@/lib/api";
 import { type Conexao, useRelogio, useSalaoAoVivo } from "@/lib/ao-vivo";
 import { prepararSom, tocarAlerta } from "@/lib/avisos";
@@ -85,7 +85,7 @@ export default function PaginaSalao() {
     return <Aviso>Sua sessão expirou ou você não tem acesso a este salão. Entre de novo.</Aviso>;
   }
   if (!salao) {
-    return <p className="text-tinta-suave">Abrindo o salão...</p>;
+    return <Esqueleto formato="cartoes" linhas={8} rotulo="Abrindo o salão" />;
   }
 
   const limite = salao.restaurante.alerta_atendimento_seg;
@@ -283,7 +283,7 @@ function IndicadorConexao({ conexao }: { conexao: Conexao }) {
         aria-hidden
         className={`size-2.5 rounded-full ${aoVivo ? "bg-ocupada" : "bg-aguardando"}`}
       />
-      {aoVivo ? "Ao vivo" : "Reconectando..."}
+      {aoVivo ? "Ao vivo" : conexao === "conectando" ? "Conectando..." : "Reconectando..."}
     </span>
   );
 }

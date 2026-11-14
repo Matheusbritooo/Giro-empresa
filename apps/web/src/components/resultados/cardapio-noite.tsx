@@ -39,7 +39,7 @@ export function CardapioDoPeriodo({
       }),
     [restaurante, periodo, dia],
   );
-  const { dados, erro } = useDados(buscar);
+  const { dados, erro } = useDados(buscar, `resultados-cardapio:${restaurante}:${periodo}:${dia}`);
   const [lista, setLista] = useState<"comida" | "bebida">("comida");
 
   if (erro) return <p className="text-sm text-tinta-suave">{erro}</p>;

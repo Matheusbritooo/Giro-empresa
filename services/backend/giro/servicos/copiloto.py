@@ -88,6 +88,8 @@ class Contexto:
     cardapio: ResultadosCardapio | None = None
     # Previsão e lista de compras (None sem ingrediente com ficha).
     compras: PlanoDeCompras | None = None
+    # O estoque como está, mesmo sem previsão (None sem ingrediente cadastrado).
+    plano: PlanoDeCompras | None = None
     # Perdas dos últimos 7 dias e os ingredientes da curva A sem contagem há uma semana.
     perdas: RelatorioDePerdas | None = None
     contar: list[str] = field(default_factory=list)
@@ -133,6 +135,7 @@ def montar_contexto(
         mesmo_dia=[r for d, r in noites if d.weekday() == hoje.weekday()],
         cardapio=cardapio if cardapio.visitas_com_pedido else None,
         compras=compras if com_previsao else None,
+        plano=compras if tem_estoque else None,
         perdas=perdas if tem_estoque else None,
         contar=contar,
         com_custo=com_custo,
@@ -148,7 +151,7 @@ def _minutos(segundos: float | None) -> str:
     return f"{(segundos or 0) / 60:.1f}".replace(".", ",").removesuffix(",0") + " min"
 
 
-def _reais(centavos: int) -> str:
+def em_reais(centavos: int) -> str:
     return f"R$ {centavos / 100:,.0f}".replace(",", ".")
 
 
@@ -260,7 +263,7 @@ def _perdas_em_numeros(r: RelatorioDePerdas, contar: list[str]) -> dict:
     }
 
 
-def _quando(noite: date, hoje: date) -> str:
+def quando_acaba(noite: date, hoje: date) -> str:
     """ "hoje", "amanhã", "na quinta", "no sábado"."""
     if noite == hoje:
         return "hoje"
@@ -278,14 +281,16 @@ def _texto_do_item(item) -> str:
 def _estoque_em_numeros(plano: PlanoDeCompras) -> dict:
     """Só quantidades: quanto tem, quando acaba e quanto comprar. Nunca reais."""
     return {
-        "proxima_compra": f"{DIAS[plano.compra.weekday()]} ({_quando(plano.compra, plano.hoje)})",
+        "proxima_compra": (
+            f"{DIAS[plano.compra.weekday()]} ({quando_acaba(plano.compra, plano.hoje)})"
+        ),
         "noites_que_a_compra_cobre": [DIAS[n.weekday()] for n in plano.cobre],
         "folga_pct": plano.folga_pct,
         "ingredientes": [
             {
                 "nome": item.insumo.nome,
                 "tem": texto_quantidade(item.insumo.unidade, item.insumo.saldo),
-                "acaba": _quando(item.acaba_em, plano.hoje) if item.acaba_em else None,
+                "acaba": quando_acaba(item.acaba_em, plano.hoje) if item.acaba_em else None,
                 "comprar": _texto_do_item(item) if item.linha.embalagens else None,
             }
             for item in plano.itens
@@ -293,7 +298,7 @@ def _estoque_em_numeros(plano: PlanoDeCompras) -> dict:
     }
 
 
-def _acabam_antes_da_compra(plano: PlanoDeCompras) -> list:
+def acabam_antes_da_compra(plano: PlanoDeCompras) -> list:
     return [
         i
         for i in plano.itens
@@ -401,17 +406,18 @@ def briefing(ctx: Contexto) -> Briefing:
         frases.append(f"A espera até o primeiro atendimento ficou em {espera / 60:.0f} min.")
     if perdido > 0:
         frases.append(
-            f"Somando mesa parada e quem foi embora, cerca de {_reais(round(perdido))} "
+            f"Somando mesa parada e quem foi embora, cerca de {em_reais(round(perdido))} "
             f"por {dia} ficaram na mesa."
         )
     if not dicas:
         dicas.append("O salão tem andado bem neste dia. Mantenha o ritmo.")
     if ctx.compras is not None:
         plano = ctx.compras
-        urgentes = _acabam_antes_da_compra(plano)
+        urgentes = acabam_antes_da_compra(plano)
         if urgentes:
             nomes = ", ".join(
-                f"{i.insumo.nome.lower()} ({_quando(i.acaba_em, plano.hoje)})" for i in urgentes
+                f"{i.insumo.nome.lower()} ({quando_acaba(i.acaba_em, plano.hoje)})"
+                for i in urgentes
             )
             # Acabar hoje é o que o dono precisa ler primeiro, até na notificação.
             dica = (
@@ -525,7 +531,7 @@ def responder_sobre_cardapio(p: str, ctx: Contexto) -> str | None:
         if prato:
             frases.append(
                 f"O prato que mais sai é {prato.nome}: {prato.quantidade} pedidos nas últimas "
-                f"4 semanas, cerca de {_reais(prato.receita_centavos)}."
+                f"4 semanas, cerca de {em_reais(prato.receita_centavos)}."
             )
         if bebida:
             frases.append(f"A bebida que mais sai é {bebida.nome} ({bebida.quantidade}).")
@@ -572,7 +578,8 @@ def responder_sobre_perdas(p: str, ctx: Contexto) -> str | None:
         )
     vendeu = r.vendeu_centavos or 1
     nomes = ", ".join(
-        f"{linha.insumo.nome.lower()} ({_reais(linha.valor_escapou or 0)})" for linha in principais
+        f"{linha.insumo.nome.lower()} ({em_reais(linha.valor_escapou or 0)})"
+        for linha in principais
     )
     maior = (
         "A maior parte não foi registrada: confira a porção e se a contagem está certa."
@@ -580,7 +587,7 @@ def responder_sobre_perdas(p: str, ctx: Contexto) -> str | None:
         else "A maior parte foi registrada como perda: veja os motivos em Estoque, Perdas."
     )
     return (
-        f"{sem_contagem}Nos últimos 7 dias escaparam {_reais(r.escapou_centavos)} do estoque. "
+        f"{sem_contagem}Nos últimos 7 dias escaparam {em_reais(r.escapou_centavos)} do estoque. "
         f"Pela ficha, os ingredientes custaram {_pct(r.custo_pela_ficha_centavos / vendeu)} "
         f"do que vendeu; de verdade, {_pct(r.custo_de_verdade_centavos / vendeu)}. "
         f"Os que mais pesaram: {nomes}. {maior}"
@@ -600,7 +607,7 @@ def responder_sobre_estoque(p: str, ctx: Contexto) -> str | None:
             "em Estoque: com isso eu digo o que comprar e o que vai acabar."
         )
     dia = DIAS[plano.compra.weekday()]
-    quando = _quando(plano.compra, plano.hoje)
+    quando = quando_acaba(plano.compra, plano.hoje)
     if comprar:
         itens = [i for i in plano.itens if i.linha.embalagens]
         if not itens:
@@ -615,14 +622,14 @@ def responder_sobre_estoque(p: str, ctx: Contexto) -> str | None:
             f"{DIAS[plano.cobre[-1].weekday()]}: {lista}{resto}. A lista completa, com o porquê "
             "de cada número, está em Estoque, na aba Lista de compras."
         )
-    urgentes = _acabam_antes_da_compra(plano)
+    urgentes = acabam_antes_da_compra(plano)
     depois = [i for i in plano.itens if i.situacao == Situacao.COMPRAR and i not in urgentes]
     if not urgentes and not depois:
         return f"Pela conta, nada acaba antes da compra de {dia} ({quando})."
     partes = []
     if urgentes:
         nomes = ", ".join(
-            f"{i.insumo.nome.lower()} ({_quando(i.acaba_em, plano.hoje)})" for i in urgentes
+            f"{i.insumo.nome.lower()} ({quando_acaba(i.acaba_em, plano.hoje)})" for i in urgentes
         )
         partes.append(f"Acaba antes da compra de {dia}: {nomes}.")
     if len(depois) > 4:
@@ -651,14 +658,16 @@ def responder_com_regras(pergunta: str, ctx: Contexto) -> str:
             return "Nas últimas 4 semanas nenhuma mesa deu prejuízo que dê para medir."
         return (
             f"A mesa {pior.numero} foi a que mais custou nas últimas 4 semanas: cerca de "
-            f"{_reais(pior.perdido_centavos)}. Ela fica em média {_minutos(pior.parada_media_seg)} "
-            "parada depois que o cliente sai. Combine quem libera essa mesa quando o salão encher."
+            f"{em_reais(pior.perdido_centavos)}. Ela fica em média "
+            f"{_minutos(pior.parada_media_seg)} parada depois que o cliente sai. Combine quem "
+            "libera essa mesa quando o salão encher."
         )
     if any(t in p for t in ("perdi", "perde", "dinheiro", "prejuizo", "custou", "quanto")):
         return (
-            f"Nas últimas 4 semanas, cerca de {_reais(q.perdido_total_centavos)} ficaram na mesa: "
-            f"{_reais(q.perdido_mesa_parada_centavos)} de mesa parada com o salão cheio e "
-            f"{_reais(q.perdido_desistencias_centavos)} de {_mesas(q.desistencias)} que "
+            f"Nas últimas 4 semanas, cerca de {em_reais(q.perdido_total_centavos)} ficaram na "
+            "mesa: "
+            f"{em_reais(q.perdido_mesa_parada_centavos)} de mesa parada com o salão cheio e "
+            f"{em_reais(q.perdido_desistencias_centavos)} de {_mesas(q.desistencias)} que "
             f"{_foram(q.desistencias)} embora sem atendimento. "
             'Use o "E se?" para ver quanto volta limpando mais rápido.'
         )
@@ -689,9 +698,9 @@ def responder_com_regras(pergunta: str, ctx: Contexto) -> str:
         antes = semana_antes[0] if semana_antes else com_movimento[-2][1]
         return (
             f"Na última noite ({DIAS[dia.weekday()]}) foram {ultima.mesas_atendidas} mesas "
-            f"atendidas e cerca de {_reais(ultima.perdido_total_centavos)} perdidos. Na noite "
+            f"atendidas e cerca de {em_reais(ultima.perdido_total_centavos)} perdidos. Na noite "
             f"de comparação foram {antes.mesas_atendidas} mesas e "
-            f"{_reais(antes.perdido_total_centavos)}."
+            f"{em_reais(antes.perdido_total_centavos)}."
         )
     b = briefing(ctx)
     return " ".join(b.frases) + " " + b.dicas[0]

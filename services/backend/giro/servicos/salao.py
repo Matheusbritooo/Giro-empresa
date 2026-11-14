@@ -62,6 +62,21 @@ def ocupacoes_abertas(db: Session, mesa_ids: list[int]) -> dict[int, Ocupacao]:
     return {o.mesa_id: o for o in linhas}  # a mais recente vence
 
 
+def lancamento_com_chave(db: Session, mesa: Mesa, chave: str | None) -> int | None:
+    """A visita em que essa mesa já recebeu o lançamento com essa chave (None se é novo)."""
+    if not chave:
+        return None
+    return db.scalar(
+        select(ItemPedido.ocupacao_id)
+        .where(
+            ItemPedido.restaurante_id == mesa.restaurante_id,
+            ItemPedido.chave_lancamento == chave,
+            ItemPedido.mesa_id == mesa.id,
+        )
+        .limit(1)
+    )
+
+
 def totais_dos_pedidos(db: Session, ocupacao_ids: list[int]) -> dict[int, tuple[int, int]]:
     """Para cada visita: quanto já gastou e quantos itens ainda estão na cozinha."""
     if not ocupacao_ids:
@@ -228,9 +243,15 @@ class ServicoSalao:
         linhas: list[tuple[ItemCardapio, int, str | None]],
         usuario_id: int | None,
         agora: datetime,
+        chave: str | None = None,
     ) -> Ocupacao:
         """Garçom lançou itens na mesa. Conta como atendimento e, se a câmera ainda não
-        confirmou ninguém, a visita começa aqui. Nome e preço vão copiados para o pedido."""
+        confirmou ninguém, a visita começa aqui. Nome e preço vão copiados para o pedido.
+
+        Com `chave`, lançar de novo o mesmo pedido (o aparelho reenviou porque a resposta se
+        perdeu na rede) não muda nada: nem pedido em dobro, nem estoque baixado duas vezes."""
+        if (ja_lancado := lancamento_com_chave(db, mesa, chave)) is not None:
+            return db.get_one(Ocupacao, ja_lancado)
         restaurante = db.get_one(Restaurante, mesa.restaurante_id)
         maquina = MaquinaMesa.de_dict(regras_do_restaurante(restaurante), mesa.estado_maquina)
         mudancas = _Mudancas()
@@ -248,6 +269,7 @@ class ServicoSalao:
                 observacao=observacao,
                 lancado_em=agora,
                 lancado_por_id=usuario_id,
+                chave_lancamento=chave,
             )
             for item, quantidade, observacao in linhas
         ]

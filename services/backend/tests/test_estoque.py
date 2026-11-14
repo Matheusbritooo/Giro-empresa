@@ -263,3 +263,37 @@ def test_um_restaurante_nao_ve_nem_mexe_no_estoque_do_outro(
     assert saldos(como("gerente@cantina.demo"))["Massa de lasanha"] == 5000
     # Admin da GIRO precisa dizer de qual restaurante quer ver.
     assert como("admin@giro.demo").get("/api/estoque").status_code == 400
+
+
+def test_reenviar_o_mesmo_pedido_nao_lanca_nem_baixa_o_estoque_em_dobro(como, cardapio, estoque):  # noqa: F811
+    """Sem internet o aparelho guarda o pedido e reenvia com a mesma chave. Se o primeiro envio
+    já tinha entrado (só a resposta se perdeu), o servidor não lança de novo."""
+    equipe = como("equipe@cantina.demo")
+    mesa = id_da_mesa(equipe, 1)
+    corpo = {
+        "itens": [{"item_id": cardapio["lasanha"]["id"], "quantidade": 2}],
+        "chave": "5f0c2a90-6b1e-4c1d-9a51-3b7a0e9d4c11",
+    }
+    assert equipe.post(f"/api/mesas/{mesa}/pedidos", json=corpo).status_code == 201
+    depois_do_primeiro = saldos(equipe)
+    assert depois_do_primeiro["Muçarela"] == 2800
+
+    # Nesse meio tempo a lasanha acabou: o reenvio não esbarra nisso, porque já tinha entrado.
+    acabou = equipe.post(
+        f"/api/cardapio/itens/{cardapio['lasanha']['id']}/disponivel", json={"disponivel": False}
+    )
+    assert acabou.status_code == 200
+    de_novo = equipe.post(f"/api/mesas/{mesa}/pedidos", json=corpo)
+    assert de_novo.status_code == 201
+    assert [(i["nome"], i["quantidade"]) for i in de_novo.json()["itens"]] == [
+        ("Lasanha à bolonhesa", 2)
+    ]
+    assert de_novo.json()["total_centavos"] == 12_400
+    assert saldos(equipe) == depois_do_primeiro
+
+    # Um pedido novo (outra chave) esbarra, como sempre: a lasanha acabou.
+    novo = equipe.post(f"/api/mesas/{mesa}/pedidos", json={**corpo, "chave": "outra-chave-0001"})
+    assert (novo.status_code, novo.json()["detail"]) == (409, "Lasanha à bolonhesa acabou")
+    # A chave é do aparelho, não é texto livre.
+    ruim = equipe.post(f"/api/mesas/{mesa}/pedidos", json={**corpo, "chave": "com espaço e ç"})
+    assert ruim.status_code == 422

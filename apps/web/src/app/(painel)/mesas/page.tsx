@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 
-import { Aviso, Botao, Campo, Secao } from "@/components/ui";
+import { Aviso, Botao, Campo, Esqueleto, Secao } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useDados } from "@/lib/dados";
 import { useRestauranteAlvo } from "@/lib/restaurante";
@@ -12,7 +12,11 @@ export default function PaginaMesas() {
   const restaurante = useRestauranteAlvo();
   const [recado, setRecado] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
   const buscar = useCallback(() => api<Mesa[]>("/api/mesas", { restaurante }), [restaurante]);
-  const { dados: mesas, erro, recarregar } = useDados(restaurante ? buscar : null);
+  const {
+    dados: mesas,
+    erro,
+    recarregar,
+  } = useDados(restaurante ? buscar : null, `mesas:${restaurante}`);
 
   async function criar(evento: React.FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -109,7 +113,7 @@ export default function PaginaMesas() {
         descricao="Mesa desativada some da planta, mas o histórico dela continua guardado."
       >
         {mesas === null ? (
-          <p className="text-tinta-suave">Carregando...</p>
+          <Esqueleto />
         ) : mesas.length === 0 ? (
           <p className="text-tinta-suave">Nenhuma mesa ainda. Cadastre a primeira acima.</p>
         ) : (

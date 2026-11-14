@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 
-import { Aviso, Botao, Campo, Secao, Selecao } from "@/components/ui";
+import { Aviso, Botao, Campo, Esqueleto, Secao, Selecao } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSalaoAoVivo } from "@/lib/ao-vivo";
 import { useDados } from "@/lib/dados";
@@ -21,10 +21,13 @@ export default function PaginaCardapio() {
   const restaurante = useRestauranteAlvo();
   const gestao = !!sessao && podeGerirMesas(sessao.usuario.papel);
   const buscar = useCallback(() => api<Cardapio>("/api/cardapio", { restaurante }), [restaurante]);
-  const { dados, erro, recarregar } = useDados(restaurante ? buscar : null);
+  const { dados, erro, recarregar } = useDados(
+    restaurante ? buscar : null,
+    `cardapio:${restaurante}`,
+  );
   const aoAviso = useCallback(
     // Compra muda o preço dos ingredientes, e com ele o custo dos pratos com ficha.
-    (aviso: AvisoAoVivo) => (aviso.tipo === "cardapio" || aviso.tipo === "estoque") && recarregar(),
+    (aviso: AvisoAoVivo) => aviso.tipo !== "pedido" && recarregar(),
     [recarregar],
   );
   useSalaoAoVivo(restaurante, semAlerta, aoAviso);
@@ -74,7 +77,7 @@ export default function PaginaCardapio() {
       <Aviso>{erro}</Aviso>
 
       {!dados ? (
-        !erro && <p className="text-tinta-suave">Abrindo o cardápio...</p>
+        !erro && <Esqueleto rotulo="Abrindo o cardápio" />
       ) : (
         <>
           {dados.categorias.length === 0 && (

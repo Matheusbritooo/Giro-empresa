@@ -103,3 +103,40 @@ export const PAPEIS: Record<string, string> = {
   gerente: "Gerente",
   equipe: "Equipe do salão",
 };
+
+/**
+ * Lugar reservado enquanto o dado não chega: blocos no formato do que vem, em vez de uma frase
+ * "Carregando...". `formato="cartoes"` para telas de números; o padrão é uma lista.
+ */
+export function Esqueleto({
+  linhas = 4,
+  formato = "lista",
+  rotulo = "Carregando",
+}: {
+  linhas?: number;
+  formato?: "lista" | "cartoes";
+  rotulo?: string;
+}) {
+  const blocos = Array.from({ length: linhas }, (_, i) => i);
+  return (
+    <div role="status" className="animate-pulse motion-reduce:animate-none">
+      <span className="sr-only">{rotulo}...</span>
+      {formato === "cartoes" ? (
+        <div aria-hidden className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {blocos.map((i) => (
+            <div key={i} className="h-24 rounded-xl bg-linha/60" />
+          ))}
+        </div>
+      ) : (
+        <div aria-hidden className="flex flex-col gap-3">
+          {blocos.map((i) => (
+            <div
+              key={i}
+              className={`h-12 rounded-xl bg-linha/60 ${["w-full", "w-11/12", "w-4/5"][i % 3]}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { entrar, preferirPlanta } from "./apoio";
+import { entrar, entrarNoSalao, preferirPlanta } from "./apoio";
 
 // O seed cria 4 semanas de noites de demonstração: é delas que saem os números.
 test.beforeEach(async ({ page }) => preferirPlanta(page));
@@ -8,8 +8,7 @@ test.beforeEach(async ({ page }) => preferirPlanta(page));
 test("dono vê o dinheiro que ficou na mesa, pergunta ao Copiloto e simula o E se", async ({
   page,
 }) => {
-  await entrar(page, "marcos@cantina.demo");
-  await expect(page).toHaveURL(/\/salao$/);
+  await entrarNoSalao(page, "marcos@cantina.demo");
   await page
     .getByRole("navigation", { name: "Seções" })
     .getByRole("link", { name: "Resultados" })
@@ -36,8 +35,7 @@ test("dono vê o dinheiro que ficou na mesa, pergunta ao Copiloto e simula o E s
 });
 
 test("dono revê a pior noite no salão com o mapa de calor", async ({ page }) => {
-  await entrar(page, "marcos@cantina.demo");
-  await expect(page).toHaveURL(/\/salao$/);
+  await entrarNoSalao(page, "marcos@cantina.demo");
   await page.goto("/resultados?periodo=semana");
   await page.getByRole("link", { name: /Rever a pior noite/ }).click();
   await expect(page).toHaveURL(/\/resultados\/replay\?dia=/);
@@ -63,8 +61,7 @@ test("dono revê a pior noite no salão com o mapa de calor", async ({ page }) =
 });
 
 test("dono muda o ticket médio, mas com pedidos lançados vale o gasto real", async ({ page }) => {
-  await entrar(page, "marcos@cantina.demo");
-  await expect(page).toHaveURL(/\/salao$/);
+  await entrarNoSalao(page, "marcos@cantina.demo");
   await page.goto("/ajustes");
   await page.getByLabel("Quanto cada pessoa gasta, em média (R$)").fill("90");
   await page.getByRole("button", { name: "Salvar ajustes" }).click();

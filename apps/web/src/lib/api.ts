@@ -1,3 +1,5 @@
+import { marcarConexao } from "./conexao";
+
 // Endereço da API. Vazio = mesmo domínio do painel (produção atrás do Caddy).
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
@@ -26,8 +28,10 @@ export async function api<T>(
       body: opcoes.corpo === undefined ? undefined : JSON.stringify(opcoes.corpo),
     });
   } catch {
+    marcarConexao(false);
     throw new ErroApi(0, "Sem conexão com o servidor. Confira a internet e tente de novo.");
   }
+  marcarConexao(true);
 
   if (resposta.status === 204) return undefined as T;
   const dados = await resposta.json().catch(() => null);

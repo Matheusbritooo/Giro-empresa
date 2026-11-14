@@ -103,6 +103,16 @@ Cardápio, etapa 3, parte 3 (perdas, só o dono):
 - **Curva ABC**: os poucos ingredientes que somam 80% do que sai do estoque. A tela de Ingredientes marca os da curva A para o gerente e lembra quando passam de uma semana sem contagem; o recado antes do turno também.
 - O Copiloto responde "onde estou perdendo no estoque?": em reais para o dono, em quantidade para o gerente.
 
+Base do painel (rápido e firme no salão):
+
+- **Tela "Hoje"**: a entrada do dono (o gerente tem no menu). O salão agora, a noite até aqui e **o que pede atenção**, do mais urgente ao menos, cada item com o link para resolver: cliente sem atendimento, câmera sem sinal, cozinha esperando há mais de 20 min, estoque zerado com prato à venda, o que acaba antes da compra, dia de compra, hora de contar e o que ficou como "acabou". Preço que subiu e perdas em reais só aparecem para o dono.
+- **Pedido sem internet**: o Wi-Fi do salão caiu e o garçom continua lançando. O pedido fica guardado no aparelho e sobe sozinho quando a rede volta, uma vez só (o servidor reconhece o reenvio pela chave do lançamento). Uma faixa em toda tela avisa "Sem conexão" e quantos pedidos esperam. Se o servidor recusar (acabou um item), o pedido volta para o garçom montar de novo. Guardado há mais de 10 minutos, pede confirmação antes de ir para a cozinha. Vale com o painel aberto: abrir o painel do zero sem internet ainda não funciona.
+- **Telas que abrem na hora**: cada tela reabre com o que buscou da última vez e atualiza por trás; o salão abre com o último mapa visto. Na primeira vez aparece um esqueleto no formato da tela, não a frase "Carregando...". Quando o canal ao vivo cai e volta, pedido, cardápio e estoque buscam de novo sozinhos.
+
+![Tela Hoje do dono: o salão agora, a noite e o que pede atenção](docs/telas/hoje.png)
+
+![Pedido lançado sem internet: fica guardado e sobe quando a rede volta](docs/telas/pedido-sem-internet.png)
+
 ![Perdas da semana na Cantina](docs/telas/perdas.png)
 
 ![Pedido da mesa no celular do garçom](docs/telas/pedido-celular.png)
@@ -160,6 +170,8 @@ Prefere Postgres, como em produção? `make banco` sobe um no Docker. Depois, an
 13. Abra **Estoque**: os 18 ingredientes, o que cada um tem e o **livro** da muçarela (vendas de cada noite, compras de terça e sexta, contagem de segunda). Em **Fichas dos pratos**, mostre o Fettuccine: pela ficha ele custa mais do que o digitado antes. Lance um pedido no celular e veja o estoque baixar na hora.
 14. Ainda em **Estoque**, abra a **Lista de compras**: o que comprar na próxima compra, por fornecedor. Toque em "Por que?" na massa de lasanha e mostre a conta. Pergunte ao Copiloto "O que eu preciso comprar?".
 15. Como dono, abra **Estoque > Perdas**: o custo pela ficha contra o de verdade, o que escapou na semana (a muçarela lidera, sem registro) e o preço da muçarela que subiu na última compra, com quanto cada prato passou a custar a mais.
+16. Entre como dono: a tela **Hoje** abre sozinha com o que pede atenção. Toque em "Ver as perdas" no aviso do preço da muçarela e mostre que cai direto na aba certa.
+17. No celular do garçom, abra uma mesa, monte um pedido e **desligue o Wi-Fi** antes de lançar. Mostre a faixa "Sem conexão. 1 pedido na fila" e o pedido em "Esperando a rede". Religue o Wi-Fi: o pedido sobe sozinho e aparece na cozinha, uma vez só.
 
 Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 
@@ -203,7 +215,7 @@ Simulador (demonstração) ─────────────────�
                        banco (histórico)     painel ao vivo (WebSocket)    celular (Web Push)
 ```
 
-A foto nunca chega à API: o serviço de visão analisa e descarta. O que fica gravado são eventos em texto, como "mesa 4 ocupada às 20h41" (LGPD, seção 1.9 do TCM). Para o desenho das mesas existe só uma prévia com as pessoas pixeladas, na memória, por 3 minutos.
+A foto nunca chega à API: o serviço de visão analisa e descarta. O que fica gravado são eventos em texto, como "mesa 4 ocupada às 20h41" (LGPD, seção 1.9 do TCM). Para o desenho das mesas existe só uma prévia com as pessoas pixeladas, na memória, por 3 minutos. No aparelho de quem usa o painel fica guardado só o pedido que ainda não subiu por falta de rede (mesa e itens, até subir ou ser descartado); o que as telas buscaram fica na memória e some ao entrar ou sair da conta.
 
 ## Estrutura
 
@@ -290,5 +302,7 @@ O repositório já vem preparado para o grupo usar o Claude Code:
 | 2b. Calibração em campo | Medir a visão com vídeo de um restaurante parceiro; receber a foto do gravador por FTPS para dispensar o conector |
 | 3. Inteligência (resto) | Previsão da próxima mesa a vagar, relatório semanal por e-mail "quanto a GIRO te devolveu" |
 | Cardápio, etapa 3 (parte 4) | Importar a planilha de vendas do sistema de caixa |
+| Painel, base (resto) | Relatório do mês em PDF e planilha, "esqueci a senha" e histórico de quem fez o quê, primeiros passos guiados, busca de qualquer tela, modo TV na cozinha, abrir o painel sem internet |
+| Painel, pacote tecnológico | Mesa esquecida depois do pedido (a câmera já vê o garçom), QR na mesa (cardápio, chamar garçom, pedir a conta), foto da nota vira compra, prato do dia sugerido pelo estoque, previsão com clima e feriado, fila na porta, Copiloto que avisa sozinho, por voz e no WhatsApp, mesa que se libera sozinha (depende do teste com vídeo real) |
 | 4. Gestão GIRO | Leads com as perguntas de qualificação, assinatura e cobrança (Asaas), painel financeiro |
 | 5. Site | Página de vendas e calculadora de retorno |

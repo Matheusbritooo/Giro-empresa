@@ -164,8 +164,9 @@ test("dono vê as perdas: custo pela ficha, de verdade e o preço que subiu", as
   // A demonstração tem a muçarela sumindo na contagem e vindo mais cara na última compra.
   await expect(page.getByRole("row", { name: /^Muçarela/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "O preço subiu" })).toBeVisible();
-  await expect(page.getByText(/^Muçarela subiu \d+%/)).toBeVisible();
-  await expect(page.getByText(/^Curva ABC:/)).toBeVisible();
+  const perdas = page.getByRole("tabpanel", { name: "Perdas" });
+  await expect(perdas.getByText(/^Muçarela subiu \d+%/)).toBeVisible();
+  await expect(perdas.getByText(/^Curva ABC:/)).toBeVisible();
 
   await page.getByRole("button", { name: "4 semanas" }).click();
   await expect(page.getByRole("button", { name: "4 semanas" })).toHaveAttribute(

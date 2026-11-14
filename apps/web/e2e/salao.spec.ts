@@ -61,9 +61,12 @@ test("garçom só vê o salão; dono vê mesas, equipe e ajustes", async ({ page
   await page.getByRole("button", { name: "Sair" }).click();
   await expect(page).toHaveURL(/\/entrar$/);
 
+  // O dono abre no resumo do dia, com o "Hoje" à frente no menu.
   await entrar(page, "marcos@cantina.demo");
-  await expect(page.getByTestId("mesa-1")).toBeVisible();
+  await expect(page).toHaveURL(/\/hoje$/);
+  await expect(page.getByRole("heading", { name: "Hoje", exact: true })).toBeVisible();
   await expect(navegacao.getByRole("link")).toHaveText([
+    "Hoje",
     "Salão",
     "Cozinha",
     "Estoque",

@@ -22,7 +22,10 @@ export function Copiloto({ restaurante }: { restaurante: number | null }) {
     () => api<BriefingCopiloto>("/api/copiloto/briefing", { restaurante }),
     [restaurante],
   );
-  const { dados: briefing, erro } = useDados(restaurante ? buscar : null);
+  const { dados: briefing, erro } = useDados(
+    restaurante ? buscar : null,
+    `briefing:${restaurante}`,
+  );
   const [pergunta, setPergunta] = useState("");
   const [conversa, setConversa] = useState<{ pergunta: string; resposta: RespostaCopiloto }[]>([]);
   const [pensando, setPensando] = useState(false);

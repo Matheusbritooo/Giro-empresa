@@ -207,7 +207,10 @@ class ItemPedido(Base):
     cardápio depois não muda o que já foi pedido. Não guarda nada do cliente, só da mesa."""
 
     __tablename__ = "itens_pedido"
-    __table_args__ = (Index("ix_itens_pedido_restaurante_lancado", "restaurante_id", "lancado_em"),)
+    __table_args__ = (
+        Index("ix_itens_pedido_restaurante_lancado", "restaurante_id", "lancado_em"),
+        Index("ix_itens_pedido_chave_lancamento", "restaurante_id", "chave_lancamento"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"))
@@ -224,6 +227,9 @@ class ItemPedido(Base):
     cancelado_em: Mapped[datetime | None]
     cancelado_por_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
     motivo_cancelamento: Mapped[str | None] = mapped_column(String(60))
+    # Chave que o aparelho inventa a cada "Lançar pedido". Sem internet o pedido fica na fila
+    # do aparelho e é reenviado: com a mesma chave, o servidor não lança duas vezes.
+    chave_lancamento: Mapped[str | None] = mapped_column(String(64))
 
     mesa: Mapped[Mesa] = relationship()
 
