@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 from giro.dominio.indicadores import (
     Indicadores,
     MesaInfo,
+    NotasDosClientes,
     Visita,
     calcular,
     intervalo_da_noite,
+    notas_dos_clientes,
 )
 from giro.modelos import ItemPedido, Mesa, Ocupacao, Restaurante
 
@@ -169,6 +171,28 @@ class Resultados:
     atual: Indicadores
     anterior: Indicadores
     noites: list[ResumoNoite]
+    notas: NotasDosClientes
+
+
+def notas_do_periodo(
+    db: Session, restaurante: Restaurante, inicio: datetime, fim: datetime
+) -> NotasDosClientes:
+    """As notas do QR da mesa nas visitas que sentaram no período."""
+    linhas = db.execute(
+        select(Ocupacao.nota, Ocupacao.sentou_em, Ocupacao.atendida_em).where(
+            Ocupacao.restaurante_id == restaurante.id,
+            Ocupacao.sentou_em >= inicio,
+            Ocupacao.sentou_em < fim,
+            Ocupacao.nota.is_not(None),
+        )
+    ).all()
+    return notas_dos_clientes(
+        [
+            (nota, (atendida - sentou).total_seconds() if atendida else None)
+            for nota, sentou, atendida in linhas
+        ],
+        restaurante.alerta_atendimento_seg,
+    )
 
 
 def resultados(
@@ -191,4 +215,5 @@ def resultados(
                     noite, r.mesas_atendidas, r.giro_medio, r.desistencias, r.perdido_total_centavos
                 )
             )
-    return Resultados(periodo, dia, atual, antes, noites)
+    notas = notas_do_periodo(db, restaurante, inicio, min(fim, agora))
+    return Resultados(periodo, dia, atual, antes, noites, notas)

@@ -198,3 +198,36 @@ def test_copiloto_diz_o_que_comprar_e_o_que_acaba_sem_falar_de_reais(
                      "comprar": "5 kg"}  # fmt: skip
     texto = json.dumps(numeros["estoque"], ensure_ascii=False)
     assert "R$" not in texto and "reais" not in texto and "custo" not in texto
+
+
+def test_prato_do_dia_quando_sobra_ingrediente(como, historico, estoque, hoje):  # noqa: F811
+    """Chegaram 20 kg de carne moída: mesmo sem comprar mais, dá para a próxima compra inteira.
+    A casa sugere a lasanha (o prato que usa carne) na tela Hoje, no pedido e no QR da mesa."""
+    dono, gerente = como("dono@cantina.demo"), como("gerente@cantina.demo")
+    comprar_em(dono, historico, hoje)
+    assert dono.get("/api/cardapio").json()["sugeridos"] == []
+    compra = {"insumo_id": estoque["carne"]["id"], "quantidade": 20_000, "valor_centavos": 76_000}
+    assert gerente.post("/api/estoque/compras", json=compra).status_code == 201
+
+    lasanha = next(
+        i["id"]
+        for i in dono.get("/api/cardapio").json()["itens"]
+        if i["nome"].startswith("Lasanha")
+    )
+    assert gerente.get("/api/cardapio").json()["sugeridos"] == [lasanha]
+    pendencias = {p["tipo"]: p for p in gerente.get("/api/hoje").json()["pendencias"]}
+    assert pendencias["prato_do_dia"] == {
+        "tipo": "prato_do_dia",
+        "texto": "Tem carne moída de sobra: dá para a próxima compra inteira sem comprar mais. "
+        "Ofereça lasanha à bolonhesa hoje.",
+        "href": "/cardapio",
+        "urgente": False,
+    }
+    chave = {m["numero"]: m["chave"] for m in gerente.get("/api/mesas/qr").json()}[1]
+    qr = como("equipe@cantina.demo").get(f"/api/publico/mesas/{chave}").json()
+    sugeridos = [i["nome"] for c in qr["categorias"] for i in c["itens"] if i["sugestao"]]
+    assert sugeridos == ["Lasanha à bolonhesa"]
+
+    # A lasanha acabou hoje: não dá para sugerir o que não sai da cozinha.
+    gerente.post(f"/api/cardapio/itens/{lasanha}/disponivel", json={"disponivel": False})
+    assert gerente.get("/api/cardapio").json()["sugeridos"] == []

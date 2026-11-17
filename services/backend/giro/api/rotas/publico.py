@@ -30,6 +30,7 @@ from giro.modelos import (
     Restaurante,
     TipoAlerta,
 )
+from giro.servicos.compras import plano_de_compras, pratos_do_dia
 from giro.servicos.salao import ocupacoes_abertas
 
 router = APIRouter(prefix="/api/publico", tags=["público (QR da mesa)"])
@@ -65,6 +66,7 @@ class ItemPublico(BaseModel):
     descricao: str | None
     preco_centavos: int
     disponivel: bool
+    sugestao: bool = False  # a casa sugere hoje (ingrediente sobrando no estoque)
 
 
 class CategoriaPublica(BaseModel):
@@ -163,6 +165,7 @@ def ver_mesa(chave: ChaveMesa, db: Db) -> MesaPublicaSaida:
         .distinct()
     ).all()
     visita = _visita_para_nota(db, mesa)
+    sugeridos = {p.item_id for p in pratos_do_dia(db, plano_de_compras(db, restaurante, agora()))}
     return MesaPublicaSaida(
         restaurante=restaurante.nome,
         mesa=mesa.numero,
@@ -180,6 +183,7 @@ def ver_mesa(chave: ChaveMesa, db: Db) -> MesaPublicaSaida:
                         descricao=i.descricao,
                         preco_centavos=i.preco_centavos,
                         disponivel=i.disponivel,
+                        sugestao=i.id in sugeridos,
                     )
                     for i in itens
                     if i.categoria_id == c.id

@@ -354,12 +354,22 @@ class ResumoNoiteSaida(Saida):
     perdido_total_centavos: int
 
 
+class NotasSaida(Saida):
+    quantidade: int
+    media: float | None
+    no_tempo: int  # notas de quem foi atendido dentro do tempo do alerta
+    media_no_tempo: float | None
+    esperaram: int  # notas de quem esperou mais que isso
+    media_esperaram: float | None
+
+
 class ResultadosSaida(Saida):
     periodo: str
     dia: date
     atual: IndicadoresSaida
     anterior: IndicadoresSaida
     noites: list[ResumoNoiteSaida]
+    notas: NotasSaida
 
 
 class MesaReplay(Saida):
@@ -466,6 +476,8 @@ class CardapioSaida(BaseModel):
     mostra_custo: bool
     # Os itens que mais saíram nas últimas 4 semanas: ficam no topo para o garçom.
     mais_pedidos: list[int] = []
+    # Pratos para oferecer hoje: usam um ingrediente que está sobrando no estoque.
+    sugeridos: list[int] = []
 
 
 class DisponivelEntrada(BaseModel):

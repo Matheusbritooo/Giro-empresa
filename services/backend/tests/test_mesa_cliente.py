@@ -118,6 +118,7 @@ def test_cliente_ve_o_cardapio_de_hoje_sem_custo(app, como, cardapio, qr):  # no
         "descricao": None,
         "preco_centavos": 6200,
         "disponivel": True,
+        "sugestao": False,  # sem estoque cadastrado, a casa não sugere nada
     }
     # Nada de custo, de quem trabalha ou de quem está sentado.
     texto = pagina.text
