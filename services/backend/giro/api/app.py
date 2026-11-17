@@ -23,12 +23,14 @@ from giro.api.rotas import (
     ingest,
     mesas,
     pedidos,
+    publico,
     push,
     resultados,
     salao,
 )
 from giro.api.rotas.auth import LimiteTentativas
 from giro.api.rotas.copiloto import LimitePerguntas
+from giro.api.rotas.publico import LimiteChamados
 from giro.banco import agora, criar_engine, criar_sessoes
 from giro.config import Config, obter_config
 from giro.push import EnviadorPush
@@ -84,6 +86,7 @@ def criar_app(config: Config | None = None) -> FastAPI:
     app.state.limite_login = LimiteTentativas()
     app.state.copiloto = Copiloto(config)
     app.state.limite_copiloto = LimitePerguntas()
+    app.state.limite_chamados = LimiteChamados()
     app.state.visao = ClienteVisao(config)
 
     app.add_middleware(
@@ -108,6 +111,7 @@ def criar_app(config: Config | None = None) -> FastAPI:
         pedidos,
         estoque,
         hoje,
+        publico,
     ):
         app.include_router(modulo.router)
 

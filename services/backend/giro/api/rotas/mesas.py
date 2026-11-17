@@ -1,4 +1,7 @@
+import secrets
+
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -16,6 +19,16 @@ from giro.modelos import Camera, Mesa
 from giro.servicos.salao import mesa_salao, mesas_salao, ocupacoes_abertas
 
 router = APIRouter(prefix="/api/mesas", tags=["mesas"], dependencies=[exigir_papel(*GESTAO)])
+
+
+class QrMesaSaida(BaseModel):
+    mesa_id: int
+    numero: int
+    chave: str  # o painel monta o endereço do QR: <painel>/m/<chave>
+
+
+def _nova_chave() -> str:
+    return secrets.token_urlsafe(16)  # 22 letras: impossível de adivinhar
 
 
 @router.get("")
@@ -64,3 +77,31 @@ def atualizar(mesa_id: int, dados: MesaAtualizacao, db: Db, usuario: UsuarioAtua
             status.HTTP_409_CONFLICT, "já existe uma mesa com esse número"
         ) from erro
     return mesa_salao(mesa, ocupacoes_abertas(db, [mesa.id]).get(mesa.id))
+
+
+@router.get("/qr")
+def ver_qr(db: Db, restaurante_id: RestauranteAlvo) -> list[QrMesaSaida]:
+    """O QR de cada mesa ativa, para imprimir. A mesa que ainda não tinha ganha o seu agora."""
+    mesas = db.scalars(
+        select(Mesa)
+        .where(Mesa.restaurante_id == restaurante_id, Mesa.ativa.is_(True))
+        .order_by(Mesa.numero)
+    ).all()
+    novas = [m for m in mesas if not m.chave_publica]
+    for mesa in novas:
+        mesa.chave_publica = _nova_chave()
+    if novas:
+        db.commit()
+    return [QrMesaSaida(mesa_id=m.id, numero=m.numero, chave=m.chave_publica or "") for m in mesas]
+
+
+@router.post("/{mesa_id}/qr/trocar")
+def trocar_qr(mesa_id: int, db: Db, usuario: UsuarioAtual) -> QrMesaSaida:
+    """Troca a chave do QR da mesa: o QR impresso antes para de funcionar."""
+    mesa = db.get(Mesa, mesa_id)
+    if mesa is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "mesa não encontrada")
+    restaurante_permitido(usuario, mesa.restaurante_id)
+    mesa.chave_publica = _nova_chave()
+    db.commit()
+    return QrMesaSaida(mesa_id=mesa.id, numero=mesa.numero, chave=mesa.chave_publica)

@@ -26,6 +26,7 @@ class RestauranteSaida(Saida):
     nome: str
     cidade: str | None
     alerta_atendimento_seg: int
+    alerta_visita_min: int  # 0 = não avisa mesa sem visita
     ticket_medio_centavos: int
     abre_as: str
     fecha_as: str
@@ -91,6 +92,8 @@ class RestauranteAtualizacao(BaseModel):
     nome: str | None = Field(default=None, min_length=2, max_length=120)
     cidade: str | None = Field(default=None, max_length=80)
     alerta_atendimento_seg: int | None = Field(default=None, ge=60, le=1800)
+    # Minutos sem ninguém da equipe passar pela mesa ocupada. Zero desliga o aviso.
+    alerta_visita_min: int | None = Field(default=None, ge=0, le=60)
     # De R$ 5 a R$ 1.000 por pessoa.
     ticket_medio_centavos: int | None = Field(default=None, ge=500, le=100_000)
     abre_as: Horario | None = None
@@ -152,6 +155,9 @@ class MesaSalao(BaseModel):
     # Pediu a conta: quando o garçom avisou e quando a mesa deve vagar.
     conta_pedida_em: datetime | None = None
     vaga_prevista_em: datetime | None = None
+    # Passadas da equipe pela mesa desde que foi atendida, e a hora da última.
+    visitas: int = 0
+    ultima_visita_em: datetime | None = None
 
 
 class AlertaSaida(BaseModel):

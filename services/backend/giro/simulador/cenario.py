@@ -200,6 +200,7 @@ def gerar_noite(
     """
     sorteio = random.Random(semente)  # noqa: S311 (simulação, não é segurança)
     permanencia = (6, 15) if ritmo == "demo" else (35, 80)
+    volta = (4, 7) if ritmo == "demo" else (8, 13)  # minutos entre uma passada e outra
     limpeza = (1, 5) if ritmo == "demo" else (2, 12)
     passos: list[Passo] = []
     fim = timedelta(minutes=duracao_min)
@@ -223,7 +224,24 @@ def gerar_noite(
                 atendimento = t + timedelta(minutes=espera)
                 passos.append(Passo(atendimento, mesa, em_pe=1))
                 passos.append(Passo(atendimento + timedelta(seconds=40), mesa, em_pe=0))
-                t = atendimento + timedelta(minutes=sorteio.uniform(*permanencia))
+                fica = sorteio.uniform(*permanencia)
+                # O garçom volta à mesa de tempos em tempos (prato, bebida, conta). Em uma
+                # visita a cada quinze, depois de atender ele some por 18 a 22 min: vira o
+                # alerta de mesa sem visita (a mesa fica o bastante para isso, mesmo no demo).
+                esquecida = sorteio.random() < 1 / 15
+                if esquecida:
+                    fica = max(fica, 26)
+                saida = atendimento + timedelta(minutes=fica)
+                passada = atendimento
+                while True:
+                    some = esquecida and passada == atendimento
+                    intervalo = sorteio.uniform(18, 22) if some else sorteio.uniform(*volta)
+                    passada += timedelta(minutes=intervalo)
+                    if passada + timedelta(minutes=1) >= saida:
+                        break
+                    passos.append(Passo(passada, mesa, em_pe=1))
+                    passos.append(Passo(passada + timedelta(seconds=30), mesa, em_pe=0))
+                t = saida
                 passos.append(Passo(t, mesa, sentados=0))
             t += timedelta(minutes=sorteio.uniform(*limpeza))
 
