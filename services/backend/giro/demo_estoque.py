@@ -140,6 +140,9 @@ SUMICO = {
 SUMICO_PADRAO = (0.0, 0.02)
 # Na última compra antes de hoje, comprou pouco destes: o estoque mostra o que está acabando.
 COMPROU_POUCO = {"Massa de lasanha", "Muçarela", "Mascarpone"}
+# A carne moída veio a mais na última compra (promoção do açougue): sobra até depois da
+# próxima, e a tela "Hoje" sugere oferecer o prato que mais usa.
+COMPROU_MUITO = {"Carne moída"}
 # E a muçarela veio mais cara: a aba de perdas mostra "o preço subiu" e o que pesa nos pratos.
 PRECO_SUBIU = {"Muçarela"}
 
@@ -321,6 +324,8 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
                 precisa = sum(previsto(n, insumo_id) for n in ciclo) * (1 + FOLGA)
                 if dia == ultima_compra and insumo.nome in COMPROU_POUCO:
                     precisa *= 0.7
+                if dia == ultima_compra and insumo.nome in COMPROU_MUITO:
+                    precisa *= 2.2
                 subiu = dia == ultima_compra and insumo.nome in PRECO_SUBIU
                 comprar(insumo, round(precisa - saldo[insumo_id]), manha, subiu)
         # Perdas registradas pela equipe.

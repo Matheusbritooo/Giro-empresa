@@ -12,6 +12,14 @@ quem alimenta pode ser o simulador ou a visão computacional.
 
 O garçom lançar um pedido também conta: mesa esperando vira atendida, e mesa livre ou suja
 começa uma visita já atendida (a câmera ainda não confirmou quem sentou).
+
+Depois de atendida, a mesa não pode ser esquecida: cada vez que a câmera vê alguém em pé junto
+dela (ou o garçom lança um pedido) conta como uma passada da equipe. Mesa ocupada há 15 minutos
+sem nenhuma passada gera o alerta de mesa sem visita, que some na passada seguinte. Só avisa
+com a câmera olhando a mesa: sem foto, não dá para saber se alguém passou.
+
+    OCUPADA ─(alguém em pé, ou pedido lançado)─► conta a passada, zera o relógio
+       │ 15 min sem passada: alerta de mesa sem visita
 """
 
 from __future__ import annotations
@@ -35,8 +43,10 @@ class TipoEvento(StrEnum):
     SAIU = "saiu"
     SAIU_SEM_ATENDIMENTO = "saiu_sem_atendimento"
     LIBERADA = "liberada"
+    VISITA = "visita"  # alguém da equipe passou pela mesa já atendida
     ALERTA_SEM_ATENDIMENTO = "alerta_sem_atendimento"
     ALERTA_MESA_VAGA = "alerta_mesa_vaga"
+    ALERTA_SEM_VISITA = "alerta_sem_visita"
 
 
 class TransicaoInvalida(Exception):
@@ -51,6 +61,13 @@ class Regras:
     confirma_saiu: timedelta = timedelta(seconds=60)
     # Tempo sentado sem ninguém da equipe chegar até disparar o alerta ao gerente.
     alerta_sem_atendimento: timedelta = timedelta(minutes=5)
+    # Tempo de uma mesa já atendida sem ninguém da equipe passar por ela até avisar que foi
+    # esquecida. None = o restaurante desligou esse aviso.
+    alerta_sem_visita: timedelta | None = timedelta(minutes=15)
+    # Fotos seguidas com alguém em pé são a mesma passada; depois deste tempo, é outra.
+    nova_visita: timedelta = timedelta(seconds=60)
+    # Sem foto da mesa há mais que isso, a câmera não está olhando (o painel mostra "sem sinal").
+    camera_parada: timedelta = timedelta(seconds=90)
 
 
 @dataclass(frozen=True)
@@ -80,6 +97,10 @@ class MaquinaMesa:
     # Primeira vez que viu a mesa vazia com clientes (saída ainda não confirmada).
     vazia_desde: datetime | None = None
     ultima_observacao: datetime | None = None
+    # Depois de atendida: quando a equipe esteve na mesa pela última vez e quantas passadas.
+    ultima_visita: datetime | None = None
+    visitas: int = 0
+    alertou_sem_visita: bool = False
 
     def observar(self, obs: Observacao) -> list[Evento]:
         if self.ultima_observacao is not None and obs.em <= self.ultima_observacao:
@@ -102,6 +123,24 @@ class MaquinaMesa:
         ):
             self.alertou_sem_atendimento = True
             return [Evento(TipoEvento.ALERTA_SEM_ATENDIMENTO, agora)]
+        limite = self.regras.alerta_sem_visita
+        # Mesa que a câmera já vê vazia não foi esquecida: os clientes estão saindo. E sem a
+        # câmera olhando (mesa só com pedido, ou câmera sem sinal), não há como saber.
+        olhando = (
+            self.ultima_observacao is not None
+            and agora - self.ultima_observacao <= self.regras.camera_parada
+        )
+        if (
+            self.estado == Estado.OCUPADA
+            and limite is not None
+            and not self.alertou_sem_visita
+            and self.vazia_desde is None
+            and olhando
+        ):
+            desde = self.ultima_visita or self.estado_desde
+            if desde is not None and agora - desde >= limite:
+                self.alertou_sem_visita = True
+                return [Evento(TipoEvento.ALERTA_SEM_VISITA, agora)]
         return []
 
     def liberar(self, agora: datetime) -> list[Evento]:
@@ -114,7 +153,7 @@ class MaquinaMesa:
     def registrar_pedido(self, agora: datetime) -> list[Evento]:
         """O garçom lançou um pedido na mesa: alguém da equipe esteve lá."""
         if self.estado == Estado.OCUPADA:
-            return []
+            return self._visitar(agora)
         eventos = []
         if self.estado in (Estado.LIVRE, Estado.PARA_LIMPAR):
             # Se a câmera já via gente sentando, a visita começa ali; senão, no pedido.
@@ -127,7 +166,7 @@ class MaquinaMesa:
             self.candidato_desde = None
             self.vazia_desde = None
             eventos.append(Evento(TipoEvento.SENTOU, sentou_em, pessoas=0))
-        self._mudar(Estado.OCUPADA, agora)
+        self._atender(agora)
         eventos.append(Evento(TipoEvento.ATENDIDA, agora))
         return eventos
 
@@ -159,8 +198,10 @@ class MaquinaMesa:
             self.vazia_desde = None
             self.pessoas_max = max(self.pessoas_max, obs.sentados)
             if self.estado == Estado.AGUARDANDO and obs.em_pe > 0:
-                self._mudar(Estado.OCUPADA, obs.em)
+                self._atender(obs.em)
                 return [Evento(TipoEvento.ATENDIDA, obs.em)]
+            if self.estado == Estado.OCUPADA and obs.em_pe > 0:
+                return self._visitar(obs.em)
             return []
 
         if self.vazia_desde is None:
@@ -177,10 +218,34 @@ class MaquinaMesa:
 
         self._mudar(Estado.PARA_LIMPAR, saiu_em)
         self.vazia_desde = None
+        self._esquecer_visitas()
         return [
             Evento(TipoEvento.SAIU, saiu_em, pessoas=pessoas),
             Evento(TipoEvento.ALERTA_MESA_VAGA, obs.em),
         ]
+
+    def _atender(self, em: datetime) -> None:
+        """O primeiro atendimento é a primeira passada da equipe pela mesa."""
+        self._mudar(Estado.OCUPADA, em)
+        self.ultima_visita = em
+        self.visitas = 1
+        self.alertou_sem_visita = False
+
+    def _visitar(self, em: datetime) -> list[Evento]:
+        """Alguém da equipe está na mesa já atendida. Fotos seguidas são uma passada só."""
+        nova = self.ultima_visita is None or em - self.ultima_visita > self.regras.nova_visita
+        avisava = self.alertou_sem_visita
+        self.ultima_visita = em
+        self.alertou_sem_visita = False
+        if nova:
+            self.visitas += 1
+        # O evento sai na passada nova e também quando esta passada desfaz o alerta.
+        return [Evento(TipoEvento.VISITA, em)] if nova or avisava else []
+
+    def _esquecer_visitas(self) -> None:
+        self.ultima_visita = None
+        self.visitas = 0
+        self.alertou_sem_visita = False
 
     def _mudar(self, estado: Estado, em: datetime) -> None:
         self.estado = estado
@@ -193,6 +258,7 @@ class MaquinaMesa:
         self.alertou_sem_atendimento = False
         self.candidato_desde = None
         self.vazia_desde = None
+        self._esquecer_visitas()
 
     # Persistência: o estado vai para uma coluna JSON da mesa e volta a cada observação.
 
@@ -209,6 +275,9 @@ class MaquinaMesa:
             "candidato_desde": iso(self.candidato_desde),
             "vazia_desde": iso(self.vazia_desde),
             "ultima_observacao": iso(self.ultima_observacao),
+            "ultima_visita": iso(self.ultima_visita),
+            "visitas": self.visitas,
+            "alertou_sem_visita": self.alertou_sem_visita,
         }
 
     @classmethod
@@ -230,4 +299,7 @@ class MaquinaMesa:
             candidato_desde=data("candidato_desde"),
             vazia_desde=data("vazia_desde"),
             ultima_observacao=data("ultima_observacao"),
+            ultima_visita=data("ultima_visita"),
+            visitas=dados.get("visitas", 0),
+            alertou_sem_visita=dados.get("alertou_sem_visita", False),
         )

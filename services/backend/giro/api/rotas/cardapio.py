@@ -30,8 +30,17 @@ from giro.esquemas import (
     ItemCardapioEntrada,
     ItemCardapioSaida,
 )
-from giro.modelos import CategoriaCardapio, Insumo, ItemCardapio, ItemPedido, Papel, Usuario
+from giro.modelos import (
+    CategoriaCardapio,
+    Insumo,
+    ItemCardapio,
+    ItemPedido,
+    Papel,
+    Restaurante,
+    Usuario,
+)
 from giro.servicos import estoque as servico_estoque
+from giro.servicos.compras import plano_de_compras, pratos_do_dia
 
 router = APIRouter(prefix="/api/cardapio", tags=["cardápio"])
 
@@ -109,12 +118,15 @@ def ver_cardapio(db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo)
         .order_by(quantidade.desc(), ItemPedido.item_id)
         .limit(MAIS_PEDIDOS)
     ).all()
+    restaurante = db.get_one(Restaurante, restaurante_id)
+    sugeridos = [p.item_id for p in pratos_do_dia(db, plano_de_compras(db, restaurante, agora()))]
     com_ficha = servico_estoque.itens_com_ficha(db, restaurante_id)
     return CardapioSaida(
         categorias=[CategoriaSaida.model_validate(c) for c in categorias if gestao or c.ativa],
         itens=[item_saida(i, usuario, i.id in com_ficha) for i in itens if gestao or i.ativo],
         mostra_custo=_ve_custo(usuario),
         mais_pedidos=list(mais_pedidos),
+        sugeridos=sugeridos,
     )
 
 

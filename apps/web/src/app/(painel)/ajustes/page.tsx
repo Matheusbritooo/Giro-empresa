@@ -56,6 +56,7 @@ export default function PaginaAjustes() {
           nome: form.get("nome"),
           cidade: form.get("cidade") || null,
           alerta_atendimento_seg: Math.round(Number(form.get("alerta_min")) * 60),
+          alerta_visita_min: Number(form.get("visita_min")),
           ticket_medio_centavos: Math.round(Number(form.get("ticket")) * 100),
           abre_as: form.get("abre_as"),
           fecha_as: form.get("fecha_as"),
@@ -113,6 +114,17 @@ export default function PaginaAjustes() {
               max={30}
               step={0.5}
               defaultValue={dados.alerta_atendimento_seg / 60}
+              required
+            />
+            <Campo
+              rotulo="Avisar mesa sem ninguém da equipe passar depois de (minutos)"
+              name="visita_min"
+              type="number"
+              min={0}
+              max={60}
+              step={1}
+              defaultValue={dados.alerta_visita_min}
+              ajuda="Depois de atendida, a câmera conta cada vez que alguém passa pela mesa. Zero desliga o aviso."
               required
             />
             <Campo

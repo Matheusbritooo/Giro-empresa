@@ -4,13 +4,19 @@ export type Papel = "admin_giro" | "dono" | "gerente" | "equipe";
 
 export type EstadoMesa = "livre" | "aguardando" | "ocupada" | "para_limpar";
 
-export type TipoAlerta = "sem_atendimento" | "mesa_vaga";
+export type TipoAlerta =
+  | "sem_atendimento"
+  | "mesa_vaga"
+  | "sem_visita" // mesa já atendida que a equipe esqueceu
+  | "chamou_garcom" // o cliente chamou pelo QR da mesa
+  | "pediu_conta"; // o cliente pediu a conta pelo QR da mesa
 
 export interface Restaurante {
   id: number;
   nome: string;
   cidade: string | null;
   alerta_atendimento_seg: number;
+  alerta_visita_min: number; // 0 = não avisa mesa sem visita
   ticket_medio_centavos: number;
   abre_as: string; // "HH:MM" em São Paulo
   fecha_as: string;
@@ -53,6 +59,9 @@ export interface Mesa {
   // Pediu a conta: quando o garçom avisou e quando a mesa deve vagar.
   conta_pedida_em?: string | null;
   vaga_prevista_em?: string | null;
+  // Passadas da equipe pela mesa desde o atendimento (o atendimento é a primeira).
+  visitas?: number;
+  ultima_visita_em?: string | null;
 }
 
 export interface Alerta {
@@ -178,6 +187,17 @@ export interface Resultados {
   atual: Indicadores;
   anterior: Indicadores;
   noites: ResumoNoite[];
+  notas: NotasDosClientes;
+}
+
+/** Notas que os clientes deram pelo QR da mesa, separadas pela espera do atendimento. */
+export interface NotasDosClientes {
+  quantidade: number;
+  media: number | null;
+  no_tempo: number;
+  media_no_tempo: number | null;
+  esperaram: number;
+  media_esperaram: number | null;
 }
 
 export interface MesaReplay {
@@ -260,6 +280,8 @@ export interface Cardapio {
   itens: ItemCardapio[];
   mostra_custo: boolean;
   mais_pedidos: number[];
+  /** Pratos para oferecer hoje: usam um ingrediente que está sobrando no estoque. */
+  sugeridos?: number[];
 }
 
 export interface ItemPedido {
@@ -564,4 +586,32 @@ export interface Hoje {
   pendencias: Pendencia[];
   esperar: string[];
   dicas: string[];
+}
+
+// QR da mesa (página do cliente, sem login)
+
+export interface QrMesa {
+  mesa_id: number;
+  numero: number;
+  chave: string;
+}
+
+export interface MesaPublica {
+  restaurante: string;
+  mesa: number;
+  com_clientes: boolean;
+  chamados: ("garcom" | "conta")[];
+  nota: number | null;
+  destaques: string[];
+  categorias: {
+    nome: string;
+    bebida: boolean;
+    itens: {
+      nome: string;
+      descricao: string | null;
+      preco_centavos: number;
+      disponivel: boolean;
+      sugestao: boolean;
+    }[];
+  }[];
 }

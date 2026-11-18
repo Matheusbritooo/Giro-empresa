@@ -198,3 +198,9 @@ def texto_compra(
         return texto_quantidade(unidade, embalagens * embalagem_quantidade)
     nome = embalagem_nome.strip()
     return f"{embalagens} {nome if embalagens == 1 else plural(nome)}"
+
+
+def sobrando(tem: int, sobra: int, precisa: int) -> bool:
+    """Tem estoque de sobra: mesmo sem comprar nada, o que vai sobrar no dia da compra já cobre
+    todas as noites que essa compra cobriria. Vale empurrar o prato que usa o ingrediente."""
+    return tem > 0 and precisa > 0 and sobra >= precisa

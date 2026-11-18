@@ -4,10 +4,14 @@ import {
   aplicarMensagem,
   camerasSemSinal,
   contarPorTom,
+  horaCurta,
+  pedeAlguemNaMesa,
   SALAO_VAZIO,
   situacao,
   tempoDecorrido,
+  textoAlerta,
   textoDaConta,
+  textoDasVisitas,
 } from "./salao";
 import type { Alerta, Camera, Mesa, Salao } from "./tipos";
 
@@ -66,6 +70,7 @@ const salao: Salao = {
     nome: "Cantina",
     cidade: null,
     alerta_atendimento_seg: 300,
+    alerta_visita_min: 15,
     ticket_medio_centavos: 8500,
     abre_as: "18:00",
     fecha_as: "23:30",
@@ -225,5 +230,36 @@ describe("câmeras", () => {
       camera: camera({ ultima_observacao_em: minutosAtras(0) }),
     });
     expect(camerasSemSinal(viva.salao?.cameras ?? [], AGORA)).toHaveLength(0);
+  });
+});
+
+describe("mesa esquecida e chamados pelo QR", () => {
+  it("cada alerta diz o que aconteceu e se pede alguém na mesa", () => {
+    const tipos = ["sem_visita", "chamou_garcom", "pediu_conta", "mesa_vaga"] as const;
+    const textos = tipos.map((tipo) => textoAlerta(alerta({ tipo, mesa_numero: 5 })));
+    expect(textos).toEqual([
+      "Mesa 5 está há tempo sem ninguém da equipe passar",
+      "Mesa 5 chamou o garçom pelo celular",
+      "Mesa 5 pediu a conta pelo celular",
+      "Mesa 5 vagou e precisa ser limpa",
+    ]);
+    expect(tipos.map((tipo) => pedeAlguemNaMesa(alerta({ tipo })))).toEqual([
+      true,
+      true,
+      true,
+      false,
+    ]);
+  });
+
+  it("quantas vezes a equipe passou pela mesa", () => {
+    const hora = (iso: string) => horaCurta(iso);
+    const ultima = "2026-10-23T23:10:00Z";
+    expect(textoDasVisitas(mesa({ visitas: 0 }))).toBe("");
+    expect(textoDasVisitas(mesa({ visitas: 1, ultima_visita_em: ultima }))).toBe(
+      `A equipe passou 1 vez, às ${hora(ultima)}.`,
+    );
+    expect(textoDasVisitas(mesa({ visitas: 3, ultima_visita_em: ultima }))).toBe(
+      `A equipe passou 3 vezes, a última às ${hora(ultima)}.`,
+    );
   });
 });

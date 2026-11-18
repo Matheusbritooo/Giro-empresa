@@ -119,6 +119,7 @@ export default function PaginaPedido() {
   const naCozinha = jaPedidos.filter((i) => situacaoDoItem(i) === "na_cozinha").length;
   const qtdRascunho = quantidadeNoRascunho(rascunho);
   const categorias = menu.categorias.filter((c) => c.ativa);
+  const sugeridos = new Set(menu.sugeridos ?? []);
 
   async function lancar() {
     if (enviando || rascunho.length === 0 || !sessao || !mesa) return;
@@ -288,6 +289,7 @@ export default function PaginaPedido() {
                 <li key={item.id}>
                   <BotaoItem
                     item={item}
+                    sugerido={sugeridos.has(item.id)}
                     quantidade={rascunho.find((l) => l.itemId === item.id)?.quantidade ?? 0}
                     aoTocar={() => setRascunho((r) => adicionar(r, item.id))}
                   />
@@ -453,10 +455,12 @@ function Chip({
 
 function BotaoItem({
   item,
+  sugerido,
   quantidade,
   aoTocar,
 }: {
   item: ItemCardapio;
+  sugerido: boolean;
   quantidade: number;
   aoTocar: () => void;
 }) {
@@ -466,7 +470,7 @@ function BotaoItem({
       type="button"
       onClick={aoTocar}
       disabled={acabou}
-      aria-label={`${item.nome}, ${acabou ? "acabou" : preco(item.preco_centavos)}${quantidade ? `, ${quantidade} no pedido` : ""}`}
+      aria-label={`${item.nome}, ${acabou ? "acabou" : preco(item.preco_centavos)}${sugerido && !acabou ? ", sugestão de hoje" : ""}${quantidade ? `, ${quantidade} no pedido` : ""}`}
       className={`relative flex h-full min-h-[4.5rem] w-full flex-col justify-between gap-1 rounded-xl border p-3 text-left transition active:scale-[0.98] ${
         acabou
           ? "cursor-not-allowed border-dashed border-linha text-tinta-suave"
@@ -478,6 +482,11 @@ function BotaoItem({
       <span className={`pr-6 font-semibold leading-tight ${acabou ? "line-through" : ""}`}>
         {item.nome}
       </span>
+      {sugerido && !acabou && (
+        <span className="self-start rounded-full border border-ocupada px-2 text-xs font-bold text-ocupada">
+          Sugestão de hoje
+        </span>
+      )}
       <span className="numeros text-sm text-tinta-suave">
         {acabou ? (
           <span className="font-bold text-atrasada">Acabou</span>

@@ -26,6 +26,9 @@ class Papel(StrEnum):
 class TipoAlerta(StrEnum):
     SEM_ATENDIMENTO = "sem_atendimento"
     MESA_VAGA = "mesa_vaga"
+    SEM_VISITA = "sem_visita"  # mesa já atendida que a equipe esqueceu
+    CHAMOU_GARCOM = "chamou_garcom"  # o cliente tocou em "Chamar o garçom" no QR da mesa
+    PEDIU_CONTA = "pediu_conta"  # o cliente tocou em "Pedir a conta" no QR da mesa
 
 
 class Restaurante(Base):
@@ -35,6 +38,9 @@ class Restaurante(Base):
     nome: Mapped[str] = mapped_column(String(120))
     cidade: Mapped[str | None] = mapped_column(String(80))
     alerta_atendimento_seg: Mapped[int] = mapped_column(default=300)
+    # Minutos de uma mesa já atendida sem ninguém da equipe passar por ela até avisar.
+    # Zero desliga o aviso.
+    alerta_visita_min: Mapped[int] = mapped_column(default=15, server_default="15")
     # Gasto médio por pessoa, em centavos: transforma tempo perdido em dinheiro nos resultados.
     ticket_medio_centavos: Mapped[int] = mapped_column(default=8500, server_default="8500")
     # Horário do serviço, "HH:MM" em São Paulo: briefing na abertura, resumo no fechamento.
@@ -82,7 +88,10 @@ class Camera(Base):
 
 class Mesa(Base):
     __tablename__ = "mesas"
-    __table_args__ = (UniqueConstraint("restaurante_id", "numero"),)
+    __table_args__ = (
+        UniqueConstraint("restaurante_id", "numero"),
+        Index("ix_mesas_chave_publica", "chave_publica", unique=True),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"), index=True)
@@ -99,6 +108,9 @@ class Mesa(Base):
     estado: Mapped[str] = mapped_column(String(20), default=Estado.LIVRE.value)
     estado_desde: Mapped[datetime | None]
     estado_maquina: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # Chave do QR da mesa: abre o cardápio e os botões do cliente, sem login. Não dá para
+    # adivinhar e não diz nada sobre quem está sentado.
+    chave_publica: Mapped[str | None] = mapped_column(String(32))
 
 
 class Ocupacao(Base):
@@ -121,6 +133,13 @@ class Ocupacao(Base):
     sem_atendimento: Mapped[bool] = mapped_column(default=False)  # foi embora sem ser atendido
     # O garçom avisou que a mesa pediu a conta: o painel mostra quando ela deve vagar.
     conta_pedida_em: Mapped[datetime | None]
+    # Passadas da equipe pela mesa (a câmera viu alguém em pé, ou um pedido foi lançado). O
+    # atendimento é a primeira.
+    visitas: Mapped[int] = mapped_column(default=0, server_default="0")
+    ultima_visita_em: Mapped[datetime | None]
+    # Nota de 1 a 5 que o cliente deu pelo QR da mesa. É da visita, nunca da pessoa.
+    nota: Mapped[int | None]
+    nota_em: Mapped[datetime | None]
 
 
 class EventoMesa(Base):

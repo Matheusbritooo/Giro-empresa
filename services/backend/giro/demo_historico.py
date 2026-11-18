@@ -138,6 +138,16 @@ def gerar_historico(
     for v in todas:
         if not v.sem_atendimento and v.saiu_em is not None:
             v.conta_pedida_em = v.saiu_em - timedelta(minutes=pedidos.uniform(6, 14))
+    # Uma em cada três mesas atendidas deu nota pelo QR. Quem esperou muito pelo garçom
+    # dá nota menor: é o que a tela de resultados mostra. Outro sorteio, para não mexer no resto.
+    notas = random.Random(semente + 2)  # noqa: S311
+    for v in todas:
+        if v.sem_atendimento or v.atendida_em is None or notas.random() > 1 / 3:
+            continue
+        espera = (v.atendida_em - v.sentou_em).total_seconds() / 60
+        nota = 4.7 - 0.22 * max(espera - 4, 0) + notas.gauss(0, 0.6)
+        v.nota = min(5, max(1, round(nota)))
+        v.nota_em = v.saiu_em
     db.flush()  # as visitas ganham id para os pedidos apontarem para elas
     papeis = criar_cardapio(db, restaurante_id)
     linhas_pedido = [linha for v in todas for linha in pedidos_da_visita(v, papeis, pedidos)]

@@ -269,3 +269,32 @@ def calcular(
         por_hora=por_hora,
         por_mesa=por_mesa,
     )
+
+
+@dataclass(frozen=True)
+class NotasDosClientes:
+    """As notas que os clientes deram pelo QR da mesa, separadas por quem foi atendido dentro
+    do tempo do alerta e quem esperou mais que isso. Mostra o quanto a espera pesa na nota."""
+
+    quantidade: int
+    media: float | None
+    no_tempo: int
+    media_no_tempo: float | None
+    esperaram: int
+    media_esperaram: float | None
+
+
+def notas_dos_clientes(
+    notas: list[tuple[int, float | None]], limite_seg: float
+) -> NotasDosClientes:
+    """`notas`: (nota de 1 a 5, segundos até o primeiro atendimento ou None)."""
+    no_tempo = [n for n, espera in notas if espera is not None and espera <= limite_seg]
+    esperaram = [n for n, espera in notas if espera is not None and espera > limite_seg]
+    return NotasDosClientes(
+        quantidade=len(notas),
+        media=_media([n for n, _ in notas]),
+        no_tempo=len(no_tempo),
+        media_no_tempo=_media(no_tempo),
+        esperaram=len(esperaram),
+        media_esperaram=_media(esperaram),
+    )

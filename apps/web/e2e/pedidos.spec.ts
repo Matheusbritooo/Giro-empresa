@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { entrar, entrarNoSalao, preferirPlanta } from "./apoio";
+import { API, entrar, entrarNoSalao, preferirPlanta } from "./apoio";
 
 test.beforeEach(async ({ page }) => preferirPlanta(page));
 
@@ -221,4 +221,23 @@ test("pedido guardado que o servidor recusa volta para o garçom decidir", async
   await expect(page.getByTestId("rascunho")).toContainText("Lasanha à bolonhesa");
   await expect(page.getByTestId("faixa-conexao")).toHaveCount(0);
   await expect(page.getByTestId("total-mesa")).toHaveText(`R$ ${antes.toLocaleString("pt-BR")}`);
+});
+
+test("a sugestão de hoje vem primeiro no pedido e marcada para o garçom oferecer", async ({
+  page,
+}, info) => {
+  const { garcom: mesa } = MESAS[info.project.name as keyof typeof MESAS];
+  await entrar(page, "equipe@cantina.demo");
+  await expect(page).toHaveURL(/\/salao$/);
+  // A sugestão depende do estoque do dia na demonstração (a carne moída que veio a mais).
+  const cardapio = (await (await page.request.get(`${API}/api/cardapio`)).json()) as {
+    itens: { id: number; nome: string }[];
+    sugeridos: number[];
+  };
+  test.skip(cardapio.sugeridos.length === 0, "hoje nenhum ingrediente está sobrando");
+  const sugerido = cardapio.itens.find((i) => i.id === cardapio.sugeridos[0])?.nome ?? "";
+  await abrirPedido(page, mesa);
+  const primeiro = page.getByRole("button", { name: /, (R\$|acabou)/ }).first();
+  await expect(primeiro).toHaveAccessibleName(new RegExp(`^${sugerido}, .*sugestão de hoje`));
+  await expect(primeiro.getByText("Sugestão de hoje")).toBeVisible();
 });

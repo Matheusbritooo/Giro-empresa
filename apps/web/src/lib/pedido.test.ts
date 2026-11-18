@@ -89,6 +89,14 @@ describe("pedido na mesa", () => {
     ).toEqual([10, 11, 20]);
   });
 
+  it("a sugestão de hoje vem antes dos mais pedidos, sem repetir", () => {
+    const comSugestao = { ...CARDAPIO, sugeridos: [10] };
+    expect(itensParaEscolher(comSugestao, "mais", "").map((i) => i.id)).toEqual([10, 20]);
+    // Sugestão que saiu do cardápio não aparece.
+    const fora = { ...CARDAPIO, sugeridos: [12] };
+    expect(itensParaEscolher(fora, "mais", "").map((i) => i.id)).toEqual([20, 10]);
+  });
+
   it("filtra por categoria e busca sem acento em todo o cardápio ativo", () => {
     expect(itensParaEscolher(CARDAPIO, 1, "").map((i) => i.id)).toEqual([10, 11]);
     expect(itensParaEscolher(CARDAPIO, 2, "lasanha").map((i) => i.id)).toEqual([10]);

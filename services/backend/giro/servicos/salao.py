@@ -44,11 +44,20 @@ from giro.tempo_real import CentralTempoReal
 TIPO_ALERTA_DO_EVENTO = {
     TipoEvento.ALERTA_SEM_ATENDIMENTO: TipoAlerta.SEM_ATENDIMENTO,
     TipoEvento.ALERTA_MESA_VAGA: TipoAlerta.MESA_VAGA,
+    TipoEvento.ALERTA_SEM_VISITA: TipoAlerta.SEM_VISITA,
 }
+# O cliente chamou pelo QR da mesa: some quando alguém da equipe chega até ela.
+CHAMADOS = (TipoAlerta.CHAMOU_GARCOM, TipoAlerta.PEDIU_CONTA)
+# Alertas que somem quando alguém da equipe passa pela mesa.
+PEDEM_UMA_PASSADA = (TipoAlerta.SEM_VISITA, *CHAMADOS)
 
 
 def regras_do_restaurante(restaurante: Restaurante) -> Regras:
-    return Regras(alerta_sem_atendimento=timedelta(seconds=restaurante.alerta_atendimento_seg))
+    visita = restaurante.alerta_visita_min
+    return Regras(
+        alerta_sem_atendimento=timedelta(seconds=restaurante.alerta_atendimento_seg),
+        alerta_sem_visita=timedelta(minutes=visita) if visita else None,
+    )
 
 
 def ocupacoes_abertas(db: Session, mesa_ids: list[int]) -> dict[int, Ocupacao]:
@@ -129,6 +138,8 @@ def mesa_salao(
         dados.pessoas = ocupacao.pessoas
         total, cozinha = (totais or {}).get(ocupacao.id, (0, 0))
         dados.total_pedido_centavos, dados.itens_na_cozinha = total, cozinha
+        dados.visitas = ocupacao.visitas
+        dados.ultima_visita_em = ocupacao.ultima_visita_em
         if ocupacao.conta_pedida_em and mesa.estado == Estado.OCUPADA:
             dados.conta_pedida_em = ocupacao.conta_pedida_em
             if vaga_em is not None:
@@ -210,6 +221,11 @@ class ServicoSalao:
             maquina = MaquinaMesa.de_dict(regras, mesa.estado_maquina)
             eventos = maquina.observar(Observacao(em, item.sentados, item.em_pe))
             self._aplicar(db, mesa, maquina, eventos, mudancas)
+            if item.em_pe > 0:
+                # Alguém da equipe está na mesa: o chamado do cliente foi atendido, mesmo que
+                # seja a mesma passada (o garçom já estava ali quando ele tocou no botão).
+                for tipo in CHAMADOS:
+                    self._resolver(db, mesa, tipo, em, mudancas)
 
         camera.ultima_observacao_em = em
         db.commit()
@@ -301,6 +317,41 @@ class ServicoSalao:
         self.central.publicar(restaurante_id, {"tipo": "estoque"})
         return resultado
 
+    @_uma_por_vez
+    def chamar_pela_mesa(self, db: Session, mesa: Mesa, tipo: TipoAlerta, agora: datetime) -> bool:
+        """O cliente tocou em "Chamar o garçom" ou "Pedir a conta" no QR da mesa. Devolve
+        False quando já tinha um chamado igual esperando (não chama duas vezes)."""
+        if mesa.estado not in (Estado.AGUARDANDO, Estado.OCUPADA):
+            raise TransicaoInvalida("a mesa não está com clientes")
+        aberto = db.scalar(
+            select(Alerta.id).where(
+                Alerta.mesa_id == mesa.id,
+                Alerta.tipo == tipo.value,
+                Alerta.resolvido_em.is_(None),
+            )
+        )
+        if aberto is not None:
+            return False
+        mudancas = _Mudancas()
+        ocupacao = ocupacoes_abertas(db, [mesa.id]).get(mesa.id)
+        if tipo == TipoAlerta.PEDIU_CONTA and ocupacao is not None:
+            if mesa.estado == Estado.OCUPADA and ocupacao.conta_pedida_em is None:
+                ocupacao.conta_pedida_em = agora  # o mapa mostra quando deve vagar
+            mudancas.mesas[mesa.id] = mesa
+        alerta = Alerta(
+            restaurante_id=mesa.restaurante_id,
+            mesa_id=mesa.id,
+            mesa=mesa,
+            ocupacao_id=ocupacao.id if ocupacao else None,
+            tipo=tipo.value,
+            criado_em=agora,
+        )
+        db.add(alerta)
+        db.commit()
+        mudancas.alertas_novos.append(alerta)
+        self._avisar(db, mesa.restaurante_id, mudancas)
+        return True
+
     def avisar_pedido(self, db: Session, mesa: Mesa) -> None:
         """Um item ficou pronto ou foi cancelado: atualiza a mesa e a tela da cozinha."""
         self._avisar(db, mesa.restaurante_id, _Mudancas(mesas={mesa.id: mesa}))
@@ -309,9 +360,10 @@ class ServicoSalao:
     @_uma_por_vez
     def verificar_tempos(self, db: Session, agora: datetime) -> None:
         """Alertas que dependem só do relógio (ex.: câmera parou de mandar foto)."""
+        # Esperando atendimento (alerta de 5 min) ou já atendida (alerta de mesa sem visita).
         mesas = db.scalars(
             select(Mesa)
-            .where(Mesa.estado == Estado.AGUARDANDO.value)
+            .where(Mesa.estado.in_([Estado.AGUARDANDO.value, Estado.OCUPADA.value]))
             .order_by(Mesa.id)
             .with_for_update()
         ).all()
@@ -363,19 +415,33 @@ class ServicoSalao:
                     db.flush()
                 case TipoEvento.ATENDIDA if ocupacao:
                     ocupacao.atendida_em = evento.em
-                    self._resolver(db, mesa, TipoAlerta.SEM_ATENDIMENTO, evento.em, mudancas)
+                    ocupacao.visitas, ocupacao.ultima_visita_em = maquina.visitas, evento.em
+                    for tipo in (TipoAlerta.SEM_ATENDIMENTO, *CHAMADOS):
+                        self._resolver(db, mesa, tipo, evento.em, mudancas)
+                case TipoEvento.VISITA if ocupacao:
+                    ocupacao.visitas, ocupacao.ultima_visita_em = maquina.visitas, evento.em
+                    for tipo in PEDEM_UMA_PASSADA:
+                        self._resolver(db, mesa, tipo, evento.em, mudancas)
                 case TipoEvento.SAIU if ocupacao:
                     ocupacao.saiu_em = evento.em
                     ocupacao.pessoas = evento.pessoas or ocupacao.pessoas
+                    for tipo in PEDEM_UMA_PASSADA:
+                        self._resolver(db, mesa, tipo, evento.em, mudancas)
                 case TipoEvento.SAIU_SEM_ATENDIMENTO if ocupacao:
                     ocupacao.saiu_em = ocupacao.liberada_em = evento.em
                     ocupacao.sem_atendimento = True
                     ocupacao.pessoas = evento.pessoas or ocupacao.pessoas
-                    self._resolver(db, mesa, TipoAlerta.SEM_ATENDIMENTO, evento.em, mudancas)
+                    for tipo in (TipoAlerta.SEM_ATENDIMENTO, *CHAMADOS):
+                        self._resolver(db, mesa, tipo, evento.em, mudancas)
                 case TipoEvento.LIBERADA if ocupacao:
                     ocupacao.liberada_em = evento.em
-                    self._resolver(db, mesa, TipoAlerta.MESA_VAGA, evento.em, mudancas)
-                case TipoEvento.ALERTA_SEM_ATENDIMENTO | TipoEvento.ALERTA_MESA_VAGA:
+                    for tipo in (TipoAlerta.MESA_VAGA, *PEDEM_UMA_PASSADA):
+                        self._resolver(db, mesa, tipo, evento.em, mudancas)
+                case (
+                    TipoEvento.ALERTA_SEM_ATENDIMENTO
+                    | TipoEvento.ALERTA_MESA_VAGA
+                    | TipoEvento.ALERTA_SEM_VISITA
+                ):
                     alerta = Alerta(
                         restaurante_id=mesa.restaurante_id,
                         mesa_id=mesa.id,
@@ -448,6 +514,21 @@ class ServicoSalao:
                 f"Mesa {numero} sem atendimento",
                 "Cliente esperando e ninguém da equipe foi até a mesa ainda.",
                 papeis=(Papel.DONO, Papel.GERENTE),
+            )
+        elif alerta.tipo == TipoAlerta.SEM_VISITA:
+            self.push.enviar(
+                restaurante_id,
+                f"Mesa {numero} sem visita",
+                "Faz tempo que ninguém da equipe passa por essa mesa. Veja se precisam de algo.",
+                papeis=(Papel.DONO, Papel.GERENTE),
+            )
+        elif alerta.tipo in CHAMADOS:
+            conta = alerta.tipo == TipoAlerta.PEDIU_CONTA
+            self.push.enviar(
+                restaurante_id,
+                f"Mesa {numero} {'pediu a conta' if conta else 'chamou o garçom'}",
+                "O cliente pediu pelo celular, no QR da mesa.",
+                papeis=(Papel.DONO, Papel.GERENTE, Papel.EQUIPE),
             )
         else:
             self.push.enviar(

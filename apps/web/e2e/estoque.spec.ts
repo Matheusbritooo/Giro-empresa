@@ -141,7 +141,8 @@ test("dono muda a folga em Ajustes e a lista passa a usar", async ({ page }, inf
     .getByRole("link", { name: "Ajustes" })
     .click();
   await expect(page.getByRole("group", { name: "Dias de compra" })).toBeVisible();
-  await expect(page.getByLabel("Ter")).toBeChecked();
+  // A caixa de terça, e não qualquer texto com "ter" (a tela Hoje fica guardada por trás).
+  await expect(page.getByRole("checkbox", { name: "Ter", exact: true })).toBeChecked();
   await page.getByLabel("Folga da lista de compras (%)").fill(folga);
   await page.getByRole("button", { name: "Salvar ajustes" }).click();
   await expect(page.getByText("Ajustes salvos.")).toBeVisible();
