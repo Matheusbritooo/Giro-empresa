@@ -160,10 +160,29 @@ export function contarPorTom(mesas: Mesa[], agoraMs: number, limiteSeg: number) 
   return contagem;
 }
 
+const TEXTO_ALERTA: Record<Alerta["tipo"], string> = {
+  sem_atendimento: "está sem atendimento",
+  mesa_vaga: "vagou e precisa ser limpa",
+  sem_visita: "está há tempo sem ninguém da equipe passar",
+  chamou_garcom: "chamou o garçom pelo celular",
+  pediu_conta: "pediu a conta pelo celular",
+};
+
 export function textoAlerta(alerta: Alerta): string {
-  return alerta.tipo === "sem_atendimento"
-    ? `Mesa ${alerta.mesa_numero} está sem atendimento`
-    : `Mesa ${alerta.mesa_numero} vagou e precisa ser limpa`;
+  return `Mesa ${alerta.mesa_numero} ${TEXTO_ALERTA[alerta.tipo] ?? "precisa de atenção"}`;
+}
+
+/** Alerta resolvido por alguém da equipe ir até a mesa (e não por liberar a mesa). */
+export function pedeAlguemNaMesa(alerta: Alerta): boolean {
+  return alerta.tipo !== "mesa_vaga";
+}
+
+/** "A equipe passou 3 vezes, a última às 21:10." (vazio antes do atendimento) */
+export function textoDasVisitas(mesa: Mesa): string {
+  const vezes = mesa.visitas ?? 0;
+  if (vezes < 1 || !mesa.ultima_visita_em) return "";
+  if (vezes === 1) return `A equipe passou 1 vez, às ${horaCurta(mesa.ultima_visita_em)}.`;
+  return `A equipe passou ${vezes} vezes, a última às ${horaCurta(mesa.ultima_visita_em)}.`;
 }
 
 const SEM_SINAL_MS = 90_000; // 9 fotos perdidas seguidas

@@ -7,7 +7,13 @@ import { useCallback, useState } from "react";
 import { CardapioDoPeriodo } from "@/components/resultados/cardapio-noite";
 import { Copiloto } from "@/components/resultados/copiloto";
 import { ESe } from "@/components/resultados/e-se";
-import { FicouNaMesa, Graficos, MesasQueMaisCustam, Placar } from "@/components/resultados/numeros";
+import {
+  FicouNaMesa,
+  Graficos,
+  MesasQueMaisCustam,
+  NotaDosClientes,
+  Placar,
+} from "@/components/resultados/numeros";
 import { Aviso } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useDados } from "@/lib/dados";
@@ -170,6 +176,10 @@ export default function PaginaResultados() {
               <Graficos resultados={dados} />
               <CardapioDoPeriodo restaurante={restaurante} periodo={periodo} dia={dia} />
               <MesasQueMaisCustam atual={dados.atual} />
+              <NotaDosClientes
+                notas={dados.notas}
+                limiteMin={(sessao?.restaurante?.alerta_atendimento_seg ?? 300) / 60}
+              />
             </>
           )}
           <ESe restaurante={restaurante} dia={dia} />

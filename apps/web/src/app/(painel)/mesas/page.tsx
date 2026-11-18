@@ -1,15 +1,19 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { Aviso, Botao, Campo, Esqueleto, Secao } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useDados } from "@/lib/dados";
 import { useRestauranteAlvo } from "@/lib/restaurante";
+import { comBusca } from "@/lib/resultados";
 import type { Mesa } from "@/lib/tipos";
 
 export default function PaginaMesas() {
   const restaurante = useRestauranteAlvo();
+  const parametros = useSearchParams();
   const [recado, setRecado] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
   const buscar = useCallback(() => api<Mesa[]>("/api/mesas", { restaurante }), [restaurante]);
   const {
@@ -57,7 +61,15 @@ export default function PaginaMesas() {
 
   return (
     <>
-      <h1 className="font-placa text-4xl font-extrabold leading-none">Mesas do salão</h1>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="font-placa text-4xl font-extrabold leading-none">Mesas do salão</h1>
+        <Link
+          href={comBusca("/mesas/qr", parametros, {})}
+          className="inline-flex min-h-11 items-center rounded-lg border border-linha bg-superficie px-4 font-semibold hover:border-tinta-suave"
+        >
+          QR das mesas
+        </Link>
+      </header>
       {recado && <Aviso tipo={recado.tipo}>{recado.texto}</Aviso>}
       <Aviso>{erro}</Aviso>
 

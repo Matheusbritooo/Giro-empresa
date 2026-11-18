@@ -115,7 +115,7 @@ export function FaixaDeConexao({ usuarioId, sufixo }: { usuarioId: number; sufix
   if (ligada && !temFila && !velhos.length && !naoEntraram.length && !enviado) return null;
 
   return (
-    <div className="border-b border-linha bg-superficie" data-testid="faixa-conexao">
+    <div className="border-b border-linha bg-superficie print:hidden" data-testid="faixa-conexao">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-2 text-sm">
         {(!ligada || temFila) && (
           <p role="status" className="flex items-center gap-2 font-semibold">

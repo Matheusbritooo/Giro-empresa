@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 
 import { preco } from "@/lib/pedido";
-import { horaCurta, minutosEntre, situacao, textoDaConta } from "@/lib/salao";
+import { horaCurta, minutosEntre, situacao, textoDasVisitas, textoDaConta } from "@/lib/salao";
 import type { Mesa } from "@/lib/tipos";
 
 import { Botao } from "./ui";
@@ -81,6 +81,11 @@ export function DetalheMesa({
               ) : (
                 <li className="text-tinta-suave">
                   Esperando atendimento há {minutosEntre(mesa.sentou_em, agoraMs)} min
+                </li>
+              )}
+              {mesa.estado === "ocupada" && textoDasVisitas(mesa) && (
+                <li className="text-tinta-suave" data-testid="visitas-da-mesa">
+                  {textoDasVisitas(mesa)}
                 </li>
               )}
               {mesa.saiu_em && (

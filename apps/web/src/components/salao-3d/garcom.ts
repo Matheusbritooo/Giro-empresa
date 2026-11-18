@@ -316,7 +316,8 @@ export function planejarGarcom(
 
   let alerta: { mesaId: number; ms: number } | null = null;
   for (const a of alertas) {
-    if (a.tipo !== "sem_atendimento" || a.resolvido_em !== null) continue;
+    // Quem disse "Vou atender" ou "Vou lá": o garçom do 3D vai até a mesa.
+    if (a.tipo === "mesa_vaga" || a.resolvido_em !== null) continue;
     const ms = quando(a.reconhecido_em);
     if (ms === null || !existe.has(a.mesa_id)) continue;
     if (!alerta || ms > alerta.ms) alerta = { mesaId: a.mesa_id, ms };

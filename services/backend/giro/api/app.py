@@ -42,6 +42,18 @@ from giro.tempo_real import CentralTempoReal
 log = logging.getLogger("giro")
 
 
+class SemRegistroDoQr(logging.Filter):
+    """O registro de acesso do servidor guarda o endereço de rede de cada pedido. A página do
+    QR da mesa é do cliente do restaurante: dela não fica nem o endereço nem a chave da mesa."""
+
+    def filter(self, registro: logging.LogRecord) -> bool:
+        argumentos = registro.args if isinstance(registro.args, tuple) else ()
+        return not any(isinstance(a, str) and a.startswith("/api/publico/") for a in argumentos)
+
+
+logging.getLogger("uvicorn.access").addFilter(SemRegistroDoQr())
+
+
 def criar_app(config: Config | None = None) -> FastAPI:
     config = config or obter_config()
     config.validar_producao()

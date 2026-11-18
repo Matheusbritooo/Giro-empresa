@@ -109,6 +109,21 @@ Base do painel (rápido e firme no salão):
 - **Pedido sem internet**: o Wi-Fi do salão caiu e o garçom continua lançando. O pedido fica guardado no aparelho e sobe sozinho quando a rede volta, uma vez só (o servidor reconhece o reenvio pela chave do lançamento). Uma faixa em toda tela avisa "Sem conexão" e quantos pedidos esperam. Se o servidor recusar (acabou um item), o pedido volta para o garçom montar de novo. Guardado há mais de 10 minutos, pede confirmação antes de ir para a cozinha. Vale com o painel aberto: abrir o painel do zero sem internet ainda não funciona.
 - **Telas que abrem na hora**: cada tela reabre com o que buscou da última vez e atualiza por trás; o salão abre com o último mapa visto. Na primeira vez aparece um esqueleto no formato da tela, não a frase "Carregando...". Quando o canal ao vivo cai e volta, pedido, cardápio e estoque buscam de novo sozinhos.
 
+Pacote 2 (o que só a câmera e o histórico do GIRO conseguem):
+
+- **Mesa esquecida depois do atendimento**: cada vez que a câmera vê alguém da equipe em pé junto da mesa (ou o garçom lança um pedido), conta uma passada. Mesa ocupada há 15 minutos sem ninguém passar vira o alerta "sem visita", com "Vou lá" e aviso no celular do gerente; some quando alguém chega. O detalhe da mesa mostra "A equipe passou 3 vezes, a última às 21:10". O dono muda o tempo em **Ajustes** (zero desliga). Só avisa com a câmera olhando a mesa.
+- **QR na mesa**: em **Mesas > QR das mesas**, o gerente imprime um QR por mesa. O cliente aponta a câmera do celular e, sem baixar nada nem se cadastrar, vê o cardápio de hoje (o que acabou aparece riscado), chama o garçom, pede a conta e dá uma nota de 1 a 5. Os chamados chegam como alerta e aviso no celular da equipe e somem quando alguém chega na mesa. Só funciona com a mesa ocupada, um chamado igual por vez; o gerente troca o QR quando quiser.
+- **Prato do dia pelo estoque**: quando um ingrediente está sobrando (o que tem já cobre a próxima compra inteira), a casa sugere o prato que mais usa ele. Aparece na tela **Hoje**, em primeiro e marcado no pedido do garçom ("Sugestão de hoje") e no QR da mesa.
+- **Nota dos clientes** em **Resultados**: a média das notas do QR, separada entre quem foi atendido no tempo e quem esperou mais. Na demonstração, 4,6 contra 3,9.
+
+![Página do QR da mesa no celular do cliente](docs/telas/qr-cliente.png)
+
+![QR das mesas, prontos para imprimir](docs/telas/qr-mesas.png)
+
+![Alerta de mesa sem visita no celular do gerente](docs/telas/mesa-sem-visita.png)
+
+![Nota dos clientes, separada pela espera](docs/telas/nota-dos-clientes.png)
+
 ![Tela Hoje do dono: o salão agora, a noite e o que pede atenção](docs/telas/hoje.png)
 
 ![Pedido lançado sem internet: fica guardado e sobe quando a rede volta](docs/telas/pedido-sem-internet.png)
@@ -172,6 +187,8 @@ Prefere Postgres, como em produção? `make banco` sobe um no Docker. Depois, an
 15. Como dono, abra **Estoque > Perdas**: o custo pela ficha contra o de verdade, o que escapou na semana (a muçarela lidera, sem registro) e o preço da muçarela que subiu na última compra, com quanto cada prato passou a custar a mais.
 16. Entre como dono: a tela **Hoje** abre sozinha com o que pede atenção. Toque em "Ver as perdas" no aviso do preço da muçarela e mostre que cai direto na aba certa.
 17. No celular do garçom, abra uma mesa, monte um pedido e **desligue o Wi-Fi** antes de lançar. Mostre a faixa "Sem conexão. 1 pedido na fila" e o pedido em "Esperando a rede". Religue o Wi-Fi: o pedido sobe sozinho e aparece na cozinha, uma vez só.
+18. Como gerente, abra **Mesas > QR das mesas**. Aponte a câmera de um celular para o QR de uma mesa ocupada: aparece o cardápio de hoje, com a sugestão da casa. Toque em **Chamar o garçom**: o alerta chega no salão do gerente na hora.
+19. Com o simulador rodando (`--aleatorio`), espere uma mesa esquecida: o alerta "está há tempo sem ninguém da equipe passar" aparece com **Vou lá**. Abra **Resultados > 4 semanas** e mostre a **Nota dos clientes**: quem esperou deu nota menor.
 
 Os cenários disponíveis aparecem com `uv run python -m giro.simulador listar`.
 
@@ -215,7 +232,7 @@ Simulador (demonstração) ─────────────────�
                        banco (histórico)     painel ao vivo (WebSocket)    celular (Web Push)
 ```
 
-A foto nunca chega à API: o serviço de visão analisa e descarta. O que fica gravado são eventos em texto, como "mesa 4 ocupada às 20h41" (LGPD, seção 1.9 do TCM). Para o desenho das mesas existe só uma prévia com as pessoas pixeladas, na memória, por 3 minutos. No aparelho de quem usa o painel fica guardado só o pedido que ainda não subiu por falta de rede (mesa e itens, até subir ou ser descartado); o que as telas buscaram fica na memória e some ao entrar ou sair da conta.
+A foto nunca chega à API: o serviço de visão analisa e descarta. O que fica gravado são eventos em texto, como "mesa 4 ocupada às 20h41" (LGPD, seção 1.9 do TCM). Para o desenho das mesas existe só uma prévia com as pessoas pixeladas, na memória, por 3 minutos. No aparelho de quem usa o painel fica guardado só o pedido que ainda não subiu por falta de rede (mesa e itens, até subir ou ser descartado); o que as telas buscaram fica na memória e some ao entrar ou sair da conta. A página do QR da mesa não pede nada ao cliente e não guarda nada sobre ele: a chave é da mesa, a nota é da visita à mesa, e o registro de acesso da API pula essas rotas (nem o endereço de rede nem a chave da mesa ficam no log do GIRO). O provedor onde o sistema roda pode ter o próprio registro de acesso, como qualquer site.
 
 ## Estrutura
 
@@ -303,6 +320,6 @@ O repositório já vem preparado para o grupo usar o Claude Code:
 | 3. Inteligência (resto) | Previsão da próxima mesa a vagar, relatório semanal por e-mail "quanto a GIRO te devolveu" |
 | Cardápio, etapa 3 (parte 4) | Importar a planilha de vendas do sistema de caixa |
 | Painel, base (resto) | Relatório do mês em PDF e planilha, "esqueci a senha" e histórico de quem fez o quê, primeiros passos guiados, busca de qualquer tela, modo TV na cozinha, abrir o painel sem internet |
-| Painel, pacote tecnológico | Mesa esquecida depois do pedido (a câmera já vê o garçom), QR na mesa (cardápio, chamar garçom, pedir a conta), foto da nota vira compra, prato do dia sugerido pelo estoque, previsão com clima e feriado, fila na porta, Copiloto que avisa sozinho, por voz e no WhatsApp, mesa que se libera sozinha (depende do teste com vídeo real) |
+| Painel, pacote tecnológico (resto) | Foto da nota vira compra, previsão com clima e feriado, fila na porta, Copiloto que avisa sozinho, por voz e no WhatsApp, mesa que se libera sozinha (depende do teste com vídeo real) |
 | 4. Gestão GIRO | Leads com as perguntas de qualificação, assinatura e cobrança (Asaas), painel financeiro |
 | 5. Site | Página de vendas e calculadora de retorno |

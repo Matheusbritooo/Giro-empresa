@@ -393,3 +393,62 @@ export function MesasQueMaisCustam({ atual }: { atual: Indicadores }) {
     </section>
   );
 }
+
+/**
+ * A nota que os clientes deram pelo QR da mesa, separada por quem foi atendido no tempo e
+ * quem esperou mais. É a ponte entre o relógio da câmera e o que o cliente sentiu.
+ */
+export function NotaDosClientes({
+  notas,
+  limiteMin,
+}: {
+  notas: Resultados["notas"];
+  limiteMin: number;
+}) {
+  if (!notas || notas.quantidade === 0) return null;
+  const nota = (valor: number | null) => (valor === null ? "–" : decimal(valor));
+  const diferenca =
+    notas.media_no_tempo !== null && notas.media_esperaram !== null
+      ? notas.media_no_tempo - notas.media_esperaram
+      : null;
+  return (
+    <section aria-labelledby="titulo-notas" className="flex flex-col gap-3">
+      <h2 id="titulo-notas" className="font-placa text-2xl font-bold">
+        Nota dos clientes
+      </h2>
+      <dl className="numeros grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-linha bg-linha sm:grid-cols-3">
+        <div className="flex flex-col gap-0.5 bg-superficie px-4 py-3">
+          <dt className="text-sm font-semibold text-tinta-suave">Nota média</dt>
+          <dd className="font-placa text-3xl font-extrabold">{nota(notas.media)}</dd>
+          <dd className="text-xs text-tinta-suave">
+            {plural(notas.quantidade, "nota", "notas")} pelo QR da mesa, de 1 a 5
+          </dd>
+        </div>
+        <div className="flex flex-col gap-0.5 bg-superficie px-4 py-3">
+          <dt className="text-sm font-semibold text-tinta-suave">Atendidos no tempo</dt>
+          <dd className="font-placa text-3xl font-extrabold">{nota(notas.media_no_tempo)}</dd>
+          <dd className="text-xs text-tinta-suave">
+            {plural(notas.no_tempo, "mesa", "mesas")} com garçom em até {decimal(limiteMin, 0)} min
+          </dd>
+        </div>
+        <div className="flex flex-col gap-0.5 bg-superficie px-4 py-3">
+          <dt className="text-sm font-semibold text-tinta-suave">Esperaram mais</dt>
+          <dd
+            className={`font-placa text-3xl font-extrabold ${diferenca !== null && diferenca >= 0.5 ? "text-atrasada" : ""}`}
+          >
+            {nota(notas.media_esperaram)}
+          </dd>
+          <dd className="text-xs text-tinta-suave">
+            {plural(notas.esperaram, "mesa", "mesas")} esperando mais que isso
+          </dd>
+        </div>
+      </dl>
+      {diferenca !== null && diferenca >= 0.5 && (
+        <p className="max-w-prose">
+          Quem esperou pelo garçom deu {decimal(diferenca)} ponto{diferenca >= 1.5 ? "s" : ""} a
+          menos. Atender no tempo é o que mais pesa na nota.
+        </p>
+      )}
+    </section>
+  );
+}

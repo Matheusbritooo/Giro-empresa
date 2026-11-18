@@ -189,3 +189,25 @@ def test_cliente_avalia_a_visita(app, como, cardapio, qr):  # noqa: F811
     with app.state.sessoes() as db:
         [visita] = db.scalars(select(Ocupacao)).all()
         assert visita.nota == 4 and visita.nota_em is not None
+
+
+def test_registro_de_acesso_pula_a_pagina_do_qr():
+    import logging
+
+    from giro.api.app import SemRegistroDoQr
+
+    def registro(caminho):
+        # O mesmo formato do uvicorn: (endereço, método, caminho, versão, status).
+        return logging.LogRecord(
+            "uvicorn.access",
+            logging.INFO,
+            "",
+            0,
+            '%s - "%s %s HTTP/%s" %d',
+            ("203.0.113.9:5555", "POST", caminho, "1.1", 200),
+            None,
+        )
+
+    filtro = SemRegistroDoQr()
+    assert filtro.filter(registro("/api/publico/mesas/abcdefghijklmnopqrstuv/chamar")) is False
+    assert filtro.filter(registro("/api/salao")) is True

@@ -22,7 +22,8 @@ export function pendenciasAoVivo(salao: Salao, agoraMs: number): Pendencia[] {
     tipo: "alerta",
     texto: `${textoAlerta(alerta)}, há ${tempoDecorrido(alerta.criado_em, agoraMs)}.`,
     href: "/salao",
-    urgente: alerta.tipo === "sem_atendimento",
+    // Mesa para limpar não é urgente; cliente esperando, chamando ou esquecido é.
+    urgente: alerta.tipo !== "mesa_vaga",
   }));
   const cameras = camerasSemSinal(salao.cameras, agoraMs).map((camera) => ({
     tipo: "camera",
@@ -47,6 +48,7 @@ const IR_PARA: Record<string, string> = {
   preco: "Ver as perdas",
   perdas: "Ver as perdas",
   acabou: "Abrir o cardápio",
+  prato_do_dia: "Abrir o cardápio",
 };
 
 /** O texto do link de cada pendência: diz para onde leva. */
