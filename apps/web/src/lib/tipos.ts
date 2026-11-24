@@ -615,3 +615,53 @@ export interface MesaPublica {
     }[];
   }[];
 }
+
+// Relatório do mês (para imprimir em PDF ou baixar como planilha)
+
+export interface NoiteDoMes {
+  dia: string;
+  mesas_atendidas: number;
+  pessoas: number;
+  desistencias: number;
+  vendeu_centavos: number;
+  ficou_na_mesa_centavos: number;
+  espera_media_seg: number | null;
+  parada_media_seg: number | null;
+  nota_media: number | null;
+}
+
+export interface RelatorioDoMes {
+  restaurante: string;
+  mes: string; // AAAA-MM-01
+  primeira_noite: string;
+  ultima_noite: string;
+  completo: boolean;
+  // As noites do mês anterior com que os "_antes" se comparam; vazio = sem comparação.
+  comparado_de: string | null;
+  comparado_ate: string | null;
+  vendeu_centavos: number;
+  vendeu_antes_centavos: number;
+  mesas_atendidas: number;
+  mesas_atendidas_antes: number;
+  pessoas: number;
+  desistencias: number;
+  giro_medio: number;
+  ticket_medio_centavos: number;
+  ticket_real: boolean;
+  espera_media_seg: number | null;
+  parada_media_seg: number | null;
+  ficou_na_mesa_centavos: number;
+  ficou_na_mesa_antes_centavos: number;
+  notas: NotasDosClientes;
+  semanas: { de: string; ate: string; mesas_atendidas: number; vendeu_centavos: number }[];
+  pratos: { nome: string; quantidade: number; receita_centavos: number }[];
+  noites: NoiteDoMes[];
+  /** Só para quem vê custo (o dono). */
+  custo: {
+    custo_pela_ficha_centavos: number;
+    escapou_centavos: number;
+    compras_centavos: number;
+    itens_sem_custo: string[];
+    por_motivo: { motivo: string; valor_centavos: number | null }[];
+  } | null;
+}

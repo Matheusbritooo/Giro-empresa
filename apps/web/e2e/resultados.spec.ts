@@ -84,3 +84,54 @@ test("garçom não abre os resultados", async ({ page }) => {
     page.getByText("Os resultados do salão ficam com o dono e o gerente."),
   ).toBeVisible();
 });
+
+test("dono tira o relatório do mês em PDF e em planilha", async ({ page }) => {
+  await entrarNoSalao(page, "marcos@cantina.demo");
+  await page.goto("/resultados?periodo=semana");
+  await page.getByRole("link", { name: "Relatório do mês" }).click();
+  await expect(page).toHaveURL(/\/resultados\/relatorio/);
+  const folha = page.getByTestId("relatorio-do-mes");
+  await expect(folha.getByRole("term").filter({ hasText: "Vendeu" })).toBeVisible();
+  await expect(folha.getByRole("heading", { name: "Semana a semana" })).toBeVisible();
+  await expect(folha.getByRole("heading", { name: "Mais vendidos" })).toBeVisible();
+  await expect(folha.getByRole("heading", { name: "Custo (só o dono vê)" })).toBeVisible();
+
+  // A planilha: uma linha por noite, separada por ponto e vírgula (o Excel em português).
+  const [baixou] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Baixar planilha" }).click(),
+  ]);
+  expect(baixou.suggestedFilename()).toMatch(/^giro-cantina-do-marcos-\d{4}-\d{2}\.csv$/);
+  const caminho = await baixou.path();
+  const { readFile } = await import("node:fs/promises");
+  const texto = await readFile(caminho, "utf8");
+  expect(texto.startsWith("﻿Noite;Dia da semana;Mesas atendidas")).toBeTruthy();
+  expect(texto).toContain("Total do mês");
+
+  // O PDF sai da impressão do navegador: só a folha, sem menu nem botões.
+  await page.evaluate(() => {
+    window.print = () => document.body.setAttribute("data-imprimiu", "sim");
+  });
+  await page.getByRole("button", { name: "Salvar em PDF" }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-imprimiu", "sim");
+  await page.emulateMedia({ media: "print" });
+  await expect(page.getByRole("navigation", { name: "Seções" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Baixar planilha" })).toBeHidden();
+  await expect(folha).toBeVisible();
+  await page.emulateMedia({ media: "screen" });
+
+  // O mês anterior também sai, escolhendo na lista.
+  const mes = page.getByLabel("Mês");
+  const anterior = await mes.locator("option").nth(1).getAttribute("value");
+  await mes.selectOption(anterior ?? "");
+  await expect(page).toHaveURL(new RegExp(`mes=${anterior}`));
+  await expect(folha).toBeVisible();
+});
+
+test("o gerente tira o relatório sem a parte de custo", async ({ page }) => {
+  await entrarNoSalao(page, "gerente@cantina.demo");
+  await page.goto("/resultados/relatorio");
+  const folha = page.getByTestId("relatorio-do-mes");
+  await expect(folha.getByRole("heading", { name: "Mais vendidos" })).toBeVisible();
+  await expect(folha.getByRole("heading", { name: "Custo (só o dono vê)" })).toHaveCount(0);
+});

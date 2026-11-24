@@ -79,6 +79,36 @@ test("garçom lança o pedido, a cozinha marca pronto e o salão mostra o total"
   await expect(detalhe.getByRole("button", { name: "Pediu a conta" })).toBeVisible();
 });
 
+test("a cozinha põe a fila na TV, em letra grande, e marca pronto de lá", async ({
+  page,
+}, info) => {
+  // As lasanhas do teste acima ainda estão na cozinha.
+  const { garcom: mesa } = MESAS[info.project.name as keyof typeof MESAS];
+  await entrar(page, "equipe@cantina.demo");
+  await expect(page).toHaveURL(/\/salao$/);
+  await page
+    .getByRole("navigation", { name: "Seções" })
+    .getByRole("link", { name: "Cozinha" })
+    .click();
+  await page.getByRole("button", { name: "Modo TV" }).click();
+  await expect(page).toHaveURL(/tv=1/);
+  const tv = page.getByTestId("modo-tv");
+  await expect(tv).toBeVisible();
+  await expect(tv.getByRole("status").first()).toContainText("na fila");
+  await expect(tv.getByTestId(`tv-mesa-${mesa}`).last()).toContainText("Lasanha à bolonhesa");
+  const pronto = tv.getByRole("button", { name: `Lasanha à bolonhesa da mesa ${mesa} pronto` });
+  const antes = await pronto.count();
+  await pronto.first().click();
+  await expect(pronto).toHaveCount(antes - 1);
+
+  // Abrir de novo pelo endereço volta direto na TV (a TV da cozinha fica com ele salvo).
+  await page.reload();
+  await expect(tv).toBeVisible();
+  await tv.getByRole("button", { name: "Sair do modo TV" }).click();
+  await expect(page).not.toHaveURL(/tv=1/);
+  await expect(page.getByRole("heading", { name: "Cozinha" })).toBeVisible();
+});
+
 test("gerente cancela item com motivo e marca o que acabou", async ({ page }, info) => {
   const { gerente: mesa } = MESAS[info.project.name as keyof typeof MESAS];
   await entrar(page, "gerente@cantina.demo");
