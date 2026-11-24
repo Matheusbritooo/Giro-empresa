@@ -116,6 +116,18 @@ Pacote 2 (o que só a câmera e o histórico do GIRO conseguem):
 - **Prato do dia pelo estoque**: quando um ingrediente está sobrando (o que tem já cobre a próxima compra inteira), a casa sugere o prato que mais usa ele. Aparece na tela **Hoje**, em primeiro e marcado no pedido do garçom ("Sugestão de hoje") e no QR da mesa.
 - **Nota dos clientes** em **Resultados**: a média das notas do QR, separada entre quem foi atendido no tempo e quem esperou mais. Na demonstração, 4,6 contra 3,9.
 
+Pacote 3 (o dia a dia do dono e da cozinha):
+
+- **Relatório do mês** em **Resultados > Relatório do mês** (dono e gerente): o mês do calendário numa folha só, para mandar ao contador ou ao sócio. Vendeu, mesas atendidas, gasto por pessoa, dinheiro que ficou na mesa e a nota dos clientes, cada um comparado com o mês anterior; semana a semana, os 10 mais vendidos e a noite a noite. O dono vê também o custo pela ficha, o custo de verdade, o que escapou, as compras do mês e as perdas por motivo. **Salvar em PDF** usa a impressão do navegador (só a folha sai, sem menu); **Baixar planilha** gera um arquivo que abre no Excel e no Google Planilhas, uma linha por noite. O valor oficial de venda continua sendo o do caixa.
+- **Modo TV na cozinha**: na tela da cozinha, **Modo TV** põe a fila em tela cheia, com letra grande para ler de longe, o relógio, quantos itens faltam e o botão "Pronto" grande. Pedido novo toca um aviso. A tela não apaga sozinha (quando o aparelho deixa). O endereço com `?tv=1` abre direto no modo TV: é só deixar salvo na TV da cozinha.
+- **Busca de qualquer tela**: o botão **Buscar** no menu (ou a tecla `/`, ou Ctrl+K) acha mesa pelo número ("7" ou "mesa 7" abre o pedido dela), prato, ingrediente (com quanto tem) e as próprias telas, também pelo assunto ("contador" acha o relatório, "cmv" acha as perdas). Sem acento e sem diferença de maiúscula. Cada perfil só acha as telas que abre.
+
+![Relatório do mês da Cantina, pronto para salvar em PDF](docs/telas/relatorio-do-mes.png)
+
+![Cozinha no modo TV](docs/telas/cozinha-tv.png)
+
+![Busca de qualquer tela achando a muçarela](docs/telas/busca.png)
+
 ![Página do QR da mesa no celular do cliente](docs/telas/qr-cliente.png)
 
 ![QR das mesas, prontos para imprimir](docs/telas/qr-mesas.png)
@@ -319,7 +331,7 @@ O repositório já vem preparado para o grupo usar o Claude Code:
 | 2b. Calibração em campo | Medir a visão com vídeo de um restaurante parceiro; receber a foto do gravador por FTPS para dispensar o conector |
 | 3. Inteligência (resto) | Previsão da próxima mesa a vagar, relatório semanal por e-mail "quanto a GIRO te devolveu" |
 | Cardápio, etapa 3 (parte 4) | Importar a planilha de vendas do sistema de caixa |
-| Painel, base (resto) | Relatório do mês em PDF e planilha, "esqueci a senha" e histórico de quem fez o quê, primeiros passos guiados, busca de qualquer tela, modo TV na cozinha, abrir o painel sem internet |
+| Painel, base (resto) | "Esqueci a senha" e histórico de quem fez o quê, primeiros passos guiados, abrir o painel sem internet |
 | Painel, pacote tecnológico (resto) | Foto da nota vira compra, previsão com clima e feriado, fila na porta, Copiloto que avisa sozinho, por voz e no WhatsApp, mesa que se libera sozinha (depende do teste com vídeo real) |
 | 4. Gestão GIRO | Leads com as perguntas de qualificação, assinatura e cobrança (Asaas), painel financeiro |
 | 5. Site | Página de vendas e calculadora de retorno |

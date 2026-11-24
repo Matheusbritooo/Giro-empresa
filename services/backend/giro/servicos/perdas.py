@@ -248,16 +248,26 @@ def _reais(centavos: int) -> str:
 
 
 def relatorio_de_perdas(
-    db: Session, restaurante: Restaurante, periodo: Periodo, agora: datetime
+    db: Session,
+    restaurante: Restaurante,
+    periodo: Periodo,
+    agora: datetime,
+    janela: tuple[datetime, datetime, int] | None = None,
 ) -> RelatorioDePerdas:
+    """`janela` (início, fim, dias) troca o período por um intervalo qualquer, como um mês do
+    calendário no relatório mensal. Sem ela, os 7 ou 28 dias até hoje."""
     hoje = noite_de(agora)
     inicio, fim = intervalo(periodo, hoje)
+    dias = NOITES[periodo]
+    if janela is not None:
+        inicio, fim, dias = janela
+        hoje = min(hoje, noite_de(fim - timedelta(seconds=1)))
     fim = min(fim, agora)
     # O que escapou de um ingrediente continua na conta depois que ele sai de uso: tirar o
     # ingrediente do estoque não pode apagar a perda do relatório do dono.
     todos = _insumos(db, restaurante.id, fora_de_uso=True)
     insumos = [i for i in todos if i.ativo]
-    somas = _somas(db, restaurante.id, inicio, fim, NOITES[periodo])
+    somas = _somas(db, restaurante.id, inicio, fim, dias)
 
     # Vendas do período: quanto entrou e quanto os pratos custam (pela ficha ou o digitado).
     vendeu = custo_ficha = 0

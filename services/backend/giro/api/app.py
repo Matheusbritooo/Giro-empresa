@@ -25,6 +25,7 @@ from giro.api.rotas import (
     pedidos,
     publico,
     push,
+    relatorio,
     resultados,
     salao,
 )
@@ -124,6 +125,7 @@ def criar_app(config: Config | None = None) -> FastAPI:
         estoque,
         hoje,
         publico,
+        relatorio,
     ):
         app.include_router(modulo.router)
 

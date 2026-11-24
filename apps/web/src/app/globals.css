@@ -119,6 +119,29 @@ body {
   transform-origin: center;
 }
 
+/* Impressão (relatório do mês, QR das mesas): sempre a paleta clara, em A4. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  :root {
+    --fundo: #ffffff;
+    --superficie: #ffffff;
+    --tinta: #1c2321;
+    --tinta-suave: #5d6863;
+    --linha: #d5dad4;
+    --livre: #8a958f;
+    --aguardando: #c98f12;
+    --atrasada: #d2462e;
+    --ocupada: #2f5da8;
+    --limpar: #7a3e8e;
+    --sobre-cor: #ffffff;
+    --sobre-aguardando: #1c2321;
+    color-scheme: light;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chamando,
   .giro-abrir {

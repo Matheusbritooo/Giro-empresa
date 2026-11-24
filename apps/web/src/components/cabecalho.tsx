@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { podeGerirEquipe, podeGerirMesas, useSessao } from "@/lib/sessao";
 import type { Sessao } from "@/lib/tipos";
 
+import { Busca } from "./busca";
 import { Marca } from "./marca";
 
 export function Cabecalho({
@@ -67,6 +68,7 @@ export function Cabecalho({
           })}
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
+          <Busca papel={papel} restaurante={restaurante} />
           <span className="hidden text-tinta-suave sm:inline">{sessao.usuario.nome}</span>
           <button
             type="button"

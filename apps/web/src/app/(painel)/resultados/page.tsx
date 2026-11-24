@@ -85,7 +85,15 @@ export default function PaginaResultados() {
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="font-placa text-4xl font-extrabold leading-none">Resultados</h1>
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 className="font-placa text-4xl font-extrabold leading-none">Resultados</h1>
+          <Link
+            href={comBusca("/resultados/relatorio", busca({}), {})}
+            className="font-semibold underline underline-offset-2"
+          >
+            Relatório do mês
+          </Link>
+        </div>
         <div
           role="group"
           aria-label="Período"
