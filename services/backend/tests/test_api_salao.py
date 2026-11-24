@@ -73,7 +73,12 @@ def test_ocupacao_fica_gravada_para_os_indicadores(app, camera, inicio):
 
     mandar(camera, inicio, 0, 3, [{"mesa": 1, "sentados": 3}])
     mandar(camera, inicio, 3, 3.1, [{"mesa": 1, "sentados": 4, "em_pe": 1}])
-    mandar(camera, inicio, 3.1, 40, [{"mesa": 1, "sentados": 4}])
+    # O garçom volta à mesa aos 15 e aos 28 min (prato e conta): ninguém esqueceu dela.
+    mandar(camera, inicio, 3.1, 15, [{"mesa": 1, "sentados": 4}])
+    mandar(camera, inicio, 15, 15.1, [{"mesa": 1, "sentados": 4, "em_pe": 1}])
+    mandar(camera, inicio, 15.1, 28, [{"mesa": 1, "sentados": 4}])
+    mandar(camera, inicio, 28, 28.1, [{"mesa": 1, "sentados": 4, "em_pe": 1}])
+    mandar(camera, inicio, 28.1, 40, [{"mesa": 1, "sentados": 4}])
     mandar(camera, inicio, 40, 42, [{"mesa": 1, "sentados": 0}])
     mandar(camera, inicio, 61, 62, [{"mesa": 1, "sentados": 2}])  # nova turma senta na mesa suja
 
@@ -84,11 +89,14 @@ def test_ocupacao_fica_gravada_para_os_indicadores(app, camera, inicio):
         assert primeira.saiu_em == inicio + timedelta(minutes=40)
         assert primeira.liberada_em == inicio + timedelta(minutes=61)  # 21 min parada suja
         assert primeira.pessoas == 4
+        assert (primeira.visitas, primeira.ultima_visita_em) == (3, inicio + timedelta(minutes=28))
         assert segunda.liberada_em is None
         tipos = [e.tipo for e in db.scalars(select(EventoMesa).order_by(EventoMesa.id))]
     assert tipos == [
         "sentou",
         "atendida",
+        "visita",
+        "visita",
         "saiu",
         "alerta_mesa_vaga",
         "liberada",

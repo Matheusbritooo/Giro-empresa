@@ -123,3 +123,15 @@ def test_textos_para_o_fornecedor():
     assert texto_compra("ml", 1, 30_000, "barril de 30 L") == "1 barril de 30 L"
     assert texto_compra("g", 7, 1000, "kg") == "7 kg"
     assert texto_compra("un", 2, 12, None) == "24 unidades"
+
+
+def test_ingrediente_sobrando_cobre_a_proxima_compra_inteira():
+    from giro.dominio.compras import sobrando
+
+    # Tem 8 kg; até a compra saem 3 kg (sobram 5 kg) e a compra cobriria 4 kg: sobrando.
+    assert sobrando(tem=8000, sobra=5000, precisa=4000)
+    assert sobrando(tem=8000, sobra=4000, precisa=4000)  # cobre na conta exata
+    assert not sobrando(tem=8000, sobra=3999, precisa=4000)
+    # Ingrediente que nenhum prato previsto usa, ou que já está zerado, não vira sugestão.
+    assert not sobrando(tem=8000, sobra=8000, precisa=0)
+    assert not sobrando(tem=0, sobra=0, precisa=0)

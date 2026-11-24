@@ -26,10 +26,18 @@ from giro.dominio.compras import (
     quando_acaba,
     saidas_previstas,
     situacao,
+    sobrando,
 )
 from giro.dominio.estoque import custo_de
 from giro.dominio.indicadores import intervalo_da_noite, noite_de
-from giro.modelos import FichaTecnica, Insumo, ItemCardapio, ItemPedido, Restaurante
+from giro.modelos import (
+    CategoriaCardapio,
+    FichaTecnica,
+    Insumo,
+    ItemCardapio,
+    ItemPedido,
+    Restaurante,
+)
 
 
 @dataclass
@@ -194,3 +202,54 @@ def plano_de_compras(
             for item_id in sorted(fichas, key=lambda i: nomes[i])
         ],
     )
+
+
+@dataclass
+class PratoDoDia:
+    item_id: int
+    nome: str
+    insumo: str  # o ingrediente que está sobrando
+    compra: date  # a próxima compra, que ele já cobre sozinho
+
+
+SUGESTOES_DO_DIA = 2
+
+
+def pratos_do_dia(db: Session, plano: PlanoDeCompras) -> list[PratoDoDia]:
+    """Os pratos para a equipe oferecer hoje: os que mais usam um ingrediente sobrando (o que
+    tem cobre a próxima compra inteira sem comprar nada). Bebida não entra: é sugestão de
+    prato. Só pratos ativos e com "tem hoje"."""
+    sobrando_ids = {
+        i.insumo.id: i.insumo.nome
+        for i in plano.itens
+        if sobrando(i.insumo.saldo, i.linha.sobra, i.linha.precisa)
+    }
+    if not sobrando_ids:
+        return []
+    linhas = db.execute(
+        select(
+            ItemCardapio.id,
+            ItemCardapio.nome,
+            ItemCardapio.preco_centavos,
+            FichaTecnica.insumo_id,
+            FichaTecnica.quantidade,
+        )
+        .join(FichaTecnica, FichaTecnica.item_id == ItemCardapio.id)
+        .join(CategoriaCardapio, ItemCardapio.categoria_id == CategoriaCardapio.id)
+        .where(
+            FichaTecnica.insumo_id.in_(list(sobrando_ids)),
+            ItemCardapio.ativo.is_(True),
+            ItemCardapio.disponivel.is_(True),
+            CategoriaCardapio.bebida.is_(False),
+        )
+    ).all()
+    # O prato que leva mais do ingrediente por porção é o que mais ajuda a girar o estoque.
+    linhas = sorted(linhas, key=lambda x: (-x.quantidade, -x.preco_centavos, x.nome))
+    sugestoes: list[PratoDoDia] = []
+    for item_id, nome, _, insumo_id, _ in linhas:
+        if any(s.item_id == item_id or s.insumo == sobrando_ids[insumo_id] for s in sugestoes):
+            continue  # um prato por ingrediente, e o mesmo prato uma vez só
+        sugestoes.append(PratoDoDia(item_id, nome, sobrando_ids[insumo_id], plano.compra))
+        if len(sugestoes) == SUGESTOES_DO_DIA:
+            break
+    return sugestoes

@@ -177,3 +177,18 @@ def test_admin_giro_escolhe_o_restaurante(como, historico):
         "/api/resultados", params={"restaurante_id": cantina_id, "dia": NOITE.isoformat()}
     )
     assert r.json()["atual"]["pessoas_atendidas"] == 2
+
+
+def test_notas_dos_clientes_separadas_pela_espera():
+    from giro.dominio.indicadores import notas_dos_clientes
+
+    # Limite de 5 min: três atendidos no tempo (5, 5, 4), dois que esperaram (2, 3) e um sem
+    # hora de atendimento (conta na média geral, fica fora da comparação).
+    notas = notas_dos_clientes(
+        [(5, 120), (5, 300), (4, 60), (2, 480), (3, 700), (4, None)], limite_seg=300
+    )
+    assert (notas.quantidade, notas.media) == (6, 23 / 6)
+    assert (notas.no_tempo, notas.media_no_tempo) == (3, 14 / 3)
+    assert (notas.esperaram, notas.media_esperaram) == (2, 2.5)
+    vazio = notas_dos_clientes([], limite_seg=300)
+    assert (vazio.quantidade, vazio.media, vazio.media_esperaram) == (0, None, None)

@@ -1,17 +1,28 @@
 descricao: >
-  O caso ideal. Casal senta na mesa 1, o garçom chega em 2 minutos, eles jantam
-  e vão embora. A equipe libera a mesa 6 minutos depois. Nenhum alerta de atendimento.
+  O caso ideal. Casal senta na mesa 1, o garçom chega em 2 minutos e volta três vezes
+  durante o jantar (traz os pratos, passa para ver se está tudo bem, traz a conta). Eles
+  vão embora e a equipe libera a mesa 6 minutos depois. Nenhum alerta de atendimento nem
+  de mesa sem visita.
 
 linha_do_tempo:
   - {em: "0:00", mesa: 1, sentados: 2}
   - {em: "2:00", mesa: 1, em_pe: 1}
   - {em: "2:40", mesa: 1, em_pe: 0}
+  - {em: "12:00", mesa: 1, em_pe: 1}
+  - {em: "12:30", mesa: 1, em_pe: 0}
+  - {em: "25:00", mesa: 1, em_pe: 1}
+  - {em: "25:30", mesa: 1, em_pe: 0}
+  - {em: "38:00", mesa: 1, em_pe: 1}
+  - {em: "38:30", mesa: 1, em_pe: 0}
   - {em: "45:00", mesa: 1, sentados: 0}
   - {em: "52:00", mesa: 1, acao: liberar}
 
 esperado:
   - {em: "0:00", mesa: 1, tipo: sentou}
   - {em: "2:00", mesa: 1, tipo: atendida}
+  - {em: "12:00", mesa: 1, tipo: visita}
+  - {em: "25:00", mesa: 1, tipo: visita}
+  - {em: "38:00", mesa: 1, tipo: visita}
   - {em: "45:00", mesa: 1, tipo: saiu}
   - {em: "46:00", mesa: 1, tipo: alerta_mesa_vaga}
   - {em: "52:00", mesa: 1, tipo: liberada}

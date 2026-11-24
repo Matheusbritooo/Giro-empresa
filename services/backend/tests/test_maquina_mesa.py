@@ -158,9 +158,11 @@ def test_pedido_lancado_conta_como_atendimento(maquina):
     assert tipos(maquina.registrar_pedido(em(2))) == [TipoEvento.ATENDIDA]
     assert maquina.estado == Estado.OCUPADA
     assert maquina.estado_desde == em(2)
-    # Atendida não alerta mais, e um segundo pedido não muda nada.
+    # Atendida não alerta mais. Um segundo pedido não atende de novo: conta só como uma
+    # passada da equipe pela mesa (é o que zera o relógio da mesa sem visita).
     assert tipos(alimentar(maquina, 1, 8, sentados=2)) == []
-    assert maquina.registrar_pedido(em(9)) == []
+    assert tipos(maquina.registrar_pedido(em(9))) == [TipoEvento.VISITA]
+    assert (maquina.estado, maquina.estado_desde, maquina.visitas) == (Estado.OCUPADA, em(2), 2)
 
 
 def test_pedido_em_mesa_livre_abre_a_visita_ja_atendida(maquina):
@@ -190,3 +192,85 @@ def test_pedido_em_mesa_suja_fecha_a_visita_anterior(maquina):
     assert maquina.estado == Estado.PARA_LIMPAR
     eventos = maquina.registrar_pedido(em(40))
     assert tipos(eventos) == [TipoEvento.LIBERADA, TipoEvento.SENTOU, TipoEvento.ATENDIDA]
+
+
+# Mesa esquecida depois do atendimento: passadas da equipe e alerta de mesa sem visita.
+
+
+def atendida(maquina: MaquinaMesa) -> None:
+    """Casal senta às 0:00 e o garçom chega às 2:00 (fica 30s na mesa)."""
+    alimentar(maquina, 0, 2, 2)
+    alimentar(maquina, 2, 2.5, 2, em_pe=1)
+    assert maquina.estado == Estado.OCUPADA and maquina.visitas == 1
+
+
+def test_fotos_seguidas_com_o_garcom_sao_uma_passada_so(maquina):
+    atendida(maquina)
+    # Volta aos 10:00 e fica 40s: quatro fotos, uma passada.
+    eventos = alimentar(maquina, 2.5, 10, 2) + alimentar(maquina, 10, 10 + 40 / 60, 2, em_pe=1)
+    assert tipos(eventos) == [TipoEvento.VISITA]
+    assert (maquina.visitas, maquina.ultima_visita) == (2, em(10) + timedelta(seconds=30))
+    # Sai e volta logo (menos de 1 min depois): ainda a mesma passada.
+    eventos = alimentar(maquina, 10 + 40 / 60, 11, 2) + alimentar(maquina, 11, 11.2, 2, em_pe=1)
+    assert tipos(eventos) == [] and maquina.visitas == 2
+
+
+def test_mesa_sem_visita_avisa_aos_15_minutos_e_some_na_passada(maquina):
+    atendida(maquina)
+    # A última foto com o garçom foi às 2:20: o alerta sai 15 min depois, uma vez só.
+    eventos = alimentar(maquina, 2.5, 25, 2)
+    assert tipos(eventos) == [TipoEvento.ALERTA_SEM_VISITA]
+    assert eventos[0].em == em(17) + timedelta(seconds=20)
+    # O garçom aparece: a passada sai como evento e desfaz o alerta.
+    eventos = alimentar(maquina, 25, 25.5, 2, em_pe=1)
+    assert tipos(eventos) == [TipoEvento.VISITA]
+    assert not maquina.alertou_sem_visita
+    # Mais 15 min sem ninguém: avisa de novo.
+    assert tipos(alimentar(maquina, 25.5, 41, 2)) == [TipoEvento.ALERTA_SEM_VISITA]
+
+
+def test_pedido_lancado_conta_como_passada(maquina):
+    atendida(maquina)
+    alimentar(maquina, 2.5, 12, 2)
+    assert tipos(maquina.registrar_pedido(em(12))) == [TipoEvento.VISITA]
+    assert maquina.visitas == 2
+    # 15 min contados a partir do pedido.
+    assert tipos(alimentar(maquina, 12, 26.9, 2)) == []
+    assert tipos(alimentar(maquina, 26.9, 27.2, 2)) == [TipoEvento.ALERTA_SEM_VISITA]
+
+
+def test_sem_camera_olhando_nao_avisa_mesa_sem_visita(maquina):
+    # Mesa aberta só pelo pedido, sem nenhuma foto: não há como saber se alguém passou.
+    maquina.registrar_pedido(em(0))
+    assert maquina.verificar_tempo(em(40)) == []
+    # Com câmera, mas a câmera parou de mandar foto: também não avisa.
+    maquina2 = MaquinaMesa(regras=Regras())
+    atendida(maquina2)
+    assert maquina2.verificar_tempo(em(30)) == []
+
+
+def test_mesa_esvaziando_ou_aviso_desligado_nao_avisa():
+    # Clientes saindo: a câmera vê a mesa vazia, não é mesa esquecida.
+    maquina = MaquinaMesa(regras=Regras())
+    atendida(maquina)
+    alimentar(maquina, 2.5, 16.9, 2)
+    assert tipos(alimentar(maquina, 16.9, 17.6, 0)) == []
+    # O dono desligou o aviso (zero em Ajustes).
+    desligado = MaquinaMesa(regras=Regras(alerta_sem_visita=None))
+    atendida(desligado)
+    assert tipos(alimentar(desligado, 2.5, 40, 2)) == []
+
+
+def test_passadas_sobrevivem_ida_e_volta_pelo_banco_e_zeram_na_saida(maquina):
+    atendida(maquina)
+    alimentar(maquina, 2.5, 18, 2)
+    assert maquina.alertou_sem_visita
+    copia = MaquinaMesa.de_dict(Regras(), maquina.para_dict())
+    assert (copia.visitas, copia.ultima_visita, copia.alertou_sem_visita) == (
+        1,
+        maquina.ultima_visita,
+        True,
+    )
+    alimentar(maquina, 18, 20, 0)  # foram embora
+    assert maquina.estado == Estado.PARA_LIMPAR
+    assert (maquina.visitas, maquina.ultima_visita, maquina.alertou_sem_visita) == (0, None, False)

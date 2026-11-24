@@ -38,7 +38,7 @@ export function Cabecalho({
   ].filter(Boolean) as { href: string; texto: string; sufixo: string }[];
 
   return (
-    <header className="border-b border-linha bg-superficie">
+    <header className="border-b border-linha bg-superficie print:hidden">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
         <div className="flex items-baseline gap-3">
           <Marca tamanho={26} />

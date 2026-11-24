@@ -23,12 +23,14 @@ from giro.api.rotas import (
     ingest,
     mesas,
     pedidos,
+    publico,
     push,
     resultados,
     salao,
 )
 from giro.api.rotas.auth import LimiteTentativas
 from giro.api.rotas.copiloto import LimitePerguntas
+from giro.api.rotas.publico import LimiteChamados
 from giro.banco import agora, criar_engine, criar_sessoes
 from giro.config import Config, obter_config
 from giro.push import EnviadorPush
@@ -38,6 +40,18 @@ from giro.servicos.turno import verificar_avisos
 from giro.tempo_real import CentralTempoReal
 
 log = logging.getLogger("giro")
+
+
+class SemRegistroDoQr(logging.Filter):
+    """O registro de acesso do servidor guarda o endereço de rede de cada pedido. A página do
+    QR da mesa é do cliente do restaurante: dela não fica nem o endereço nem a chave da mesa."""
+
+    def filter(self, registro: logging.LogRecord) -> bool:
+        argumentos = registro.args if isinstance(registro.args, tuple) else ()
+        return not any(isinstance(a, str) and a.startswith("/api/publico/") for a in argumentos)
+
+
+logging.getLogger("uvicorn.access").addFilter(SemRegistroDoQr())
 
 
 def criar_app(config: Config | None = None) -> FastAPI:
@@ -84,6 +98,7 @@ def criar_app(config: Config | None = None) -> FastAPI:
     app.state.limite_login = LimiteTentativas()
     app.state.copiloto = Copiloto(config)
     app.state.limite_copiloto = LimitePerguntas()
+    app.state.limite_chamados = LimiteChamados()
     app.state.visao = ClienteVisao(config)
 
     app.add_middleware(
@@ -108,6 +123,7 @@ def criar_app(config: Config | None = None) -> FastAPI:
         pedidos,
         estoque,
         hoje,
+        publico,
     ):
         app.include_router(modulo.router)
 

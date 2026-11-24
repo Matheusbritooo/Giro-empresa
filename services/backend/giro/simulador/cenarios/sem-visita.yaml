@@ -1,0 +1,24 @@
+descricao: >
+  A mesa esquecida depois do pedido. O casal da mesa 5 é atendido aos 2 minutos e depois
+  ninguém mais passa por lá. Quinze minutos depois da última passada (17:30) sai o alerta
+  de mesa sem visita. O garçom aparece aos 20:00 e o alerta some; ele volta aos 30:00 e
+  os clientes vão embora aos 40:00, sem novo alerta.
+
+linha_do_tempo:
+  - {em: "0:00", mesa: 5, sentados: 2}
+  - {em: "2:00", mesa: 5, em_pe: 1}
+  - {em: "2:40", mesa: 5, em_pe: 0}
+  - {em: "20:00", mesa: 5, em_pe: 1}
+  - {em: "20:30", mesa: 5, em_pe: 0}
+  - {em: "30:00", mesa: 5, em_pe: 1}
+  - {em: "30:30", mesa: 5, em_pe: 0}
+  - {em: "40:00", mesa: 5, sentados: 0}
+
+esperado:
+  - {em: "0:00", mesa: 5, tipo: sentou}
+  - {em: "2:00", mesa: 5, tipo: atendida}
+  - {em: "17:30", mesa: 5, tipo: alerta_sem_visita}
+  - {em: "20:00", mesa: 5, tipo: visita}
+  - {em: "30:00", mesa: 5, tipo: visita}
+  - {em: "40:00", mesa: 5, tipo: saiu}
+  - {em: "41:00", mesa: 5, tipo: alerta_mesa_vaga}

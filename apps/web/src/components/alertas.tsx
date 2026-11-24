@@ -1,9 +1,18 @@
 "use client";
 
-import { textoAlerta, tempoDecorrido } from "@/lib/salao";
+import { pedeAlguemNaMesa, textoAlerta, tempoDecorrido } from "@/lib/salao";
 import type { Alerta } from "@/lib/tipos";
 
 import { Botao } from "./ui";
+
+// Cor da borda por tipo (o texto ao lado sempre diz o que é: nunca só a cor).
+const BORDA: Record<Alerta["tipo"], string> = {
+  sem_atendimento: "border-atrasada",
+  chamou_garcom: "border-atrasada",
+  pediu_conta: "border-ocupada",
+  sem_visita: "border-aguardando",
+  mesa_vaga: "border-limpar",
+};
 
 export function ListaAlertas({
   alertas,
@@ -31,12 +40,13 @@ export function ListaAlertas({
     <ul className="flex flex-col gap-2" aria-label="Mesas que precisam de atenção">
       {alertas.map((alerta) => {
         const atendimento = alerta.tipo === "sem_atendimento";
+        const irAteAMesa = pedeAlguemNaMesa(alerta);
         return (
           <li
             key={alerta.id}
             data-testid={`alerta-${alerta.tipo}-${alerta.mesa_numero}`}
             className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border-l-[6px] bg-superficie py-2.5 pl-3 pr-2 ${
-              atendimento ? "border-atrasada" : "border-limpar"
+              BORDA[alerta.tipo] ?? "border-linha"
             }`}
           >
             <span className="font-placa text-3xl font-extrabold leading-none" aria-hidden>
@@ -46,7 +56,7 @@ export function ListaAlertas({
               <span className="font-semibold">{textoAlerta(alerta)}</span>
               <span className="numeros text-sm text-tinta-suave">
                 há {tempoDecorrido(alerta.criado_em, agoraMs)}
-                {atendimento && alerta.reconhecido_em && ", alguém já está indo"}
+                {irAteAMesa && alerta.reconhecido_em && ", alguém já está indo"}
               </span>
             </span>
             <span className="ml-auto flex flex-wrap justify-end gap-2">
@@ -61,10 +71,10 @@ export function ListaAlertas({
                   Ver no salão
                 </Botao>
               )}
-              {atendimento ? (
+              {irAteAMesa ? (
                 !alerta.reconhecido_em && (
                   <Botao variante="secundario" onClick={() => aoReconhecer(alerta)}>
-                    Vou atender
+                    {atendimento ? "Vou atender" : "Vou lá"}
                   </Botao>
                 )
               ) : (

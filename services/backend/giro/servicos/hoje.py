@@ -18,7 +18,7 @@ from giro.dominio.compras import Situacao
 from giro.dominio.indicadores import Indicadores, intervalo_da_noite
 from giro.modelos import FichaTecnica, ItemCardapio, ItemPedido, Mesa, Restaurante
 from giro.servicos import copiloto
-from giro.servicos.compras import PlanoDeCompras
+from giro.servicos.compras import PlanoDeCompras, pratos_do_dia
 from giro.servicos.perdas import texto_do_preco
 
 COZINHA_ATRASADA = timedelta(minutes=20)  # item esperando mais que isso vira pendência
@@ -127,6 +127,15 @@ def _estoque(db: Session, plano: PlanoDeCompras) -> list[Pendencia]:
                 f"Acaba antes da compra de {dia_da_compra}: {nomes}. Confira a geladeira.",
                 "/estoque",
                 urgente=any(i.acaba_em == plano.hoje for i in vai_faltar),
+            )
+        )
+    for prato in pratos_do_dia(db, plano):
+        pendencias.append(
+            Pendencia(
+                "prato_do_dia",
+                f"Tem {prato.insumo.lower()} de sobra: dá para a próxima compra inteira sem "
+                f"comprar mais. Ofereça {prato.nome.lower()} hoje.",
+                "/cardapio",
             )
         )
     if plano.compra == plano.hoje:

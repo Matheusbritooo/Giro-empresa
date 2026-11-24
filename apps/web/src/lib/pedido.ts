@@ -36,7 +36,8 @@ function semAcento(texto: string): string {
 
 export type Filtro = "mais" | number; // "mais pedidos" ou o id da categoria
 
-/** Os itens que aparecem para escolher: os mais pedidos, uma categoria ou a busca. */
+/** Os itens que aparecem para escolher: os mais pedidos, uma categoria ou a busca. Em "mais
+ * pedidos", a sugestão de hoje (ingrediente sobrando no estoque) vem antes de tudo. */
 export function itensParaEscolher(
   cardapio: Cardapio,
   filtro: Filtro,
@@ -48,9 +49,8 @@ export function itensParaEscolher(
   if (termo) return ativos.filter((i) => semAcento(i.nome).includes(termo));
   if (filtro === "mais") {
     const porId = new Map(ativos.map((i) => [i.id, i]));
-    const mais = cardapio.mais_pedidos
-      .map((id) => porId.get(id))
-      .filter((i): i is ItemCardapio => !!i);
+    const ids = [...new Set([...(cardapio.sugeridos ?? []), ...cardapio.mais_pedidos])];
+    const mais = ids.map((id) => porId.get(id)).filter((i): i is ItemCardapio => !!i);
     // Restaurante novo, sem pedidos ainda: começa pelo cardápio na ordem.
     return mais.length ? mais : ativos.slice(0, 8);
   }
