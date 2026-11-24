@@ -19,7 +19,15 @@ from sqlalchemy.orm import Session
 
 from giro.demo_cardapio import criar_cardapio, pedidos_da_visita
 from giro.dominio.indicadores import FUSO, intervalo_da_noite
-from giro.modelos import Alerta, EventoMesa, ItemPedido, Mesa, MovimentoEstoque, Ocupacao
+from giro.modelos import (
+    Alerta,
+    Atividade,
+    EventoMesa,
+    ItemPedido,
+    Mesa,
+    MovimentoEstoque,
+    Ocupacao,
+)
 
 # Turmas por noite em cada dia da semana (segunda = 0, fechado).
 TURMAS = {1: 20, 2: 22, 3: 30, 4: 52, 5: 56, 6: 32}
@@ -170,6 +178,12 @@ def refazer_historico(db: Session, restaurante_id: int, hoje: date, semanas: int
     # O livro do estoque das noites passadas é refeito junto (giro/demo_estoque.py).
     pedidos_antigos = select(ItemPedido.id).where(
         ItemPedido.restaurante_id == restaurante_id, ItemPedido.ocupacao_id.in_(antigas)
+    )
+    # O histórico de quem fez o quê das noites passadas também é de demonstração.
+    db.execute(
+        delete(Atividade).where(
+            Atividade.restaurante_id == restaurante_id, Atividade.em < inicio_de_hoje
+        )
     )
     db.execute(
         delete(MovimentoEstoque).where(

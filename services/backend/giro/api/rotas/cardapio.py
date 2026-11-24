@@ -40,6 +40,7 @@ from giro.modelos import (
     Usuario,
 )
 from giro.servicos import estoque as servico_estoque
+from giro.servicos.atividades import GrupoAtividade, de_para, juntar, reais, registrar
 from giro.servicos.compras import plano_de_compras, pratos_do_dia
 
 router = APIRouter(prefix="/api/cardapio", tags=["cardápio"])
@@ -134,10 +135,13 @@ def ver_cardapio(db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo)
     "/categorias", status_code=status.HTTP_201_CREATED, dependencies=[exigir_papel(*GESTAO)]
 )
 def criar_categoria(
-    dados: CategoriaEntrada, db: Db, restaurante_id: RestauranteAlvo
+    dados: CategoriaEntrada, db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo
 ) -> CategoriaSaida:
     categoria = CategoriaCardapio(restaurante_id=restaurante_id, **dados.model_dump())
     db.add(categoria)
+    registrar(
+        db, restaurante_id, usuario, GrupoAtividade.CARDAPIO, f"Criou a categoria {categoria.nome}"
+    )
     db.commit()
     return CategoriaSaida.model_validate(categoria)
 
@@ -150,8 +154,17 @@ def atualizar_categoria(
     if categoria is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "categoria não encontrada")
     restaurante_permitido(usuario, categoria.restaurante_id)
-    for campo, valor in dados.model_dump(exclude_unset=True).items():
+    mudancas = dados.model_dump(exclude_unset=True)
+    frases = []
+    if "nome" in mudancas and mudancas["nome"] != categoria.nome:
+        frases.append(f"Renomeou a categoria {categoria.nome} para {mudancas['nome']}")
+    if "ativa" in mudancas and mudancas["ativa"] != categoria.ativa:
+        verbo = "Voltou com" if mudancas["ativa"] else "Tirou"
+        frases.append(f"{verbo} a categoria {mudancas.get('nome', categoria.nome)}")
+    for campo, valor in mudancas.items():
         setattr(categoria, campo, valor)
+    for frase in frases:
+        registrar(db, categoria.restaurante_id, usuario, GrupoAtividade.CARDAPIO, frase)
     db.commit()
     return CategoriaSaida.model_validate(categoria)
 
@@ -168,6 +181,13 @@ def criar_item(
     _categoria_do_restaurante(db, dados.categoria_id, restaurante_id)
     item = ItemCardapio(restaurante_id=restaurante_id, **dados.model_dump())
     db.add(item)
+    registrar(
+        db,
+        restaurante_id,
+        usuario,
+        GrupoAtividade.CARDAPIO,
+        f"Criou o item {item.nome}, a {reais(item.preco_centavos)}",
+    )
     db.commit()
     _avisar_mudanca(servico, restaurante_id)
     return item_saida(item, usuario, com_ficha=False)
@@ -190,11 +210,45 @@ def atualizar_item(
         )
     if mudancas.get("categoria_id") is not None:
         _categoria_do_restaurante(db, mudancas["categoria_id"], item.restaurante_id)
+    for frase in _o_que_mudou_no_item(item, mudancas):
+        registrar(db, item.restaurante_id, usuario, GrupoAtividade.CARDAPIO, frase)
     for campo, valor in mudancas.items():
         setattr(item, campo, valor)
     db.commit()
     _avisar_mudanca(servico, item.restaurante_id)
     return item_saida(item, usuario, com_ficha)
+
+
+def _o_que_mudou_no_item(item: ItemCardapio, mudancas: dict) -> list[str]:
+    """As frases do histórico para a edição de um item (o que não mudou não entra)."""
+    nome = mudancas.get("nome", item.nome)
+    frases = []
+    if "nome" in mudancas and mudancas["nome"] != item.nome:
+        frases.append(f"Renomeou {item.nome} para {nome}")
+    if "preco_centavos" in mudancas and mudancas["preco_centavos"] != item.preco_centavos:
+        frases.append(
+            de_para(
+                f"Preço de {nome}", reais(item.preco_centavos), reais(mudancas["preco_centavos"])
+            )
+        )
+    if "custo_centavos" in mudancas and mudancas["custo_centavos"] != item.custo_centavos:
+        frases.append(
+            de_para(
+                f"Custo de {nome}", reais(item.custo_centavos), reais(mudancas["custo_centavos"])
+            )
+        )
+    if "ativo" in mudancas and mudancas["ativo"] != item.ativo:
+        frases.append(
+            f"Voltou com {nome} ao cardápio" if mudancas["ativo"] else f"Tirou {nome} do cardápio"
+        )
+    outros = [
+        rotulo
+        for campo, rotulo in (("descricao", "descrição"), ("categoria_id", "categoria"))
+        if campo in mudancas and mudancas[campo] != getattr(item, campo)
+    ]
+    if outros:
+        frases.append(f"Mudou {juntar(outros)} de {nome}")
+    return frases
 
 
 @router.post("/itens/{item_id}/disponivel")
@@ -203,6 +257,14 @@ def marcar_disponivel(
 ) -> ItemCardapioSaida:
     """A cozinha avisa que acabou (ou que voltou). Vale na hora para todos os garçons."""
     item = _item(db, item_id, usuario)
+    if item.disponivel != dados.disponivel:
+        registrar(
+            db,
+            item.restaurante_id,
+            usuario,
+            GrupoAtividade.CARDAPIO,
+            f'Marcou {item.nome} como "{"tem hoje" if dados.disponivel else "acabou"}"',
+        )
     item.disponivel = dados.disponivel
     db.commit()
     _avisar_mudanca(servico, item.restaurante_id)
@@ -234,6 +296,13 @@ def salvar_ficha(
 
     def salvar() -> None:
         servico_estoque.salvar_ficha(db, item, linhas, dados.custo_outros_centavos, muda_outros)
+        frase = (
+            f"Mudou a ficha de {item.nome}: {len(linhas)} "
+            f"{'ingrediente' if len(linhas) == 1 else 'ingredientes'}"
+            if linhas
+            else f"Tirou a ficha de {item.nome} (o prato não mexe mais no estoque)"
+        )
+        registrar(db, item.restaurante_id, usuario, GrupoAtividade.CARDAPIO, frase)
 
     servico.mexer_no_estoque(db, item.restaurante_id, salvar)
     _avisar_mudanca(servico, item.restaurante_id)  # o custo do prato pode ter mudado

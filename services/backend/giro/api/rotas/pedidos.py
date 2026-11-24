@@ -29,6 +29,7 @@ from giro.esquemas import (
     PedidoMesaSaida,
 )
 from giro.modelos import ItemCardapio, ItemPedido, Mesa, Usuario
+from giro.servicos.atividades import GrupoAtividade, registrar
 from giro.servicos.estoque import cancelar_pedido
 from giro.servicos.salao import lancamento_com_chave, mesas_salao, ocupacoes_abertas
 
@@ -154,6 +155,16 @@ def cancelar(
         pedido.cancelado_por_id = usuario.id
         pedido.motivo_cancelamento = dados.motivo
         cancelar_pedido(db, pedido, usuario.id, momento)
+        depois_do_pronto = " (já tinha saído da cozinha)" if pedido.pronto_em else ""
+        registrar(
+            db,
+            pedido.restaurante_id,
+            usuario,
+            GrupoAtividade.PEDIDO,
+            f"Cancelou {pedido.quantidade} {pedido.nome} da mesa {pedido.mesa.numero}"
+            f"{depois_do_pronto}: {dados.motivo.lower()}",
+            momento,
+        )
         db.commit()
         servico.avisar_pedido(db, pedido.mesa)
     return ItemPedidoSaida.model_validate(pedido)

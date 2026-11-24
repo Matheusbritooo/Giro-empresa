@@ -92,6 +92,12 @@ const TELAS: Tela[] = [
     quem: podeGerirEquipe,
   },
   {
+    titulo: "Quem fez o quê",
+    href: "/historico",
+    palavras: "historico mudou preco quem mexeu cancelou auditoria",
+    quem: podeGerirEquipe,
+  },
+  {
     titulo: "Ajustes",
     href: "/ajustes",
     palavras: "configuracoes ticket horario alerta dias de compra folga",

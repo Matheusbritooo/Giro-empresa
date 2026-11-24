@@ -19,9 +19,11 @@ from datetime import date, datetime, time, timedelta
 from sqlalchemy import insert, select
 from sqlalchemy.orm import Session
 
+from giro.dominio.compras import texto_quantidade
 from giro.dominio.estoque import TipoMovimento, base_do_preco, custo_medio
 from giro.dominio.indicadores import FUSO, intervalo_da_noite, noite_de
 from giro.modelos import (
+    Atividade,
     FichaTecnica,
     Insumo,
     ItemCardapio,
@@ -30,6 +32,7 @@ from giro.modelos import (
     Papel,
     Usuario,
 )
+from giro.servicos.atividades import GrupoAtividade, juntar, reais
 from giro.servicos.estoque import atualizar_custo_dos_pratos, recalcular_saldos
 
 # nome, unidade, embalagem, nome da embalagem, onde compra, preço (centavos por kg, L ou un)
@@ -251,6 +254,18 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
     saldo = dict.fromkeys(por_id, 0)
     preco = {i.id: i.custo_centavos for i in por_id.values()}
     linhas: list[dict] = []
+    historico: list[dict] = []  # o que aparece em "Quem fez o quê"
+
+    def contar_no_historico(quem, quando, texto, grupo=GrupoAtividade.ESTOQUE) -> None:
+        historico.append(
+            {
+                "restaurante_id": restaurante_id,
+                "usuario_id": quem,
+                "grupo": grupo.value,
+                "texto": texto,
+                "em": quando,
+            }
+        )
 
     def anotar(insumo_id, tipo, quantidade, quando, **extra) -> None:
         saldo[insumo_id] += quantidade
@@ -288,6 +303,12 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
             saldo[insumo.id], preco[insumo.id], quanto, valor, insumo.unidade
         )
         anotar(insumo.id, TipoMovimento.COMPRA, quanto, quando, valor=valor, usuario=gerente)
+        contar_no_historico(
+            gerente,
+            quando,
+            f"Lançou a compra de {texto_quantidade(insumo.unidade, quanto)} de {insumo.nome} "
+            f"por {reais(valor)}",
+        )
 
     def previsto(noite: date, insumo_id: int) -> int:
         """O que a noite vai gastar: a de verdade se já passou, senão a da semana anterior."""
@@ -312,12 +333,30 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
             for insumo_id in por_id:
                 tinha = sum(previsto(dia + timedelta(days=n), insumo_id) for n in range(3))
                 anotar(insumo_id, TipoMovimento.INICIAL, round(tinha * 1.2), manha, usuario=gerente)
+            contar_no_historico(
+                gerente, manha, f"Cadastrou {len(por_id)} ingredientes no estoque, já contados"
+            )
         if dia.weekday() == SEGUNDA:  # fechado: dia de contar
+            faltou = []
             for insumo_id, insumo in por_id.items():
                 saiu = sum(consumo.get(d, {}).get(insumo_id, 0) for d in semana_passada)
                 faixa = SUMICO.get(insumo.nome, SUMICO_PADRAO)
                 sumiu = min(round(saiu * sorteio.uniform(*faixa)), saldo[insumo_id])
                 anotar(insumo_id, TipoMovimento.CONTAGEM, -sumiu, manha, usuario=gerente)
+                if sumiu > 0:
+                    faltou.append(
+                        (sumiu * preco[insumo_id] / base_do_preco(insumo.unidade), insumo.nome)
+                    )
+            contar_no_historico(
+                gerente,
+                manha,
+                f"Contou {len(por_id)} ingredientes"
+                + (
+                    f": achou menos em {juntar([n for _, n in sorted(faltou, reverse=True)], 3)}"
+                    if faltou
+                    else ", tudo bateu com a conta"
+                ),
+            )
         if dia.weekday() in (TERCA, SEXTA):
             ciclo = [dia + timedelta(days=n) for n in range(3)]
             for insumo_id, insumo in por_id.items():
@@ -344,6 +383,12 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
                 anotar(
                     insumo_id, TipoMovimento.PERDA, -quanto, tarde, motivo=motivo, usuario=equipe
                 )
+                contar_no_historico(
+                    equipe,
+                    tarde,
+                    f"Registrou perda de {texto_quantidade(por_id[insumo_id].unidade, quanto)} "
+                    f"de {nome}: {motivo.lower()}",
+                )
         # A noite: compra de última hora se não der, depois sai o que foi vendido.
         gasto = consumo.get(dia, {})
         fim = datetime.combine(dia, time(23, 45), FUSO)
@@ -355,6 +400,30 @@ def gerar_estoque(db: Session, restaurante_id: int, hoje: date, semente: int = 1
 
     if linhas:
         db.execute(insert(MovimentoEstoque), linhas)
+    # Dois momentos da equipe fora do estoque, para o histórico não ser só compras: o garçom
+    # marca que o tiramisù acabou num sábado cheio e o gerente volta com ele no domingo.
+    sabados = [d for d in consumo if d.weekday() == 5]
+    tiramisu = db.scalar(
+        select(ItemCardapio.nome).where(
+            ItemCardapio.restaurante_id == restaurante_id, ItemCardapio.nome == "Tiramisù"
+        )
+    )
+    if sabados and tiramisu:
+        sabado = max(sabados)
+        contar_no_historico(
+            equipe,
+            datetime.combine(sabado, time(22, 10), FUSO),
+            f'Marcou {tiramisu} como "acabou"',
+            GrupoAtividade.CARDAPIO,
+        )
+        contar_no_historico(
+            gerente,
+            datetime.combine(sabado + timedelta(days=1), time(17, 30), FUSO),
+            f'Marcou {tiramisu} como "tem hoje"',
+            GrupoAtividade.CARDAPIO,
+        )
+    if historico:
+        db.execute(insert(Atividade), historico)
     for insumo_id, insumo in por_id.items():
         insumo.custo_centavos = preco[insumo_id]
     db.flush()

@@ -39,6 +39,8 @@ Cliente: restaurante de bairro com 6 a 20 mesas, na região oeste da Grande São
 | Custo pela ficha | prato com ficha tem `custo_centavos` calculado pela ficha (ingredientes pelo custo médio ponderado das compras + "outros") e não se digita; a matriz de lucro usa esse custo | `atualizar_custo_dos_pratos` |
 | Relatório do mês | mês do calendário, noite a noite (6h às 6h), comparado com o mês anterior inteiro; mais vendidos = 10 itens por quantidade; custo (ficha, de verdade, escapou, compras, perdas por motivo) só para quem vê custo; mês que ainda não começou responde 422; planilha com `;`, vírgula decimal e BOM (Excel em português) | `giro/servicos/relatorio.py`, `apps/web/src/lib/relatorio.ts` |
 | Busca | mesa pelo número, prato ativo, ingrediente ativo e telas (pelo nome ou assunto), sem acento; cada perfil só acha as telas que abre; até 8 resultados | `apps/web/src/lib/busca.ts` |
+| Quem fez o quê | a rota chama `registrar` antes do commit, com a frase pronta, só quando o valor muda; entra preço, custo, "acabou", ficha, compra, perda, contagem, cancelamento, ajustes, equipe, mesas, QR e câmeras; nunca senha, e-mail, token ou cliente; lançar pedido, "Pronto" e "Liberar mesa" ficam fora; nada se apaga; só o dono vê | `giro/servicos/atividades.py`, `giro/api/rotas/atividades.py` |
+| Primeiros passos | 8 passos que se marcam sozinhos pelo banco; aparecem na tela Hoje enquanto falta algum e o restaurante é novo (nenhuma visita com mais de 14 dias); o gerente vê os passos do dono sem link; "Esconder neste aparelho" fica só no navegador | `giro/servicos/primeiros_passos.py`, `components/primeiros-passos.tsx` |
 | Assinatura e ativação | R$ 299/mês e R$ 290 (Fase 4) | ainda não está no código |
 | Custo de nuvem orçado | R$ 100 por cliente/mês (visão R$ 65) | anexo A.1 do TCM |
 
@@ -164,4 +166,5 @@ Login de demonstração (senha `giro1234`): `admin@giro.demo`, `marcos@cantina.d
 - **Ficha técnica**: a receita de um prato, com quanto de cada ingrediente vai em uma porção (`fichas_tecnicas`). Liga o pedido ao estoque e calcula o custo do prato.
 - **Livro do estoque**: cada compra, venda, estorno, perda, contagem e saldo de partida (`inicial`) é uma linha (`movimentos_estoque`); o saldo do ingrediente é a soma delas.
 - **CMV**: custo da mercadoria vendida. Pela ficha, o que os pratos vendidos deveriam ter gastado; de verdade, o que saiu do estoque contado. A diferença é o que escapou.
+- **Quem fez o quê**: o histórico de mudanças do restaurante (tabela `atividades`), uma frase por mudança, com quem fez e quando. Mudança nova que mexe em dinheiro ou na operação entra lá.
 - **Curva ABC**: os poucos ingredientes (A) que somam 80% do que sai do estoque. São os que valem uma contagem toda semana.

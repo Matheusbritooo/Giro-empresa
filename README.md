@@ -122,11 +122,18 @@ Pacote 3 (o dia a dia do dono e da cozinha):
 - **Modo TV na cozinha**: na tela da cozinha, **Modo TV** põe a fila em tela cheia, com letra grande para ler de longe, o relógio, quantos itens faltam e o botão "Pronto" grande. Pedido novo toca um aviso. A tela não apaga sozinha (quando o aparelho deixa). O endereço com `?tv=1` abre direto no modo TV: é só deixar salvo na TV da cozinha.
 - **Busca de qualquer tela**: o botão **Buscar** no menu (ou a tecla `/`, ou Ctrl+K) acha mesa pelo número ("7" ou "mesa 7" abre o pedido dela), prato, ingrediente (com quanto tem) e as próprias telas, também pelo assunto ("contador" acha o relatório, "cmv" acha as perdas). Sem acento e sem diferença de maiúscula. Cada perfil só acha as telas que abre.
 
+- **Quem fez o quê** (só o dono, em **Ajustes > Quem fez o quê**): cada mudança de preço e de custo, o que acabou e voltou, ficha dos pratos, compras, perdas, contagens, pedidos cancelados, equipe, ajustes, mesas, QR e câmeras, numa frase ("Preço de Lasanha à bolonhesa: de R$ 62 para R$ 64,50"), com quem fez e a hora. Filtra por assunto, por pessoa e por 7 dias, 30 dias ou 3 meses. Nada se apaga. Não entra senha, e-mail nem nada de cliente. Lançar pedido, "Pronto" e "Liberar mesa" ficam fora: acontecem o tempo todo e já têm a própria tela.
+- **Primeiros passos** na tela **Hoje** de um restaurante novo: as 8 coisas que o GIRO precisa para trabalhar (mesas, câmera ligada, desenho das mesas, cardápio, equipe, ajustes, ingredientes e fichas, QR das mesas), na ordem, com "Fazer agora" levando para a tela certa. Cada passo se marca sozinho pelo que já está cadastrado. Some quando tudo está pronto, quando o restaurante já roda há mais de 14 dias ou quando a pessoa esconde no aparelho.
+
 ![Relatório do mês da Cantina, pronto para salvar em PDF](docs/telas/relatorio-do-mes.png)
 
 ![Cozinha no modo TV](docs/telas/cozinha-tv.png)
 
 ![Busca de qualquer tela achando a muçarela](docs/telas/busca.png)
+
+![Quem fez o quê: o histórico da Cantina](docs/telas/historico.png)
+
+![Primeiros passos de um restaurante novo, no celular](docs/telas/primeiros-passos.png)
 
 ![Página do QR da mesa no celular do cliente](docs/telas/qr-cliente.png)
 
@@ -331,7 +338,7 @@ O repositório já vem preparado para o grupo usar o Claude Code:
 | 2b. Calibração em campo | Medir a visão com vídeo de um restaurante parceiro; receber a foto do gravador por FTPS para dispensar o conector |
 | 3. Inteligência (resto) | Previsão da próxima mesa a vagar, relatório semanal por e-mail "quanto a GIRO te devolveu" |
 | Cardápio, etapa 3 (parte 4) | Importar a planilha de vendas do sistema de caixa |
-| Painel, base (resto) | "Esqueci a senha" e histórico de quem fez o quê, primeiros passos guiados, abrir o painel sem internet |
+| Painel, base (resto) | "Esqueci a senha", abrir o painel sem internet |
 | Painel, pacote tecnológico (resto) | Foto da nota vira compra, previsão com clima e feriado, fila na porta, Copiloto que avisa sozinho, por voz e no WhatsApp, mesa que se libera sozinha (depende do teste com vídeo real) |
 | 4. Gestão GIRO | Leads com as perguntas de qualificação, assinatura e cobrança (Asaas), painel financeiro |
 | 5. Site | Página de vendas e calculadora de retorno |

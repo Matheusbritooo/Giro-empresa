@@ -16,6 +16,7 @@ from giro.api.deps import (
 from giro.dominio.mesa import Estado
 from giro.esquemas import MesaAtualizacao, MesaEntrada, MesaSalao
 from giro.modelos import Camera, Mesa
+from giro.servicos.atividades import GrupoAtividade, de_para, registrar
 from giro.servicos.salao import mesa_salao, mesas_salao, ocupacoes_abertas
 
 router = APIRouter(prefix="/api/mesas", tags=["mesas"], dependencies=[exigir_papel(*GESTAO)])
@@ -40,14 +41,45 @@ def listar(db: Db, restaurante_id: RestauranteAlvo) -> list[MesaSalao]:
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def criar(dados: MesaEntrada, db: Db, restaurante_id: RestauranteAlvo) -> MesaSalao:
+def criar(
+    dados: MesaEntrada, db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo
+) -> MesaSalao:
     mesa = Mesa(restaurante_id=restaurante_id, **dados.model_dump())
     db.add(mesa)
+    registrar(
+        db,
+        restaurante_id,
+        usuario,
+        GrupoAtividade.MESAS,
+        f"Cadastrou a mesa {mesa.numero}, de {mesa.lugares} lugares",
+    )
     try:
         db.commit()
     except IntegrityError as erro:
         raise HTTPException(status.HTTP_409_CONFLICT, f"já existe a mesa {dados.numero}") from erro
     return mesa_salao(mesa, None)
+
+
+def _o_que_mudou_na_mesa(mesa: Mesa, mudancas: dict) -> list[str]:
+    numero = mudancas.get("numero", mesa.numero)
+    frases = []
+    if "numero" in mudancas and mudancas["numero"] != mesa.numero:
+        frases.append(f"Mudou o número da mesa {mesa.numero} para {numero}")
+    if "lugares" in mudancas and mudancas["lugares"] != mesa.lugares:
+        frases.append(de_para(f"Lugares da mesa {numero}", mesa.lugares, mudancas["lugares"]))
+    if "ativa" in mudancas and mudancas["ativa"] != mesa.ativa:
+        frases.append(f"{'Reativou' if mudancas['ativa'] else 'Desativou'} a mesa {numero}")
+    if ("pos_x" in mudancas and mudancas["pos_x"] != mesa.pos_x) or (
+        "pos_y" in mudancas and mudancas["pos_y"] != mesa.pos_y
+    ):
+        frases.append(f"Mudou a mesa {numero} de lugar na planta")
+    if "poligono" in mudancas and mudancas["poligono"] != mesa.poligono:
+        frases.append(
+            f"Desenhou a mesa {numero} na foto da câmera"
+            if mudancas["poligono"]
+            else f"Apagou o desenho da mesa {numero} na câmera"
+        )
+    return frases
 
 
 @router.patch("/{mesa_id}")
@@ -68,6 +100,8 @@ def atualizar(mesa_id: int, dados: MesaAtualizacao, db: Db, usuario: UsuarioAtua
         raise HTTPException(
             status.HTTP_409_CONFLICT, "só dá para desativar a mesa quando ela estiver livre"
         )
+    for frase in _o_que_mudou_na_mesa(mesa, mudancas):
+        registrar(db, mesa.restaurante_id, usuario, GrupoAtividade.MESAS, frase)
     for campo, valor in mudancas.items():
         setattr(mesa, campo, valor)
     try:
@@ -103,5 +137,12 @@ def trocar_qr(mesa_id: int, db: Db, usuario: UsuarioAtual) -> QrMesaSaida:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "mesa não encontrada")
     restaurante_permitido(usuario, mesa.restaurante_id)
     mesa.chave_publica = _nova_chave()
+    registrar(
+        db,
+        mesa.restaurante_id,
+        usuario,
+        GrupoAtividade.MESAS,
+        f"Trocou o QR da mesa {mesa.numero} (o impresso antes parou de funcionar)",
+    )
     db.commit()
     return QrMesaSaida(mesa_id=mesa.id, numero=mesa.numero, chave=mesa.chave_publica)

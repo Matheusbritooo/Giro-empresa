@@ -15,6 +15,13 @@ from giro.esquemas import (
 )
 from giro.modelos import Papel, Restaurante, Usuario
 from giro.seguranca import gerar_hash_senha
+from giro.servicos.atividades import (
+    NOME_DO_PAPEL,
+    GrupoAtividade,
+    juntar,
+    o_que_mudou_nos_ajustes,
+    registrar,
+)
 
 router = APIRouter(prefix="/api", tags=["equipe e cadastro"])
 
@@ -53,6 +60,13 @@ def criar_usuario(
         papel=dados.papel.value,
     )
     db.add(novo)
+    registrar(
+        db,
+        restaurante_id,
+        usuario,
+        GrupoAtividade.EQUIPE,
+        f"Deu acesso a {novo.nome} como {NOME_DO_PAPEL[dados.papel]}",
+    )
     try:
         db.commit()
     except IntegrityError as erro:
@@ -71,7 +85,23 @@ def atualizar_usuario(
     permitidos = PODE_CRIAR[Papel(usuario.papel)]
     if Papel(alvo.papel) not in permitidos or (dados.papel and dados.papel not in permitidos):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "você não pode alterar esse perfil")
-    for campo, valor in dados.model_dump(exclude_unset=True).items():
+    mudancas = dados.model_dump(exclude_unset=True)
+    nome = mudancas.get("nome", alvo.nome)
+    frases = []
+    if "nome" in mudancas and mudancas["nome"] != alvo.nome:
+        frases.append(f"Mudou o nome de {alvo.nome} para {nome}")
+    if mudancas.get("papel") and mudancas["papel"].value != alvo.papel:
+        frases.append(
+            f"Mudou {nome} de {NOME_DO_PAPEL[Papel(alvo.papel)]} "
+            f"para {NOME_DO_PAPEL[mudancas['papel']]}"
+        )
+    if "ativo" in mudancas and mudancas["ativo"] != alvo.ativo:
+        frases.append(
+            f"Devolveu o acesso de {nome}" if mudancas["ativo"] else f"Tirou o acesso de {nome}"
+        )
+    for frase in frases:
+        registrar(db, alvo.restaurante_id, usuario, GrupoAtividade.EQUIPE, frase)
+    for campo, valor in mudancas.items():
         setattr(alvo, campo, valor.value if isinstance(valor, Papel) else valor)
     db.commit()
     return UsuarioSaida.model_validate(alvo)
@@ -117,7 +147,11 @@ def atualizar_restaurante(
     restaurante = db.get(Restaurante, restaurante_id)
     if restaurante is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "restaurante não encontrado")
-    for campo, valor in dados.model_dump(exclude_unset=True).items():
+    mudancas = dados.model_dump(exclude_unset=True)
+    frases = o_que_mudou_nos_ajustes(restaurante, mudancas)
+    if frases:
+        registrar(db, restaurante.id, usuario, GrupoAtividade.AJUSTES, f"Mudou {juntar(frases)}")
+    for campo, valor in mudancas.items():
         setattr(restaurante, campo, valor)
     db.commit()
     return RestauranteSaida.model_validate(restaurante)

@@ -21,6 +21,7 @@ from giro.esquemas import (
 )
 from giro.modelos import Camera, Papel
 from giro.seguranca import gerar_token_camera, hash_token
+from giro.servicos.atividades import GrupoAtividade, registrar
 
 router = APIRouter(prefix="/api/cameras", tags=["câmeras"])
 
@@ -49,10 +50,15 @@ def listar(db: Db, restaurante_id: RestauranteAlvo) -> list[CameraSaida]:
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, dependencies=[DONO_OU_ADMIN])
-def criar(dados: CameraEntrada, db: Db, restaurante_id: RestauranteAlvo) -> CameraCriada:
+def criar(
+    dados: CameraEntrada, db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo
+) -> CameraCriada:
     token = gerar_token_camera()
     camera = Camera(restaurante_id=restaurante_id, nome=dados.nome, token_hash=hash_token(token))
     db.add(camera)
+    registrar(
+        db, restaurante_id, usuario, GrupoAtividade.MESAS, f"Cadastrou a câmera {camera.nome}"
+    )
     db.commit()
     return CameraCriada(**CameraSaida.model_validate(camera).model_dump(), token=token)
 
@@ -63,9 +69,22 @@ def atualizar(
 ) -> CameraSaida:
     camera = _camera_permitida(db, usuario, camera_id)
     mudancas = dados.model_dump(exclude_unset=True)
+    nome = mudancas.get("nome", camera.nome)
+    frases = []
+    if "nome" in mudancas and mudancas["nome"] != camera.nome:
+        frases.append(f"Renomeou a câmera {camera.nome} para {nome}")
+    if "ativa" in mudancas and mudancas["ativa"] != camera.ativa:
+        frases.append(f"{'Ligou' if mudancas['ativa'] else 'Desligou'} a câmera {nome}")
     if "ajustes_visao" in mudancas:
         ajustes = mudancas.pop("ajustes_visao") or {}
-        camera.ajustes_visao = {k: v for k, v in ajustes.items() if v is not None} or None
+        novos = {k: v for k, v in ajustes.items() if v is not None} or None
+        if novos != camera.ajustes_visao:
+            frases.append(
+                f"Calibrou a câmera {nome}" if novos else f"Voltou a câmera {nome} ao padrão"
+            )
+        camera.ajustes_visao = novos
+    for frase in frases:
+        registrar(db, camera.restaurante_id, usuario, GrupoAtividade.MESAS, frase)
     for campo, valor in mudancas.items():
         setattr(camera, campo, valor)
     db.commit()
