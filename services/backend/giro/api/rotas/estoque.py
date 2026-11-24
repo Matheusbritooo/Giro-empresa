@@ -24,6 +24,7 @@ from giro.api.deps import (
     restaurante_permitido,
 )
 from giro.banco import agora
+from giro.dominio.compras import texto_quantidade
 from giro.dominio.estoque import TipoMovimento
 from giro.dominio.perdas import preco_da_nota, subida_de_preco
 from giro.esquemas import (
@@ -63,6 +64,7 @@ from giro.modelos import (
 )
 from giro.servicos import estoque as servico_estoque
 from giro.servicos import perdas as servico_perdas
+from giro.servicos.atividades import GrupoAtividade, de_para, juntar, reais, registrar
 from giro.servicos.compras import plano_de_compras
 from giro.servicos.resultados import Periodo
 
@@ -249,6 +251,14 @@ def criar_insumo(
     def criar() -> Insumo:
         db.add(insumo)
         db.flush()
+        tem = f", com {texto_quantidade(insumo.unidade, dados.saldo)}" if dados.saldo else ""
+        registrar(
+            db,
+            restaurante_id,
+            usuario,
+            GrupoAtividade.ESTOQUE,
+            f"Cadastrou o ingrediente {nome}{tem}",
+        )
         if dados.saldo:  # "tem agora": o saldo de partida, que não é sobra nem perda
             servico_estoque.mover(
                 db,
@@ -275,6 +285,8 @@ def atualizar_insumo(
         mudancas["nome"] = mudancas["nome"].strip()
 
     def atualizar() -> Insumo:
+        for frase in _o_que_mudou_no_insumo(insumo, mudancas):
+            registrar(db, insumo.restaurante_id, usuario, GrupoAtividade.ESTOQUE, frase)
         for campo, valor in mudancas.items():
             setattr(insumo, campo, valor)
         db.flush()
@@ -285,6 +297,38 @@ def atualizar_insumo(
         return insumo
 
     return insumo_saida(servico.mexer_no_estoque(db, insumo.restaurante_id, atualizar), usuario)
+
+
+def _o_que_mudou_no_insumo(insumo: Insumo, mudancas: dict) -> list[str]:
+    nome = mudancas.get("nome", insumo.nome)
+    frases = []
+    if "nome" in mudancas and mudancas["nome"] != insumo.nome:
+        frases.append(f"Renomeou o ingrediente {insumo.nome} para {nome}")
+    if "custo_centavos" in mudancas and mudancas["custo_centavos"] != insumo.custo_centavos:
+        por = {"g": "kg", "ml": "L"}.get(insumo.unidade, "unidade")
+        frases.append(
+            de_para(
+                f"Preço de {nome} por {por}",
+                reais(insumo.custo_centavos),
+                reais(mudancas["custo_centavos"]),
+            )
+        )
+    if "ativo" in mudancas and mudancas["ativo"] != insumo.ativo:
+        frases.append(
+            f"Voltou a usar {nome} no estoque" if mudancas["ativo"] else f"Tirou {nome} de uso"
+        )
+    outros = [
+        rotulo
+        for campo, rotulo in (
+            ("embalagem_quantidade", "embalagem"),
+            ("embalagem_nome", "embalagem"),
+            ("onde_compra", "onde compra"),
+        )
+        if campo in mudancas and mudancas[campo] != getattr(insumo, campo)
+    ]
+    if outros:
+        frases.append(f"Mudou {juntar(list(dict.fromkeys(outros)))} de {nome}")
+    return frases
 
 
 @router.get("/insumos/{insumo_id}/movimentos", dependencies=[exigir_papel(*GESTAO)])
@@ -331,6 +375,15 @@ def registrar_compra(
         servico_estoque.registrar_compra(
             db, insumo, dados.quantidade, dados.valor_centavos, usuario.id, agora()
         )
+        valor = f" por {reais(dados.valor_centavos)}" if dados.valor_centavos is not None else ""
+        registrar(
+            db,
+            insumo.restaurante_id,
+            usuario,
+            GrupoAtividade.ESTOQUE,
+            f"Lançou a compra de {texto_quantidade(insumo.unidade, dados.quantidade)} "
+            f"de {insumo.nome}{valor}",
+        )
         return insumo
 
     saida = insumo_saida(servico.mexer_no_estoque(db, insumo.restaurante_id, comprar), usuario)
@@ -366,6 +419,14 @@ def registrar_perda(
             motivo=dados.motivo,
             usuario_id=usuario.id,
         )
+        registrar(
+            db,
+            insumo.restaurante_id,
+            usuario,
+            GrupoAtividade.ESTOQUE,
+            f"Registrou perda de {texto_quantidade(insumo.unidade, dados.quantidade)} "
+            f"de {insumo.nome}: {dados.motivo.lower()}",
+        )
         return insumo
 
     return insumo_saida(servico.mexer_no_estoque(db, insumo.restaurante_id, perder), usuario)
@@ -393,7 +454,26 @@ def registrar_contagem(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "ingrediente não encontrado")
 
     def contar():
-        return servico_estoque.registrar_contagem(db, restaurante_id, contados, usuario.id, agora())
+        diferencas = servico_estoque.registrar_contagem(
+            db, restaurante_id, contados, usuario.id, agora()
+        )
+        # Os que mais faltaram (ou sobraram) primeiro; a lista inteira fica na tela de contagem.
+        ordem = sorted(diferencas, key=lambda d: d.diferenca)
+        faltou = [insumos[d.insumo_id].nome for d in ordem if d.diferenca < 0]
+        sobrou = [insumos[d.insumo_id].nome for d in reversed(ordem) if d.diferenca > 0]
+        partes = [f"achou menos em {juntar(faltou, 3)}"] * bool(faltou) + [
+            f"achou mais em {juntar(sobrou, 3)}"
+        ] * bool(sobrou)
+        registrar(
+            db,
+            restaurante_id,
+            usuario,
+            GrupoAtividade.ESTOQUE,
+            f"Contou {len(contados)} "
+            f"{'ingrediente' if len(contados) == 1 else 'ingredientes'}"
+            + (f": {'; '.join(partes)}" if partes else ", tudo bateu com a conta"),
+        )
+        return diferencas
 
     diferencas = servico.mexer_no_estoque(db, restaurante_id, contar)
     return ContagemSaida(

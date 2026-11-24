@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect } from "react";
 
+import { PrimeirosPassos } from "@/components/primeiros-passos";
 import { Aviso, Esqueleto } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useRelogio, useSalaoAoVivo } from "@/lib/ao-vivo";
@@ -65,6 +66,7 @@ export default function PaginaHoje() {
         {hoje && <p className="text-tinta-suave first-letter:uppercase">{rotuloDia(hoje.dia)}</p>}
       </header>
       <Aviso>{erro}</Aviso>
+      <PrimeirosPassos restaurante={restaurante} link={link} />
 
       <section aria-labelledby="titulo-agora" className="flex flex-col gap-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

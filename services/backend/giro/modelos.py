@@ -311,3 +311,20 @@ class MovimentoEstoque(Base):
     motivo: Mapped[str | None] = mapped_column(String(30))  # perda: motivo da lista
     usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
     em: Mapped[datetime]
+
+
+class Atividade(Base):
+    """Quem fez o quê: preço, custo, "acabou", ficha, compra, perda, contagem, cancelamento,
+    ajustes, equipe, mesas e câmeras, numa frase em português ("Preço de Lasanha: de R$ 58
+    para R$ 62"). Só a equipe do restaurante aparece aqui, nunca cliente. Nada se apaga; só o
+    dono vê."""
+
+    __tablename__ = "atividades"
+    __table_args__ = (Index("ix_atividades_restaurante_em", "restaurante_id", "em"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"))
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    grupo: Mapped[str] = mapped_column(String(20))  # GrupoAtividade
+    texto: Mapped[str] = mapped_column(String(300))
+    em: Mapped[datetime] = mapped_column(default=agora)

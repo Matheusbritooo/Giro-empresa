@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 
 import { Aviso, Botao, Campo, Esqueleto, Secao } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useDados } from "@/lib/dados";
 import { useRestauranteAlvo } from "@/lib/restaurante";
+import { comBusca } from "@/lib/resultados";
 import { horaCurta } from "@/lib/salao";
 import type { Camera, Restaurante, Salao } from "@/lib/tipos";
 
@@ -23,6 +25,7 @@ const DIAS_DE_COMPRA = [
 
 export default function PaginaAjustes() {
   const restaurante = useRestauranteAlvo();
+  const parametros = useSearchParams();
   const [tokenNovo, setTokenNovo] = useState<{ nome: string; token: string } | null>(null);
   const [recado, setRecado] = useState<{ tipo: "erro" | "ok"; texto: string } | null>(null);
   const buscar = useCallback(async () => {
@@ -93,7 +96,15 @@ export default function PaginaAjustes() {
 
   return (
     <>
-      <h1 className="font-placa text-4xl font-extrabold leading-none">Ajustes</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h1 className="font-placa text-4xl font-extrabold leading-none">Ajustes</h1>
+        <Link
+          href={comBusca("/historico", parametros, {})}
+          className="font-semibold underline underline-offset-2"
+        >
+          Quem fez o quê
+        </Link>
+      </div>
       {recado && <Aviso tipo={recado.tipo}>{recado.texto}</Aviso>}
       <Aviso>{erro}</Aviso>
 

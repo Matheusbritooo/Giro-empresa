@@ -13,6 +13,7 @@ from starlette.concurrency import run_in_threadpool
 from giro.api.cliente_visao import ClienteVisao
 from giro.api.rotas import (
     ao_vivo,
+    atividades,
     auth,
     cameras,
     cardapio,
@@ -126,6 +127,7 @@ def criar_app(config: Config | None = None) -> FastAPI:
         hoje,
         publico,
         relatorio,
+        atividades,
     ):
         app.include_router(modulo.router)
 

@@ -665,3 +665,34 @@ export interface RelatorioDoMes {
     por_motivo: { motivo: string; valor_centavos: number | null }[];
   } | null;
 }
+
+export type GrupoAtividade = "cardapio" | "pedido" | "estoque" | "equipe" | "ajustes" | "mesas";
+
+export interface Atividade {
+  id: number;
+  em: string;
+  grupo: GrupoAtividade;
+  texto: string;
+  quem: string | null; // vazio: o próprio GIRO, ou alguém que saiu do cadastro
+  usuario_id: number | null;
+}
+
+export interface Historico {
+  hoje: string; // AAAA-MM-DD em São Paulo
+  atividades: Atividade[];
+  pessoas: { id: number; nome: string }[];
+  mais: boolean; // passou do limite da tela: filtre para ver o resto
+}
+
+export interface PrimeirosPassos {
+  novo: boolean; // ainda começando (sem visita de mais de 14 dias): a lista aparece em Hoje
+  feitos: number;
+  total: number;
+  passos: {
+    id: string;
+    titulo: string;
+    porque: string;
+    feito: boolean;
+    href: string | null; // vazio: é o dono quem faz
+  }[];
+}
