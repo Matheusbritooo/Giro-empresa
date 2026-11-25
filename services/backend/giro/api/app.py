@@ -15,6 +15,7 @@ from giro.api.rotas import (
     ao_vivo,
     atividades,
     auth,
+    caixa,
     cameras,
     cardapio,
     copiloto,
@@ -128,6 +129,7 @@ def criar_app(config: Config | None = None) -> FastAPI:
         publico,
         relatorio,
         atividades,
+        caixa,
     ):
         app.include_router(modulo.router)
 

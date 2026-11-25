@@ -93,6 +93,12 @@ export default function PaginaResultados() {
           >
             Relatório do mês
           </Link>
+          <Link
+            href={comBusca("/resultados/caixa", busca({}), {})}
+            className="font-semibold underline underline-offset-2"
+          >
+            Conferir com o caixa
+          </Link>
         </div>
         <div
           role="group"

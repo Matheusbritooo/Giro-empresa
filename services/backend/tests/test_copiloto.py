@@ -177,7 +177,7 @@ def test_briefing_na_abertura_e_resumo_no_fechamento_uma_vez_por_noite(app, cant
         verificar_avisos(db, push, abre + timedelta(minutes=2))
     titulos = [t for _, t, _ in push.enviados]
     assert titulos.count("Antes do turno") == 2  # um por restaurante, uma vez só
-    assert all(c.startswith("Hoje é") for _, t, c in push.enviados)
+    assert all(c.startswith("Hoje é") for _, t, c in push.enviados if t == "Antes do turno")
 
     push.enviados.clear()
     with app.state.sessoes() as db:

@@ -12,12 +12,18 @@ export class ErroApi extends Error {
   }
 }
 
+/** O endereço completo de uma rota da API, com o restaurante (equipe GIRO) quando tem. */
+export function urlDaApi(caminho: string, restaurante?: number | null): URL {
+  const url = new URL(API_URL + caminho, window.location.origin);
+  if (restaurante) url.searchParams.set("restaurante_id", String(restaurante));
+  return url;
+}
+
 export async function api<T>(
   caminho: string,
   opcoes: { metodo?: string; corpo?: unknown; restaurante?: number | null } = {},
 ): Promise<T> {
-  const url = new URL(API_URL + caminho, window.location.origin);
-  if (opcoes.restaurante) url.searchParams.set("restaurante_id", String(opcoes.restaurante));
+  const url = urlDaApi(caminho, opcoes.restaurante);
 
   let resposta: Response;
   try {
@@ -31,7 +37,8 @@ export async function api<T>(
     marcarConexao(false);
     throw new ErroApi(0, "Sem conexão com o servidor. Confira a internet e tente de novo.");
   }
-  marcarConexao(true);
+  // Resposta guardada no aparelho pelo service worker: a rede caiu, o dado pode estar velho.
+  marcarConexao(resposta.headers.get("x-giro-guardado") !== "1");
 
   if (resposta.status === 204) return undefined as T;
   const dados = await resposta.json().catch(() => null);

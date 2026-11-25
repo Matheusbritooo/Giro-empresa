@@ -2,10 +2,11 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 
-import { urlAoVivo } from "./api";
+import { api, urlAoVivo } from "./api";
 import { dadoGuardado, guardarDado } from "./dados";
+import { guardarSalao } from "./sem-internet";
 import { aplicarMensagem, type EstadoSalao, SALAO_VAZIO } from "./salao";
-import type { Alerta, AvisoAoVivo, MensagemAoVivo } from "./tipos";
+import type { Alerta, AvisoAoVivo, MensagemAoVivo, Salao } from "./tipos";
 
 export type Conexao = "conectando" | "ao_vivo" | "reconectando" | "sem_acesso";
 
@@ -34,9 +35,24 @@ export function useSalaoAoVivo(
 ) {
   const [estado, despachar] = useReducer(redutor, restaurante, salaoInicial);
   const [conexao, setConexao] = useState<Conexao>("conectando");
+  const temSalao = useRef(estado.salao !== null);
   useEffect(() => {
+    temSalao.current = estado.salao !== null;
     if (restaurante && estado.salao) guardarDado(chaveDoSalao(restaurante), estado);
   }, [restaurante, estado]);
+  // No aparelho (para abrir sem internet), no máximo uma vez a cada 5 s e só com o canal no
+  // ar: o salão que veio do próprio aparelho não volta para ele.
+  const ultimaGravacao = useRef(0);
+  useEffect(() => {
+    if (!restaurante || !estado.salao || conexao !== "ao_vivo") return;
+    const salao = estado.salao;
+    const falta = Math.max(0, ultimaGravacao.current + 5000 - Date.now());
+    const espera = setTimeout(() => {
+      ultimaGravacao.current = Date.now();
+      void guardarSalao(restaurante, salao);
+    }, falta);
+    return () => clearTimeout(espera);
+  }, [restaurante, estado.salao, conexao]);
   const avisar = useRef(aoChegarAlerta);
   const avisarOutros = useRef(aoAviso);
   useEffect(() => {
@@ -90,6 +106,17 @@ export function useSalaoAoVivo(
           return;
         }
         setConexao("reconectando");
+        // Abriu sem internet e sem salão na memória: o último salão guardado no aparelho
+        // (pelo service worker) serve para achar a mesa e lançar o pedido.
+        if (!jaConectou && tentativa === 0 && !temSalao.current) {
+          api<Salao>("/api/salao", { restaurante })
+            .then((salao) => {
+              if (!encerrado && !jaConectou) {
+                despachar({ tipo: "salao", salao: { ...salao, agora: new Date().toISOString() } });
+              }
+            })
+            .catch(() => undefined);
+        }
         const ms = ESPERAS_RECONEXAO_MS[Math.min(tentativa, ESPERAS_RECONEXAO_MS.length - 1)];
         tentativa += 1;
         espera = setTimeout(conectar, ms);

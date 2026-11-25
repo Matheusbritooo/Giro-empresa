@@ -153,6 +153,42 @@ export default function PaginaHoje() {
         )}
       </section>
 
+      {hoje && hoje.semana.length > 0 && (
+        <section aria-labelledby="titulo-semana" className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="titulo-semana" className="font-placa text-2xl font-bold">
+              O Copiloto notou nesta semana
+            </h2>
+            <Link
+              href={link("/resultados?periodo=semana")}
+              className="font-semibold underline underline-offset-2"
+            >
+              Ver a semana
+            </Link>
+          </div>
+          <ul className="flex flex-col gap-2" data-testid="semana">
+            {hoje.semana.map((m) => (
+              <li
+                key={m.tipo}
+                data-tipo={m.tipo}
+                data-piorou={m.piorou ? "sim" : "nao"}
+                className={`flex flex-col gap-0.5 rounded-xl border-l-[6px] bg-superficie py-3 pr-3 pl-4 ${
+                  m.piorou ? "border-aguardando" : "border-ocupada"
+                }`}
+              >
+                <span className="text-xs font-bold tracking-wide text-tinta-suave">
+                  {m.piorou ? "Piorou" : "Melhorou"}
+                </span>
+                <span>{m.texto}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-sm text-tinta-suave">
+            As 7 últimas noites contra as 7 anteriores. Toda semana sai também no celular.
+          </p>
+        </section>
+      )}
+
       {hoje && (
         <section aria-labelledby="titulo-esperar" className="flex max-w-prose flex-col gap-2">
           <h2 id="titulo-esperar" className="font-placa text-2xl font-bold">

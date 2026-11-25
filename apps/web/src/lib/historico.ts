@@ -10,6 +10,7 @@ export const GRUPOS: { valor: GrupoAtividade; texto: string }[] = [
   { valor: "equipe", texto: "Equipe" },
   { valor: "ajustes", texto: "Ajustes" },
   { valor: "mesas", texto: "Mesas e câmeras" },
+  { valor: "caixa", texto: "Planilha do caixa" },
 ];
 
 export const PERIODOS = [
