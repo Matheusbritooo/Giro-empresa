@@ -60,6 +60,12 @@ class CustoDoMesSaida(BaseModel):
     por_motivo: list[MotivoSaida]
 
 
+class CaixaDoMesSaida(BaseModel):
+    noites: int  # noites do mês que vieram do caixa
+    caixa_centavos: int
+    giro_centavos: int  # o que foi lançado no GIRO nessas mesmas noites
+
+
 class RelatorioSaida(BaseModel):
     restaurante: str
     mes: date
@@ -88,6 +94,7 @@ class RelatorioSaida(BaseModel):
     pratos: list[ItemDoMesSaida]
     noites: list[NoiteDoMesSaida]
     custo: CustoDoMesSaida | None
+    caixa: CaixaDoMesSaida | None  # só com a planilha do caixa importada no mês
 
 
 @router.get("/mes")
@@ -141,6 +148,15 @@ def ver_relatorio(
                 ],
             )
             if r.custo is not None
+            else None
+        ),
+        caixa=(
+            CaixaDoMesSaida(
+                noites=len(r.caixa.noites),
+                caixa_centavos=r.caixa.caixa_centavos,
+                giro_centavos=r.caixa.giro_centavos,
+            )
+            if r.caixa is not None
             else None
         ),
     )

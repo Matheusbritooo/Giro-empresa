@@ -35,6 +35,13 @@ class PendenciaSaida(BaseModel):
     urgente: bool
 
 
+class MudancaSaida(BaseModel):
+    tipo: str
+    piorou: bool
+    texto: str
+    href: str
+
+
 class HojeSaida(BaseModel):
     dia: str
     dia_semana: str
@@ -43,6 +50,7 @@ class HojeSaida(BaseModel):
     pendencias: list[PendenciaSaida]
     esperar: list[str]
     dicas: list[str]
+    semana: list[MudancaSaida]  # "O Copiloto notou": a semana que passou contra a anterior
 
 
 @router.get("")
@@ -74,4 +82,8 @@ def ver_hoje(db: Db, usuario: UsuarioAtual, restaurante_id: RestauranteAlvo) -> 
         pendencias=[PendenciaSaida(**vars(p)) for p in hoje.pendencias],
         esperar=hoje.esperar,
         dicas=hoje.dicas,
+        semana=[
+            MudancaSaida(tipo=m.tipo, piorou=m.piorou, texto=m.texto, href=m.href)
+            for m in hoje.semana
+        ],
     )

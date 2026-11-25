@@ -1,4 +1,5 @@
-"""Avisos do turno no celular do dono e do gerente: briefing na abertura, resumo no fechamento.
+"""Avisos do turno no celular do dono e do gerente: briefing na abertura, resumo no fechamento
+e, uma vez por semana, o que mudou de uma semana para a outra ("O Copiloto notou").
 
 Roda junto da verificação periódica de alertas. Cada aviso sai uma vez por noite (o
 restaurante guarda a última noite avisada) e só se o push estiver configurado.
@@ -15,6 +16,7 @@ from giro.dominio.indicadores import FUSO, VIRADA, Indicadores, intervalo_da_noi
 from giro.modelos import Papel, Restaurante
 from giro.push import EnviadorPush
 from giro.servicos import copiloto, resultados
+from giro.servicos.semana import chave_da_semana, semana_que_passou
 
 # Passou disso depois da abertura sem o servidor estar no ar, o briefing já não serve.
 JANELA_BRIEFING = timedelta(hours=2)
@@ -68,6 +70,21 @@ def verificar_avisos(db: Session, push: EnviadorPush, agora: datetime) -> None:
                 restaurante.id, "Antes do turno", recado.resumo_curto, GESTAO, url="/resultados"
             )
             restaurante.ultimo_briefing_noite = chave
+
+        # Uma vez por semana, junto do primeiro briefing dela: o que mudou de uma semana
+        # para a outra. Sem mudança que valha, não manda nada (e não tenta de novo).
+        semana = chave_da_semana(noite)
+        if restaurante.ultimo_aviso_semana != semana and abre <= agora < abre + JANELA_BRIEFING:
+            mudancas = semana_que_passou(db, restaurante, agora)
+            if mudancas:
+                push.enviar(
+                    restaurante.id,
+                    "O Copiloto notou",
+                    " ".join(m.texto for m in mudancas[:2]),
+                    GESTAO,
+                    url="/hoje",
+                )
+            restaurante.ultimo_aviso_semana = semana
 
         if restaurante.ultimo_resumo_noite != chave and fecha <= agora < fim:
             dados = resultados.carregar(db, restaurante, inicio, fim, agora)

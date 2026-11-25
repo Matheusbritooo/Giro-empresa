@@ -106,7 +106,7 @@ Cardápio, etapa 3, parte 3 (perdas, só o dono):
 Base do painel (rápido e firme no salão):
 
 - **Tela "Hoje"**: a entrada do dono (o gerente tem no menu). O salão agora, a noite até aqui e **o que pede atenção**, do mais urgente ao menos, cada item com o link para resolver: cliente sem atendimento, câmera sem sinal, cozinha esperando há mais de 20 min, estoque zerado com prato à venda, o que acaba antes da compra, dia de compra, hora de contar e o que ficou como "acabou". Preço que subiu e perdas em reais só aparecem para o dono.
-- **Pedido sem internet**: o Wi-Fi do salão caiu e o garçom continua lançando. O pedido fica guardado no aparelho e sobe sozinho quando a rede volta, uma vez só (o servidor reconhece o reenvio pela chave do lançamento). Uma faixa em toda tela avisa "Sem conexão" e quantos pedidos esperam. Se o servidor recusar (acabou um item), o pedido volta para o garçom montar de novo. Guardado há mais de 10 minutos, pede confirmação antes de ir para a cozinha. Vale com o painel aberto: abrir o painel do zero sem internet ainda não funciona.
+- **Pedido sem internet**: o Wi-Fi do salão caiu e o garçom continua lançando. O pedido fica guardado no aparelho e sobe sozinho quando a rede volta, uma vez só (o servidor reconhece o reenvio pela chave do lançamento). Uma faixa em toda tela avisa "Sem conexão" e quantos pedidos esperam. Se o servidor recusar (acabou um item), o pedido volta para o garçom montar de novo. Guardado há mais de 10 minutos, pede confirmação antes de ir para a cozinha. O painel também **abre do zero sem internet** (celular que fechou o navegador): as telas do salão, o último salão visto, o cardápio e o pedido das mesas abertas ficam no aparelho e aparecem só quando a rede falha. Ao sair da conta, esses dados são apagados do aparelho.
 - **Telas que abrem na hora**: cada tela reabre com o que buscou da última vez e atualiza por trás; o salão abre com o último mapa visto. Na primeira vez aparece um esqueleto no formato da tela, não a frase "Carregando...". Quando o canal ao vivo cai e volta, pedido, cardápio e estoque buscam de novo sozinhos.
 
 Pacote 2 (o que só a câmera e o histórico do GIRO conseguem):
@@ -125,6 +125,9 @@ Pacote 3 (o dia a dia do dono e da cozinha):
 - **Quem fez o quê** (só o dono, em **Ajustes > Quem fez o quê**): cada mudança de preço e de custo, o que acabou e voltou, ficha dos pratos, compras, perdas, contagens, pedidos cancelados, equipe, ajustes, mesas, QR e câmeras, numa frase ("Preço de Lasanha à bolonhesa: de R$ 62 para R$ 64,50"), com quem fez e a hora. Filtra por assunto, por pessoa e por 7 dias, 30 dias ou 3 meses. Nada se apaga. Não entra senha, e-mail nem nada de cliente. Lançar pedido, "Pronto" e "Liberar mesa" ficam fora: acontecem o tempo todo e já têm a própria tela.
 - **Primeiros passos** na tela **Hoje** de um restaurante novo: as 8 coisas que o GIRO precisa para trabalhar (mesas, câmera ligada, desenho das mesas, cardápio, equipe, ajustes, ingredientes e fichas, QR das mesas), na ordem, com "Fazer agora" levando para a tela certa. Cada passo se marca sozinho pelo que já está cadastrado. Some quando tudo está pronto, quando o restaurante já roda há mais de 14 dias ou quando a pessoa esconde no aparelho.
 
+- **O Copiloto notou**: uma vez por semana, no celular do dono e do gerente junto com o "Antes do turno", e sempre na tela **Hoje**, o que mudou da semana anterior para a que passou: espera até o garçom, mesa parada suja (e qual mesa pesou), quem foi embora sem atendimento, movimento, dinheiro que ficou na mesa e nota dos clientes. Só entra mudança grande em proporção e em valor; a piora vem primeiro e uma melhora fecha a lista, para o dono saber que a mudança que fez deu certo.
+- **Conferir com o caixa** (em **Resultados**, dono e gerente): importe a planilha de vendas do sistema de caixa (CSV) e veja, noite a noite e item a item, o que foi vendido sem pedido no GIRO (o estoque não baixou e os resultados não viram). O GIRO acha sozinho as colunas de data, produto, quantidade e valor, aceita os formatos comuns de data e de dinheiro e sugere o item do cardápio de cada produto do caixa. Nome de cliente, CPF, forma de pagamento e qualquer outra coluna são ignorados; o arquivo não fica guardado, só as somas por noite e produto. Importar de novo as mesmas noites troca as anteriores. O relatório do mês mostra o caixa ao lado do que foi lançado.
+
 ![Relatório do mês da Cantina, pronto para salvar em PDF](docs/telas/relatorio-do-mes.png)
 
 ![Cozinha no modo TV](docs/telas/cozinha-tv.png)
@@ -134,6 +137,8 @@ Pacote 3 (o dia a dia do dono e da cozinha):
 ![Quem fez o quê: o histórico da Cantina](docs/telas/historico.png)
 
 ![Primeiros passos de um restaurante novo, no celular](docs/telas/primeiros-passos.png)
+
+![Conferência com o caixa: o que foi vendido sem pedido no GIRO](docs/telas/caixa.png)
 
 ![Página do QR da mesa no celular do cliente](docs/telas/qr-cliente.png)
 
@@ -251,7 +256,7 @@ Simulador (demonstração) ─────────────────�
                        banco (histórico)     painel ao vivo (WebSocket)    celular (Web Push)
 ```
 
-A foto nunca chega à API: o serviço de visão analisa e descarta. O que fica gravado são eventos em texto, como "mesa 4 ocupada às 20h41" (LGPD, seção 1.9 do TCM). Para o desenho das mesas existe só uma prévia com as pessoas pixeladas, na memória, por 3 minutos. No aparelho de quem usa o painel fica guardado só o pedido que ainda não subiu por falta de rede (mesa e itens, até subir ou ser descartado); o que as telas buscaram fica na memória e some ao entrar ou sair da conta. A página do QR da mesa não pede nada ao cliente e não guarda nada sobre ele: a chave é da mesa, a nota é da visita à mesa, e o registro de acesso da API pula essas rotas (nem o endereço de rede nem a chave da mesa ficam no log do GIRO). O provedor onde o sistema roda pode ter o próprio registro de acesso, como qualquer site.
+A foto nunca chega à API: o serviço de visão analisa e descarta. O que fica gravado são eventos em texto, como "mesa 4 ocupada às 20h41" (LGPD, seção 1.9 do TCM). Para o desenho das mesas existe só uma prévia com as pessoas pixeladas, na memória, por 3 minutos. No aparelho de quem usa o painel fica guardado o pedido que ainda não subiu por falta de rede (mesa e itens, até subir ou ser descartado) e, para o painel abrir sem internet, a sessão, o último salão, o cardápio e o pedido das mesas abertas, apagados ao entrar ou sair da conta; o resto do que as telas buscaram fica na memória. A planilha do caixa é lida e descartada: ficam só as somas por noite e produto, sem nenhuma coluna de cliente. A página do QR da mesa não pede nada ao cliente e não guarda nada sobre ele: a chave é da mesa, a nota é da visita à mesa, e o registro de acesso da API pula essas rotas (nem o endereço de rede nem a chave da mesa ficam no log do GIRO). O provedor onde o sistema roda pode ter o próprio registro de acesso, como qualquer site.
 
 ## Estrutura
 
@@ -337,8 +342,7 @@ O repositório já vem preparado para o grupo usar o Claude Code:
 |---|---|
 | 2b. Calibração em campo | Medir a visão com vídeo de um restaurante parceiro; receber a foto do gravador por FTPS para dispensar o conector |
 | 3. Inteligência (resto) | Previsão da próxima mesa a vagar, relatório semanal por e-mail "quanto a GIRO te devolveu" |
-| Cardápio, etapa 3 (parte 4) | Importar a planilha de vendas do sistema de caixa |
-| Painel, base (resto) | "Esqueci a senha", abrir o painel sem internet |
-| Painel, pacote tecnológico (resto) | Foto da nota vira compra, previsão com clima e feriado, fila na porta, Copiloto que avisa sozinho, por voz e no WhatsApp, mesa que se libera sozinha (depende do teste com vídeo real) |
+| Painel, base (resto) | "Esqueci a senha" (depende do serviço de e-mail) |
+| Painel, pacote tecnológico (resto) | Foto da nota vira compra, previsão com clima e feriado, fila na porta, Copiloto por voz e no WhatsApp, mesa que se libera sozinha (depende do teste com vídeo real) |
 | 4. Gestão GIRO | Leads com as perguntas de qualificação, assinatura e cobrança (Asaas), painel financeiro |
 | 5. Site | Página de vendas e calculadora de retorno |

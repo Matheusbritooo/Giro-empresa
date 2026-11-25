@@ -5,7 +5,7 @@ Regra de ouro (LGPD e isolamento entre clientes):
 - nenhuma tabela guarda imagem. O que fica são eventos em texto ("mesa 4 ocupada às 20h41").
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -53,6 +53,8 @@ class Restaurante(Base):
     # Última noite (AAAA-MM-DD) que já recebeu o briefing e o resumo, para não mandar duas vezes.
     ultimo_briefing_noite: Mapped[str | None] = mapped_column(String(10))
     ultimo_resumo_noite: Mapped[str | None] = mapped_column(String(10))
+    # Segunda-feira (AAAA-MM-DD) da última semana em que o Copiloto mandou "O Copiloto notou".
+    ultimo_aviso_semana: Mapped[str | None] = mapped_column(String(10))
     criado_em: Mapped[datetime] = mapped_column(default=agora)
 
 
@@ -328,3 +330,22 @@ class Atividade(Base):
     grupo: Mapped[str] = mapped_column(String(20))  # GrupoAtividade
     texto: Mapped[str] = mapped_column(String(300))
     em: Mapped[datetime] = mapped_column(default=agora)
+
+
+class VendaCaixa(Base):
+    """O que o caixa do restaurante vendeu, importado da planilha dele: uma linha por noite e
+    produto, já somada (sem o horário de cada venda). Serve para conferir com os pedidos
+    lançados no GIRO. Importar de novo as mesmas noites troca as linhas delas."""
+
+    __tablename__ = "vendas_caixa"
+    __table_args__ = (Index("ix_vendas_caixa_restaurante_noite", "restaurante_id", "noite"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    restaurante_id: Mapped[int] = mapped_column(ForeignKey("restaurantes.id"))
+    noite: Mapped[date]
+    nome: Mapped[str] = mapped_column(String(120))  # como está no caixa
+    item_id: Mapped[int | None] = mapped_column(ForeignKey("itens_cardapio.id"))
+    quantidade: Mapped[int]
+    valor_centavos: Mapped[int]
+    importado_em: Mapped[datetime] = mapped_column(default=agora)
+    importado_por_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))

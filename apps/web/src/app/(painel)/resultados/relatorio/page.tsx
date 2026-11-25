@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 
 import { Aviso, Esqueleto } from "@/components/ui";
 import { api } from "@/lib/api";
+import { parteVista } from "@/lib/caixa";
 import { useDados } from "@/lib/dados";
 import {
   chaveDoMes,
@@ -188,6 +189,14 @@ function Folha({ r }: { r: RelatorioDoMes }) {
         {minutos(r.parada_media_seg)} em média. Giro de {decimal(r.giro_medio)} turmas por mesa, por
         noite.
       </p>
+      {r.caixa && (
+        <p className="max-w-prose" data-testid="caixa-no-relatorio">
+          No caixa, {reais(r.caixa.caixa_centavos)} em {r.caixa.noites}{" "}
+          {r.caixa.noites === 1 ? "noite importada" : "noites importadas"}; com pedido no GIRO,{" "}
+          {reais(r.caixa.giro_centavos)} nessas noites
+          {parteVista(r.caixa) ? ` (${parteVista(r.caixa)} do caixa)` : ""}.
+        </p>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2 print:grid-cols-2">
         <Secao titulo="Semana a semana">

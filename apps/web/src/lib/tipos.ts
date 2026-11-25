@@ -586,6 +586,8 @@ export interface Hoje {
   pendencias: Pendencia[];
   esperar: string[];
   dicas: string[];
+  /** "O Copiloto notou": a semana que passou contra a anterior (vazio se nada mudou muito). */
+  semana: { tipo: string; piorou: boolean; texto: string; href: string }[];
 }
 
 // QR da mesa (página do cliente, sem login)
@@ -656,6 +658,8 @@ export interface RelatorioDoMes {
   semanas: { de: string; ate: string; mesas_atendidas: number; vendeu_centavos: number }[];
   pratos: { nome: string; quantidade: number; receita_centavos: number }[];
   noites: NoiteDoMes[];
+  /** Só com a planilha do caixa importada no mês. */
+  caixa: { noites: number; caixa_centavos: number; giro_centavos: number } | null;
   /** Só para quem vê custo (o dono). */
   custo: {
     custo_pela_ficha_centavos: number;
@@ -666,7 +670,14 @@ export interface RelatorioDoMes {
   } | null;
 }
 
-export type GrupoAtividade = "cardapio" | "pedido" | "estoque" | "equipe" | "ajustes" | "mesas";
+export type GrupoAtividade =
+  | "cardapio"
+  | "pedido"
+  | "estoque"
+  | "equipe"
+  | "ajustes"
+  | "mesas"
+  | "caixa";
 
 export interface Atividade {
   id: number;
@@ -695,4 +706,38 @@ export interface PrimeirosPassos {
     feito: boolean;
     href: string | null; // vazio: é o dono quem faz
   }[];
+}
+
+export interface PreviaCaixa {
+  de: string;
+  ate: string;
+  noites: number;
+  linhas: number;
+  ignoradas: number;
+  total_centavos: number;
+  colunas: Record<string, string>;
+  avisos: string[];
+  nomes: {
+    nome: string;
+    quantidade: number;
+    valor_centavos: number;
+    sugestao_item_id: number | null;
+  }[];
+  noites_ja_importadas: number;
+}
+
+export interface ConferenciaCaixa {
+  mes: string;
+  noites: { noite: string; caixa_centavos: number; giro_centavos: number }[];
+  itens: {
+    nome: string;
+    item_id: number | null;
+    caixa_quantidade: number;
+    giro_quantidade: number;
+    caixa_centavos: number;
+    giro_centavos: number;
+  }[];
+  caixa_centavos: number;
+  giro_centavos: number;
+  sem_associacao: string[];
 }

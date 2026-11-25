@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 
 import { api, ErroApi } from "./api";
 import { limparDados } from "./dados";
+import { apagarDadosGuardados, ligarSemInternet } from "./sem-internet";
 import type { Papel, Sessao } from "./tipos";
 
 interface ContextoSessao {
@@ -21,6 +22,7 @@ export function ProvedorSessao({ children }: { children: React.ReactNode }) {
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
+    ligarSemInternet();
     api<Sessao>("/api/auth/sessao")
       .then(setSessao)
       .catch(() => setSessao(null))
@@ -33,6 +35,7 @@ export function ProvedorSessao({ children }: { children: React.ReactNode }) {
       corpo: { email, senha },
     });
     limparDados(); // quem entra não vê o que a conta anterior deixou na memória
+    await apagarDadosGuardados(); // nem no aparelho
     setSessao(nova);
     return nova;
   }, []);
@@ -40,6 +43,7 @@ export function ProvedorSessao({ children }: { children: React.ReactNode }) {
   const sair = useCallback(async () => {
     await api("/api/auth/sair", { metodo: "POST" }).catch(() => undefined);
     limparDados();
+    await apagarDadosGuardados();
     setSessao(null);
   }, []);
 

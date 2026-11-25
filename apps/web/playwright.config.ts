@@ -15,6 +15,9 @@ export default defineConfig({
     baseURL: PAINEL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // O service worker (painel sem internet) responde antes do page.route dos testes. Fica
+    // desligado, menos no teste que liga de propósito (e2e/sem-internet.spec.ts).
+    serviceWorkers: "block",
     launchOptions: {
       // No ambiente da nuvem do Claude o Chromium já vem instalado; na CI o Playwright baixa.
       ...(process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {}),

@@ -27,6 +27,7 @@ class GrupoAtividade(StrEnum):
     EQUIPE = "equipe"
     AJUSTES = "ajustes"
     MESAS = "mesas"
+    CAIXA = "caixa"
 
 
 def registrar(

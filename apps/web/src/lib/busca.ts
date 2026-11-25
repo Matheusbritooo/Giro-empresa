@@ -71,6 +71,12 @@ const TELAS: Tela[] = [
     palavras: "pdf planilha contador mensal",
     quem: podeGerirMesas,
   },
+  {
+    titulo: "Conferir com o caixa",
+    href: "/resultados/caixa",
+    palavras: "caixa planilha importar vendas pdv nota fiscal",
+    quem: podeGerirMesas,
+  },
   { titulo: "Cardápio", href: "/cardapio", palavras: "itens precos acabou matriz", quem: todos },
   { titulo: "Mesas", href: "/mesas", palavras: "cadastrar mesas lugares", quem: podeGerirMesas },
   {

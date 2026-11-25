@@ -2,8 +2,15 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { camera, entrarNoSalao } from "./apoio";
 
-// Aviso que o próprio @react-three/fiber dá no three 0.186 (THREE.Clock virou THREE.Timer).
-const AVISOS_CONHECIDOS = [/THREE\.Clock/];
+// Avisos que não são do painel: o do @react-three/fiber no three 0.186 (THREE.Clock virou
+// THREE.Timer); o do Playwright quando o painel liga o service worker (os testes rodam com ele
+// desligado); e a dica de desempenho do driver de vídeo simulado (SwiftShader, sem placa de
+// vídeo), que às vezes aparece com o nível alto e também acontece na main.
+const AVISOS_CONHECIDOS = [
+  /THREE\.Clock/,
+  /Service Worker registration blocked by Playwright/,
+  /GL Driver Message \(OpenGL, Performance,.*GPU stall due to ReadPixels/,
+];
 const SELO = "Pessoas ilustrativas: a câmera só conta, não filma ninguém.";
 
 /** Erros e avisos do console daqui em diante, fora o aviso conhecido do three. */

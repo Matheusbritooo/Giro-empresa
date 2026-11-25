@@ -16,10 +16,12 @@ from sqlalchemy.orm import Session
 
 from giro.dominio.compras import Situacao
 from giro.dominio.indicadores import Indicadores, intervalo_da_noite
+from giro.dominio.semana import Mudanca
 from giro.modelos import FichaTecnica, ItemCardapio, ItemPedido, Mesa, Restaurante
 from giro.servicos import copiloto
 from giro.servicos.compras import PlanoDeCompras, pratos_do_dia
 from giro.servicos.perdas import texto_do_preco
+from giro.servicos.semana import semana_que_passou
 
 COZINHA_ATRASADA = timedelta(minutes=20)  # item esperando mais que isso vira pendência
 JANELA_COZINHA = timedelta(hours=12)  # a mesma da tela da cozinha
@@ -45,6 +47,7 @@ class Hoje:
     pendencias: list[Pendencia]
     esperar: list[str]  # o que costuma acontecer neste dia da semana
     dicas: list[str]
+    semana: list[Mudanca]  # o que mudou da semana anterior para a que passou
 
 
 def _lista(nomes: list[str], limite: int = 3) -> str:
@@ -242,4 +245,5 @@ def painel_de_hoje(db: Session, restaurante: Restaurante, agora: datetime, com_c
         pendencias=pendencias,
         esperar=recado.frases,
         dicas=recado.dicas,
+        semana=semana_que_passou(db, restaurante, agora),
     )

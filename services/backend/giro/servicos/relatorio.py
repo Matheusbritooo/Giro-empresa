@@ -24,6 +24,7 @@ from giro.dominio.indicadores import (
 )
 from giro.modelos import ItemPedido, MovimentoEstoque, Ocupacao, Restaurante
 from giro.servicos import resultados as servico_resultados
+from giro.servicos.caixa import Conferencia, conferencia
 from giro.servicos.perdas import PerdaPorMotivo, relatorio_de_perdas
 
 PRATOS = 10  # quantos itens entram no "mais vendidos"
@@ -81,6 +82,7 @@ class Relatorio:
     # andamento: do dia 1 até o mesmo dia e hora) ou nada, quando o GIRO ainda não estava em
     # uso no começo do mês anterior (a comparação mostraria um salto que não aconteceu).
     comparacao: tuple[date, date] | None = None
+    caixa: Conferencia | None = None  # só com a planilha do caixa importada no mês
 
 
 def primeiro_dia(mes: date) -> date:
@@ -267,6 +269,7 @@ def relatorio_do_mes(
         noites_com_movimento=sum(1 for n in noites if n.mesas_atendidas or n.vendeu_centavos),
         pessoas=atual.pessoas_atendidas,
         semanas=semanas,
+        caixa=(c if (c := conferencia(db, restaurante.id, mes, ultima)).noites else None),
         comparacao=(
             (noite_de(antes_inicio), noite_de(antes_ate - timedelta(seconds=1))) if janela else None
         ),
